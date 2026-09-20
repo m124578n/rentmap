@@ -30,7 +30,7 @@
 | 快取 | **KV** | Geocoding 結果、URL 解析結果、AI 分析結果快取 |
 | 驗證 | **JSON Schema / Zod**（`shared/` 共用） | 前後端同一份 schema |
 | AI 分析 | **Anthropic API**（`claude-sonnet-5`）| 結構化輸出 JSON（優點 / 缺點 / 價差原因）；金鑰放 Worker secret |
-| 登入 | **Phase 1–2：Cloudflare Access**（Zero Trust，50 人內免費）| 零程式碼，整站鎖住只有你能進；Phase 3 有公開評論再換成正式 auth |
+| 登入 | **Google OAuth**（比照 menmap：Worker 端 OAuth flow + HS256 JWT session cookie）| 一開始就是正式帳號系統，Phase 3 公開評論不用換；程式碼從 menmap 搬 |
 | 資料採集 | **家裡這台 Windows 跑 Python + Playwright**（與 menmap `ramen` 同一套工具鏈：uv、Python 3.14）| 住宅 IP 抓 591 / 樂屋 / 好房不會被擋；家裡只做 outbound push，不開任何 inbound port |
 | 背景工作 | 採集排程在家裡（Task Scheduler）；雲端 Cron 只做輕量事（例如清過期快取） | Worker 不抓外站 |
 | 測試 | **Vitest** + `@cloudflare/vitest-pool-workers`；E2E 用 Playwright | 可直接在 Workers runtime 跑測試 |
@@ -51,14 +51,14 @@
                        │
                        ▼
           ┌──────────────────────────────────────────┐
-          │  Cloudflare Access（只放行你的 email）      │
+          │  Google OAuth（/auth/*，session cookie）    │
           └────────────────────┬─────────────────────┘
                                ▼
           ┌──────────────────────────────────────────┐
           │  Worker: rent-house（Hono + Static Assets）│
           │   /            → React SPA                │◀──── 瀏覽器 / 手機
           │   /api/*       → 業務 API                  │
-          │   /api/ingest  → 採集機寫入（bearer，不經 Access）│
+          │   /api/ingest  → 採集機寫入（bearer，不走 session）│
           │   /api/ingest/pending → 採集機領取待抓 URL   │
           └──┬──────────┬──────────┬──────────────────┘
              ▼          ▼          ▼
@@ -142,23 +142,25 @@ RentStat (實價登錄租賃，參考資料)
 
 **listing_price_history** — `listing_id, rent, seen_at`
 
-**pending_urls** — `id, url, source, status (pending|fetching|done|failed), error, requested_at, done_at`（採集機 poll 用）
+**pending_urls** — `id, user_id, url, source, status (pending|fetching|done|failed), error, requested_at, done_at`（採集機 poll 用）
 
 **photos** — `id, property_id, visit_id?, r2_key, kind (listing|visit), caption, taken_at`
 
-**favorites** — `property_id (PK), stage, tags_json, priority, note, rank, updated_at`
+**users** — `id, google_sub, email, name, avatar, created_at`
+
+**favorites** — `user_id, property_id (PK), stage, tags_json, priority, note, rank, updated_at`
 stage enum：`saved → contacted → scheduled → visited → considering → finalist | rejected → signed`
 
-**contacts** — `id, property_id, role (landlord|agent), name, phone, line_id, other`
-**contact_logs** — `id, property_id, at, channel, question, reply, status`
+**contacts** — `id, user_id, property_id, role (landlord|agent), name, phone, line_id, other`
+**contact_logs** — `id, user_id, property_id, at, channel, question, reply, status`
 
-**visits** — `id, property_id, scheduled_at, duration_min, status (planned|done|cancelled), route_batch_id`
+**visits** — `id, user_id, property_id, scheduled_at, duration_min, status (planned|done|cancelled), route_batch_id`
 **visit_checklist_items** — `visit_id, item_key, state (ok|bad|na|unchecked), note`
 **visit_reviews** — `visit_id, ratings_json {light,noise,condition,transport,space}, pros_json, cons_json, text, visibility (private|anon|public), share_flags_json, created_at`
 
 **ai_analyses** — `property_id, input_hash, result_json, model, created_at`
 
-**user_prefs** — `id=1, budget_min, budget_max, rooms_json, size_min, mrt_max_min, must_have_json, weights_json`
+**user_prefs** — `user_id (PK), budget_min, budget_max, rooms_json, size_min, mrt_max_min, must_have_json, weights_json`
 
 **mrt_stations** — `id, name, line, lat, lng`
 **rent_stats** — 內政部租賃實價登錄：`id, city, district, road, building_type, size_ping, rooms, floor, total_floors, building_age, rent, rent_per_ping, date, has_elevator, has_mgmt, raw_json`
@@ -225,9 +227,10 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 ### 5.8 隱私
 
+- 所有資料表凡是「人的資料」都帶 `user_id`；Phase 1 只有你一個帳號，但 schema 一開始就多人。
 - 所有聯絡資訊、私人備註、看房日期永遠不公開。
 - `visit_reviews.visibility` 預設 `private`；公開只揭露 `share_flags_json` 勾選的欄位。
-- Phase 1–2 整站在 Access 後面，根本沒有其他使用者，隱私邏輯先做在資料層即可。
+- Phase 1–2 用 `ADMIN_EMAILS` 白名單，只有你的 Google 帳號能登入；開放註冊是 Phase 3 的事。
 
 ---
 
@@ -267,8 +270,7 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 | D1 | `rent-house-db` | 主資料 |
 | R2 | `rent-house-photos` | 照片、錄音 |
 | KV | `rent-house-cache` | Geocoding / AI / 匯入快取 |
-| Secrets | `ANTHROPIC_API_KEY`, `INGEST_SECRET` | 用 `wrangler secret put`；`INGEST_SECRET` 同一把放家裡 `.env` |
-| Access | 一個 self-hosted app，只允許你的 email | 登入 |
+| Secrets | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ANTHROPIC_API_KEY`, `INGEST_SECRET` | 用 `wrangler secret put`；`INGEST_SECRET` 同一把放家裡 `.env`；Google OAuth 可與 menmap 同一組 client 只加 redirect URI |
 | 家裡排程 | Task Scheduler，每日一次 `collector sync` + `publish` | 比照 menmap `run_daily.ps1` |
 
 **規則：在你說「好」之前，不執行任何 `wrangler deploy`、`wrangler d1 create`、`wrangler r2 bucket create` 等會建立雲端資源的指令。** 本機開發全部用 `vite dev` 的本地模擬。
@@ -289,15 +291,11 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 ---
 
-## 9. 已定案
+## 9. 已定案（2026-09-20）
 
 - 資料採集在家裡這台 Windows 跑（Python + Playwright，比照 menmap）。
 - 地圖底圖用 CARTO Positron / Dark Matter，沿用 menmap 的中文化與快取設定。
 - 捷運站資料直接沿用 menmap 的 `mrt.json`。
-
-## 10. 待你決定的事項
-
-1. **前端框架**：React（本文預設；menmap 也是 React + MapLibre，可以搬不少地圖程式碼）或 SvelteKit？
-2. **登入**：Phase 1 用 Cloudflare Access（推薦），還是比照 menmap 做 Google OAuth？
-3. **目標範圍**：只有雙北？影響實價登錄匯入範圍與 591 搜尋條件。
-4. **M1 之後**要不要就先直接用起來，邊用邊決定 M2–M8 的順序？
+- 前端 React + MapLibre，與 menmap 相同，地圖程式碼可搬。
+- 登入用 Google OAuth，比照 menmap 實作；Phase 1 只有 `ADMIN_EMAILS` 白名單能登入。
+- 目標範圍只有雙北（台北市、新北市）：實價登錄只匯入雙北，`mrt.json` 只取雙北路線，591 搜尋條件也只設雙北。
