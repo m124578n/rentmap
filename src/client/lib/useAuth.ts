@@ -8,9 +8,21 @@ export function useAuth() {
     mutationFn: api.logout,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
   });
+  const returnTo = () => encodeURIComponent(window.location.pathname + window.location.search);
   const login = () => {
-    const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/api/auth/google?return_to=${returnTo}`;
+    window.location.href = `/api/auth/google?return_to=${returnTo()}`;
   };
-  return { user: q.data?.user ?? null, enabled: q.data?.enabled ?? false, loading: q.isLoading, login, logout: () => logout.mutate() };
+  /** 本機開發免 Google(.dev.vars 有 DEV_USER_EMAIL 才會出現) */
+  const devLogin = () => {
+    window.location.href = `/api/auth/dev?return_to=${returnTo()}`;
+  };
+  return {
+    user: q.data?.user ?? null,
+    enabled: q.data?.enabled ?? false,
+    dev: q.data?.dev ?? false,
+    loading: q.isLoading,
+    login,
+    devLogin,
+    logout: () => logout.mutate(),
+  };
 }

@@ -7,3 +7,5 @@ SESSION_SECRET=change-me-to-a-long-random-string
 # 採集機 publish 用的 bearer;家裡 .env 放同一把
 INGEST_SECRET=local-ingest-secret
 ANTHROPIC_API_KEY=
+# 設了就有「本機登入」鈕,免 Google(正式站不要設)
+DEV_USER_EMAIL=you@example.com

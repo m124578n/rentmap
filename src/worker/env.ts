@@ -12,6 +12,7 @@ declare global {
       SESSION_SECRET?: string;
       INGEST_SECRET?: string; // 採集機 bearer
       ANTHROPIC_API_KEY?: string;
+      DEV_USER_EMAIL?: string; // 只放 .dev.vars:本機免 Google 登入(GET /api/auth/dev)
     }
   }
 }

@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/useAuth";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
-  const { user, enabled, loading, login, logout } = useAuth();
+  const { user, enabled, dev, loading, login, devLogin, logout } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const loginErr = params.get("login");
 
@@ -26,11 +26,16 @@ export function Layout() {
               <LogOut size={16} />
             </button>
           ) : (
-            !loading && (
+            !loading &&
+            (dev ? (
+              <button onClick={devLogin} className="btn-primary">
+                本機登入
+              </button>
+            ) : (
               <button onClick={login} className="btn-primary" disabled={!enabled}>
                 {enabled ? "Google 登入" : "尚未設定登入"}
               </button>
-            )
+            ))
           )}
         </nav>
       </header>
@@ -44,9 +49,15 @@ export function Layout() {
         ) : (
           <div className="card text-center">
             <p className="mb-3">先登入才看得到你的房源。</p>
-            <button onClick={login} className="btn-primary" disabled={!enabled}>
-              Google 登入
-            </button>
+            {dev ? (
+              <button onClick={devLogin} className="btn-primary">
+                本機登入
+              </button>
+            ) : (
+              <button onClick={login} className="btn-primary" disabled={!enabled}>
+                Google 登入
+              </button>
+            )}
           </div>
         )}
       </main>

@@ -111,6 +111,25 @@ auth.get("/api/auth/google/callback", async (c) => {
   return c.redirect(`${APP_ORIGIN}${returnTo}`, 302);
 });
 
+/**
+ * 本機開發免 Google:.dev.vars 設 DEV_USER_EMAIL 後,GET /api/auth/dev 直接用那個 email 建 user 並設 session。
+ * 正式站不設這個變數,端點就是 404。另外只在 APP_ORIGIN 是 localhost 時才生效,雙保險。
+ */
+auth.get("/api/auth/dev", async (c) => {
+  const email = c.env.DEV_USER_EMAIL;
+  const { SESSION_SECRET, APP_ORIGIN } = c.env;
+  if (!email || !SESSION_SECRET || !/^https?:\/\/localhost(:\d+)?$/.test(APP_ORIGIN)) return c.notFound();
+  const now = nowIso();
+  const [row] = await db(c.env.DB)
+    .insert(schema.users)
+    .values({ provider: "dev", providerId: email, displayName: "本機開發者", avatarUrl: null, email, createdAt: now, lastLoginAt: now })
+    .onConflictDoUpdate({ target: [schema.users.provider, schema.users.providerId], set: { lastLoginAt: now } })
+    .returning({ id: schema.users.id });
+  if (!row) return c.text("dev user upsert failed", 500);
+  await setSession(c, { id: row.id, name: "本機開發者", avatar: null }, SESSION_SECRET);
+  return c.redirect(`${APP_ORIGIN}${safeReturnTo(c.req.query("return_to"))}`, 302);
+});
+
 auth.post("/api/auth/logout", (c) => {
   if (!sameOrigin(c)) return c.json({ error: "forbidden" }, 403);
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
@@ -120,7 +139,8 @@ auth.post("/api/auth/logout", (c) => {
 auth.get("/api/me", async (c) => {
   c.header("Cache-Control", "no-store");
   const user = await readSession(c);
-  return c.json({ user, enabled: authConfigured(c.env) });
+  const dev = !!c.env.DEV_USER_EMAIL && /^https?:\/\/localhost(:\d+)?$/.test(c.env.APP_ORIGIN);
+  return c.json({ user, enabled: authConfigured(c.env), dev });
 });
 
 // ---- 給其他路由用 ----

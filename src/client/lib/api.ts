@@ -21,7 +21,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  me: () => req<{ user: SessionUser | null; enabled: boolean }>("/api/me"),
+  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean }>("/api/me"),
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
   listProperties: () => req<{ items: PropertySummary[] }>("/api/properties"),

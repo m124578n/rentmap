@@ -2,12 +2,15 @@ import { Hono } from "hono";
 import type { AppEnv } from "./env";
 import { auth } from "./auth";
 import { properties } from "./routes/properties";
+import { ingest } from "./routes/ingest";
 
 const app = new Hono<AppEnv>();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 app.route("/", auth);
 app.route("/", properties);
+// 採集機推入:POST /api/ingest/listings(bearer INGEST_SECRET)
+app.route("/", ingest);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

@@ -31,7 +31,7 @@
 | 驗證 | **JSON Schema / Zod**（`shared/` 共用） | 前後端同一份 schema |
 | AI 分析 | **Anthropic API**（`claude-sonnet-5`）| 結構化輸出 JSON（優點 / 缺點 / 價差原因）；金鑰放 Worker secret |
 | 登入 | **Google OAuth**（比照 menmap：Worker 端 OAuth flow + HS256 JWT session cookie）| 一開始就是正式帳號系統，Phase 3 公開評論不用換；程式碼從 menmap 搬 |
-| 資料採集 | **家裡這台 Windows 跑 Python + Playwright**（與 menmap `ramen` 同一套工具鏈：uv、Python 3.14）| 住宅 IP 抓 591 / 樂屋 / 好房不會被擋；家裡只做 outbound push，不開任何 inbound port |
+| 資料採集 | **家裡這台 Windows 跑 Node + TypeScript**（`collector/`，與 Worker 共用 `src/shared` 的 Zod schema）| 591 純 fetch 就是完整 SSR，`__NUXT__` 用 `node:vm` 執行；好房之後用 Playwright；住宅 IP 不會被擋；家裡只做 outbound push。探測結果見 `2026-09-20-collector-spike.md` |
 | 背景工作 | 採集排程在家裡（Task Scheduler）；雲端 Cron 只做輕量事（例如清過期快取） | Worker 不抓外站 |
 | 測試 | **Vitest** + `@cloudflare/vitest-pool-workers`；E2E 用 Playwright | 可直接在 Workers runtime 跑測試 |
 
@@ -44,10 +44,9 @@
 ```
    [家裡 Windows（採集機）]                 [Cloudflare]                          [你]
 
-  collector (Python + Playwright)
-    ├─ 抓 591 / 樂屋 / 好房 搜尋頁與物件頁
-    ├─ 本地 SQLite data/rent.db（採集正本）
-    └─ publish：POST /api/ingest（bearer secret，outbound only）
+  collector (Node + TypeScript)
+    ├─ 591：fetch + node:vm 執行 __NUXT__；好房：Playwright（之後）
+    └─ publish：POST /api/ingest/listings（bearer secret，outbound only）
                        │
                        ▼
           ┌──────────────────────────────────────────┐
@@ -80,13 +79,11 @@
 rent-house/
 ├── docs/design/              設計文件
 ├── migrations/               D1 SQL migrations（Drizzle 產生）
-├── collector/                家裡跑的 Python 採集套件（比照 menmap/ramen）
-│   ├── __main__.py           CLI：add <url> / sync / publish / watch
-│   ├── sources/              各站 parser：five91.py、rakuya.py、hb.py
-│   ├── db.py                 本地 SQLite schema
-│   ├── publish.py            POST /api/ingest
-│   └── geo.py                Nominatim geocoding（家裡做，結果一起推）
-├── data/                     採集正本 rent.db、logs/（gitignore）
+├── collector/                家裡跑的採集（Node + TS，`npm run collect`）
+│   ├── cli.ts                add <url> / list <listUrl>；之後加 watch / sync
+│   ├── sources/five91.ts     591 parser（fetch + node:vm）；之後 housefun.ts
+│   └── lib/http.ts           禮貌抓取：UA、隨機間隔、退避重試
+├── data/                     探測輸出、logs/（gitignore）
 ├── scripts/                  一次性腳本：匯入實價登錄、run_daily.ps1、fetch_mrt.py（從 menmap 複製）
 ├── public/                   靜態資源（icon、manifest）
 ├── src/
@@ -106,7 +103,6 @@ rent-house/
 ├── wrangler.jsonc
 ├── vite.config.ts
 ├── drizzle.config.ts
-├── pyproject.toml            collector 的依賴（uv）
 └── package.json
 ```
 
@@ -173,7 +169,7 @@ Phase 4 再加：`moves, move_items, movers, mover_quotes, move_checklist_items`
 
 ### 5.1 房源匯入（家裡採集）
 
-Worker 不抓外站。所有抓取都在家裡這台用 Playwright（住宅 IP），跟 menmap 一樣。
+Worker 不抓外站。所有抓取都在家裡這台（住宅 IP）。591 純 fetch 即可（SSR），好房需要 Playwright，樂屋目前被 Cloudflare 擋。
 
 **三種觸發**：
 1. **貼 URL**（最常用）：網頁 / 手機貼 591、樂屋、好房網址 → `pending_urls` → 採集機 `watch` 模式每 5 分鐘 poll 一次，抓完推回。
@@ -182,15 +178,15 @@ Worker 不抓外站。所有抓取都在家裡這台用 Playwright（住宅 IP�
 
 **採集端流程**：
 ```
-URL → sources/<站>.py 解析 → ImportedListing（統一 schema）→ 本地 SQLite → geocode → publish
+URL → sources/<站>.ts 解析 → ImportedListing（src/shared 的 Zod schema）→ POST /api/ingest/listings
 ```
-各站 parser 各自一檔，附 HTML fixture 測試，改版只修一檔。輸出 schema 與 Worker 端 `shared/` 的 Zod schema 對齊，ingest 端用 Zod 驗證，不合格整筆退回。
+各站 parser 各自一檔，附 HTML fixture 測試（`test/collector/`），改版只修一檔。採集端與 ingest 端用同一份 Zod schema 驗證，不合格整筆退回。591 自帶座標，不需另外 geocoding。
 
 **ingest 端點**：`POST /api/ingest/listings`（bearer secret，路由排除在 Access 之外），upsert `listings` + `properties`，價格有變就寫 `listing_price_history`。
 
 ### 5.2 Geocoding
 
-地址 → 座標，在採集機做（Nominatim 有速率限制，家裡排隊慢慢跑沒差），結果隨 ingest 一起推。網頁端只保留「手動拖標記修正」。
+591 物件頁自帶大概座標（`geocode_source = approx`）。手動表單的地址才需要 geocoding，在採集機用 Nominatim 做。網頁端保留「手動拖標記修正」，修正過（`manual`）的座標不會被採集覆蓋。
 591 頁面通常只給「大概位置」，允許 `lat/lng` 帶 `geocode_source = approx|manual|exact`。
 
 ### 5.3 捷運距離
@@ -281,7 +277,7 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 | 風險 | 對策 |
 |---|---|
-| 591 反爬 / 改版 | 住宅 IP + Playwright 真瀏覽器；parser 獨立檔案、有 fixture 測試，改版只修一檔；抓取加隨機間隔 |
+| 591 反爬 / 改版 | 目前純 fetch 可行；parser 獨立檔案、有 fixture 測試，改版只修一檔；抓取 2.5–4 秒隨機間隔、429 退避 |
 | 採集機關機 / 沒開 | 貼 URL 進 pending 佇列不會掉，開機後補抓；網頁顯示「等待採集」狀態 |
 | Geocoding 不準 | 家裡用 Nominatim，允許網頁手動拖標記；記錄 `geocode_source` |
 | 實價登錄資料格式變動 | 匯入 script 用 Zod 驗證，失敗整批不進 |
@@ -293,9 +289,9 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 ## 9. 已定案（2026-09-20）
 
-- 資料採集在家裡這台 Windows 跑（Python + Playwright，比照 menmap）。
+- 資料採集在家裡這台 Windows 跑，collector 用 Node + TypeScript（591 純 fetch 可行，探測見 `2026-09-20-collector-spike.md`）。
 - 地圖底圖用 CARTO Positron / Dark Matter，沿用 menmap 的中文化與快取設定。
 - 捷運站資料直接沿用 menmap 的 `mrt.json`。
 - 前端 React + MapLibre，與 menmap 相同，地圖程式碼可搬。
-- 登入用 Google OAuth，比照 menmap 實作；Phase 1 只有 `ADMIN_EMAILS` 白名單能登入。
+- 登入用 Google OAuth，比照 menmap 實作；Phase 1 只有 `ADMIN_EMAILS` 白名單能登入。本機開發用 `DEV_USER_EMAIL` 免 Google。
 - 目標範圍只有雙北（台北市、新北市）：實價登錄只匯入雙北，`mrt.json` 只取雙北路線，591 搜尋條件也只設雙北。
