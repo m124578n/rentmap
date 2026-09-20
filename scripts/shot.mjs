@@ -8,7 +8,8 @@ import { chromium } from "playwright";
 
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")));
-const route = flags.route ?? "/";
+// Git Bash 會把 --route=/x 轉成 C:/Program Files/Git/x,這裡還原(或跑之前設 MSYS_NO_PATHCONV=1)
+const route = (flags.route ?? "/").replace(/^[A-Za-z]:\/Program Files\/Git/, "") || "/";
 const out = flags.out ?? "data/shot.png";
 const base = process.env.RENT_HOUSE_API ?? "http://localhost:5173";
 
