@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rent-house",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // 前端 SPA 靜態檔:vite build 產到 dist/client;找不到的路徑回 index.html 交給前端路由
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // 非機密設定。機密(GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET / INGEST_SECRET / ANTHROPIC_API_KEY)
+  // 雲端用 `wrangler secret put`,本機放 .dev.vars。
+  "vars": {
+    "APP_ORIGIN": "http://localhost:5173",
+    "ADMIN_EMAILS": "m23568n@gmail.com"
+  },
+  // database_id 先留佔位:本機 dev 走 .wrangler/state 的本地 SQLite,不會碰遠端。
+  // 正式的 id 等使用者同意部署後 `wrangler d1 create rent-house-db` 再填。
+  "d1_databases": [
+    { "binding": "DB", "database_name": "rent-house-db", "database_id": "local-placeholder", "migrations_dir": "migrations" }
+  ]
+}

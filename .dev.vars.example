@@ -1,4 +1,9 @@
-# 複製成 .dev.vars 供本機 vite dev / wrangler dev 使用（.dev.vars 不進 git）
-ANTHROPIC_API_KEY=
-# 採集機 publish 用的 bearer；雲端用 wrangler secret put 設同一把，家裡放 .env
+# 複製成 .dev.vars 供本機 vite dev 使用(.dev.vars 不進 git)。正式站改用 `wrangler secret put <NAME>`。
+# Google OAuth:可以直接用 menmap 那組 client(它已註冊 http://localhost:5173 的 redirect)
+GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
+# 簽 session cookie 的密鑰,隨便一串長亂碼
+SESSION_SECRET=change-me-to-a-long-random-string
+# 採集機 publish 用的 bearer;家裡 .env 放同一把
 INGEST_SECRET=local-ingest-secret
+ANTHROPIC_API_KEY=
