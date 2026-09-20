@@ -1,3 +1,4 @@
-# 複製成 .dev.vars 供本機 wrangler dev 使用（.dev.vars 不進 git）
+# 複製成 .dev.vars 供本機 vite dev / wrangler dev 使用（.dev.vars 不進 git）
 ANTHROPIC_API_KEY=
-MAPTILER_API_KEY=
+# 採集機 publish 用的 bearer；雲端用 wrangler secret put 設同一把，家裡放 .env
+INGEST_SECRET=local-ingest-secret

@@ -23,7 +23,7 @@
 | 建置工具 | **Vite + `@cloudflare/vite-plugin`** | 一個 Vite 專案同時 build 前端 SPA 與 Worker，本機 `vite dev` 就有 D1/R2/KV 模擬 |
 | 前端 | **React 19 + TypeScript + Tailwind + shadcn/ui** | CRM 類 UI（表格、表單、Kanban、對話框）元件最齊；`react-map-gl` 地圖整合成熟 |
 | 路由 / 資料 | **TanStack Router + TanStack Query** | 型別安全路由；Query 處理快取與離線（看房時訊號差） |
-| 地圖 | **MapLibre GL JS** + MapTiler 或 OpenFreeMap 圖磚 | 免費、無 Google 綁定；向量圖磚適合上千個標記 |
+| 地圖 | **MapLibre GL JS** + **CARTO** Positron / Dark Matter GL style | 與 menmap 相同：免金鑰、向量圖磚、亮暗兩套；沿用 menmap 的 `localizeBasemap`（地名強制中文、關掉聚落層）與 PWA 快取規則（CARTO 條款端側快取 ≤ 30 天） |
 | API | **Hono** | Workers 上最輕量、型別友善；可用 RPC client 讓前後端共享型別 |
 | 資料庫 | **D1**（SQLite） + **Drizzle ORM** | 免費額度充足（5 GB）；Drizzle 有 D1 migration 工具 |
 | 照片 / 錄音 | **R2** | 看房照片、錄音直傳；免出口流量費 |
@@ -31,39 +31,48 @@
 | 驗證 | **JSON Schema / Zod**（`shared/` 共用） | 前後端同一份 schema |
 | AI 分析 | **Anthropic API**（`claude-sonnet-5`）| 結構化輸出 JSON（優點 / 缺點 / 價差原因）；金鑰放 Worker secret |
 | 登入 | **Phase 1–2：Cloudflare Access**（Zero Trust，50 人內免費）| 零程式碼，整站鎖住只有你能進；Phase 3 有公開評論再換成正式 auth |
-| 背景工作 | **Cron Trigger**（每日重新確認房源是否下架）；**Queues** 之後再說 | Phase 1 不需要 Queues |
+| 資料採集 | **家裡這台 Windows 跑 Python + Playwright**（與 menmap `ramen` 同一套工具鏈：uv、Python 3.14）| 住宅 IP 抓 591 / 樂屋 / 好房不會被擋；家裡只做 outbound push，不開任何 inbound port |
+| 背景工作 | 採集排程在家裡（Task Scheduler）；雲端 Cron 只做輕量事（例如清過期快取） | Worker 不抓外站 |
 | 測試 | **Vitest** + `@cloudflare/vitest-pool-workers`；E2E 用 Playwright | 可直接在 Workers runtime 跑測試 |
 
-**不採用的東西**：Next.js（在 Workers 上 OpenNext 太重）、Google Maps（付費 + 綁定）、Postgres（Hyperdrive 多一層，D1 對單人夠用）。
+**不採用的東西**：Next.js（在 Workers 上 OpenNext 太重）、Google Maps / MapTiler（付費或要金鑰，CARTO 就夠）、Postgres（Hyperdrive 多一層，D1 對單人夠用）、Cloudflare Browser Rendering（資料中心 IP 會被擋，menmap 已驗證過）。
 
 ---
 
 ## 2. 系統架構
 
 ```
-                ┌────────────────────────────────────────────┐
-                │           Cloudflare Access (登入)          │
-                └───────────────────┬────────────────────────┘
-                                    │
-                ┌───────────────────▼────────────────────────┐
-                │      Worker: rent-house (Hono + Assets)     │
-                │                                            │
-   瀏覽器 ──────▶  /            → React SPA (static assets)   │
-   Bookmarklet ─▶  /api/*       → Hono routes                 │
-                │  cron daily   → 房源狀態重新確認             │
-                └──┬─────────┬──────────┬──────────┬─────────┘
-                   │         │          │          │
-                ┌──▼──┐   ┌──▼──┐   ┌───▼───┐  ┌───▼──────────┐
-                │ D1  │   │ R2  │   │  KV   │  │ 外部 API      │
-                │主資料│   │照片 │   │快取   │  │ Anthropic     │
-                └─────┘   └─────┘   └───────┘  │ Geocoding     │
-                                               │ MapTiler tiles│
-                                               └──────────────┘
+   [家裡 Windows（採集機）]                 [Cloudflare]                          [你]
+
+  collector (Python + Playwright)
+    ├─ 抓 591 / 樂屋 / 好房 搜尋頁與物件頁
+    ├─ 本地 SQLite data/rent.db（採集正本）
+    └─ publish：POST /api/ingest（bearer secret，outbound only）
+                       │
+                       ▼
+          ┌──────────────────────────────────────────┐
+          │  Cloudflare Access（只放行你的 email）      │
+          └────────────────────┬─────────────────────┘
+                               ▼
+          ┌──────────────────────────────────────────┐
+          │  Worker: rent-house（Hono + Static Assets）│
+          │   /            → React SPA                │◀──── 瀏覽器 / 手機
+          │   /api/*       → 業務 API                  │
+          │   /api/ingest  → 採集機寫入（bearer，不經 Access）│
+          │   /api/ingest/pending → 採集機領取待抓 URL   │
+          └──┬──────────┬──────────┬──────────────────┘
+             ▼          ▼          ▼
+           D1         R2         KV        外部：Anthropic API、Nominatim、CARTO tiles
+         主資料     照片/錄音    快取
 ```
 
-**單一 Worker、單一 repo、單一 package**。Phase 1 不做 monorepo。
+**兩條寫入路徑**：
+- **採集機 → ingest**：房源本體（listing / property / 照片 URL / 價格快照）由家裡抓好再推上去。
+- **你 → API**：收藏、狀態、聯絡紀錄、看房評價這些「人的資料」直接在網頁寫。
 
----
+**貼 URL 的流程**：你在手機或電腦貼一個 591 網址 → 進 `pending_urls` 表 → 採集機每 N 分鐘 poll `/api/ingest/pending` 抓回來 → 推回 ingest → 網頁上出現房源。家裡不用開 port，手機也能用。
+
+**單一 Worker、單一 repo**。前端與 API 同一個 Worker（不像 menmap 分 Pages + Worker），少一組路由設定。
 
 ## 3. 專案結構
 
@@ -71,7 +80,14 @@
 rent-house/
 ├── docs/design/              設計文件
 ├── migrations/               D1 SQL migrations（Drizzle 產生）
-├── scripts/                  一次性腳本：匯入實價登錄、捷運站座標
+├── collector/                家裡跑的 Python 採集套件（比照 menmap/ramen）
+│   ├── __main__.py           CLI：add <url> / sync / publish / watch
+│   ├── sources/              各站 parser：five91.py、rakuya.py、hb.py
+│   ├── db.py                 本地 SQLite schema
+│   ├── publish.py            POST /api/ingest
+│   └── geo.py                Nominatim geocoding（家裡做，結果一起推）
+├── data/                     採集正本 rent.db、logs/（gitignore）
+├── scripts/                  一次性腳本：匯入實價登錄、run_daily.ps1、fetch_mrt.py（從 menmap 複製）
 ├── public/                   靜態資源（icon、manifest）
 ├── src/
 │   ├── client/               React SPA
@@ -83,14 +99,14 @@ rent-house/
 │   ├── worker/               Hono API
 │   │   ├── index.ts          入口：Hono app + cron handler
 │   │   ├── routes/           每個資源一檔：properties、listings、favorites、market、ai、visits…
-│   │   ├── services/         純邏輯：import/（各來源 parser）、market/（行情計算）、ai/、planner/
+│   │   ├── services/         純邏輯：ingest/（驗證與 upsert）、market/（行情計算）、ai/、planner/
 │   │   ├── db/               Drizzle schema + queries
 │   │   └── env.ts            Bindings 型別
 │   └── shared/               前後端共用：Zod schema、型別、常數（行政區、設備 enum）
-├── bookmarklet/              瀏覽器端抓取腳本（build 後產生一行 JS）
 ├── wrangler.jsonc
 ├── vite.config.ts
 ├── drizzle.config.ts
+├── pyproject.toml            collector 的依賴（uv）
 └── package.json
 ```
 
@@ -126,6 +142,8 @@ RentStat (實價登錄租賃，參考資料)
 
 **listing_price_history** — `listing_id, rent, seen_at`
 
+**pending_urls** — `id, url, source, status (pending|fetching|done|failed), error, requested_at, done_at`（採集機 poll 用）
+
 **photos** — `id, property_id, visit_id?, r2_key, kind (listing|visit), caption, taken_at`
 
 **favorites** — `property_id (PK), stage, tags_json, priority, note, rank, updated_at`
@@ -151,24 +169,31 @@ Phase 4 再加：`moves, move_items, movers, mover_quotes, move_checklist_items`
 
 ## 5. 關鍵流程設計
 
-### 5.1 房源匯入（URL → 房源）
+### 5.1 房源匯入（家裡採集）
 
-591 有反爬與 JS 渲染，Worker 直接 fetch 常會失敗。策略分三層，全部落到同一個 `POST /api/import` 端點：
+Worker 不抓外站。所有抓取都在家裡這台用 Playwright（住宅 IP），跟 menmap 一樣。
 
-1. **Bookmarklet（主要方式）**：在 591 / 樂屋 / 好房頁面按一下書籤，在**你自己的瀏覽器**裡讀 DOM，整理成標準 JSON 後 POST 到 API。穩定、合法、不用管反爬。
-2. **Worker 端 fetch**：貼 URL 進系統，Worker 嘗試抓 HTML 解析。成功就用，失敗提示改用 bookmarklet。
-3. **手動表單**：FB 社團、路邊廣告等，直接填。
+**三種觸發**：
+1. **貼 URL**（最常用）：網頁 / 手機貼 591、樂屋、好房網址 → `pending_urls` → 採集機 `watch` 模式每 5 分鐘 poll 一次，抓完推回。
+2. **儲存搜尋條件**：在採集機設定幾組 591 搜尋 URL（例如「大安區 1–2 房 15k–22k」），每天排程跑一次 `sync`，新出現的房源自動進系統，已存在的更新價格與狀態（下架偵測）。
+3. **手動表單**：FB 社團、路邊廣告直接填在網頁。
 
-各來源 parser 放 `services/import/<source>.ts`，都輸出同一個 `ImportedListing` Zod schema，之後接 OCR 也走同一條路。
+**採集端流程**：
+```
+URL → sources/<站>.py 解析 → ImportedListing（統一 schema）→ 本地 SQLite → geocode → publish
+```
+各站 parser 各自一檔，附 HTML fixture 測試，改版只修一檔。輸出 schema 與 Worker 端 `shared/` 的 Zod schema 對齊，ingest 端用 Zod 驗證，不合格整筆退回。
+
+**ingest 端點**：`POST /api/ingest/listings`（bearer secret，路由排除在 Access 之外），upsert `listings` + `properties`，價格有變就寫 `listing_price_history`。
 
 ### 5.2 Geocoding
 
-地址 → 座標。順序：KV 快取 → Nominatim（OSM，免費，含台灣地址）→ 手動在地圖上點位置修正。
+地址 → 座標，在採集機做（Nominatim 有速率限制，家裡排隊慢慢跑沒差），結果隨 ingest 一起推。網頁端只保留「手動拖標記修正」。
 591 頁面通常只給「大概位置」，允許 `lat/lng` 帶 `geocode_source = approx|manual|exact`。
 
 ### 5.3 捷運距離
 
-Phase 1 用捷運站座標（政府開放資料）算直線距離 × 1.3 ÷ 80 m/min 估步行分鐘。夠用來篩選與比較，Phase 2 再考慮真正的路徑 API。
+直接複製 menmap 的 `web/public/mrt.json`（OSM Overpass 產生，含雙北 / 台中 / 高雄站點、路線代碼與顏色、路線幾何），以及 `scripts/fetch_mrt.py` 供日後更新。Phase 1 用直線距離 × 1.3 ÷ 80 m/min 估步行分鐘。夠用來篩選與比較，Phase 2 再考慮真正的路徑 API。
 
 ### 5.4 租金合理性
 
@@ -216,7 +241,7 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 |---|---|---|
 | M1 | 專案骨架：Vite + React + Hono + D1 + Drizzle；手動新增房源表單；房源列表 | 能記錄房源 |
 | M2 | 地圖：MapLibre、價格標記、點擊看摘要、Geocoding | 地圖上看房源 |
-| M3 | Bookmarklet + URL 匯入（591 優先） | 一鍵存房源 |
+| M3 | collector：貼 URL → pending → 採集機抓 591 → ingest；`watch` 模式 | 一鍵存房源 |
 | M4 | 收藏 / 狀態流程（Kanban）；房源詳細頁；照片上傳 R2 | 找房 CRM |
 | M5 | 實價登錄匯入；捷運站資料；租金行情卡 | 知道價格合不合理 |
 | M6 | 需求設定 + 權重；地圖 🟢🟡🔴 | 篩掉不符合的 |
@@ -242,9 +267,9 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 | D1 | `rent-house-db` | 主資料 |
 | R2 | `rent-house-photos` | 照片、錄音 |
 | KV | `rent-house-cache` | Geocoding / AI / 匯入快取 |
-| Secrets | `ANTHROPIC_API_KEY`, `MAPTILER_API_KEY` | 用 `wrangler secret put` |
+| Secrets | `ANTHROPIC_API_KEY`, `INGEST_SECRET` | 用 `wrangler secret put`；`INGEST_SECRET` 同一把放家裡 `.env` |
 | Access | 一個 self-hosted app，只允許你的 email | 登入 |
-| Cron | `0 3 * * *`（每日一次） | 重新確認房源狀態 |
+| 家裡排程 | Task Scheduler，每日一次 `collector sync` + `publish` | 比照 menmap `run_daily.ps1` |
 
 **規則：在你說「好」之前，不執行任何 `wrangler deploy`、`wrangler d1 create`、`wrangler r2 bucket create` 等會建立雲端資源的指令。** 本機開發全部用 `vite dev` 的本地模擬。
 
@@ -254,8 +279,9 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 | 風險 | 對策 |
 |---|---|
-| 591 反爬 / 改版 | Bookmarklet 為主；parser 獨立檔案、有 fixture 測試，改版只修一檔 |
-| Geocoding 不準 | 允許手動拖標記；記錄 `geocode_source` |
+| 591 反爬 / 改版 | 住宅 IP + Playwright 真瀏覽器；parser 獨立檔案、有 fixture 測試，改版只修一檔；抓取加隨機間隔 |
+| 採集機關機 / 沒開 | 貼 URL 進 pending 佇列不會掉，開機後補抓；網頁顯示「等待採集」狀態 |
+| Geocoding 不準 | 家裡用 Nominatim，允許網頁手動拖標記；記錄 `geocode_source` |
 | 實價登錄資料格式變動 | 匯入 script 用 Zod 驗證，失敗整批不進 |
 | D1 單筆查詢上限 / 無 PostGIS | 座標用 bounding box 索引查詢，量小夠用 |
 | AI 產生不實資訊 | 只餵結構化資料，要求引用輸入欄位；輸出 JSON schema 驗證 |
@@ -263,10 +289,15 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 ---
 
-## 9. 待你決定的事項
+## 9. 已定案
 
-1. **前端框架**：React（本文預設）或 SvelteKit？兩者都能跑在同一個 Worker。
-2. **地圖圖磚**：MapTiler（免費 10 萬次 / 月，要申請 key）或 OpenFreeMap（完全免費、無 key、無 SLA）？
-3. **登入**：Phase 1 用 Cloudflare Access（推薦），還是一開始就做帳號系統？
-4. **範圍**：目標城市只有台北 / 新北？影響捷運站資料與實價登錄匯入範圍。
-5. **M1 之後**要不要就先直接用起來，邊用邊決定 M2–M8 的順序？
+- 資料採集在家裡這台 Windows 跑（Python + Playwright，比照 menmap）。
+- 地圖底圖用 CARTO Positron / Dark Matter，沿用 menmap 的中文化與快取設定。
+- 捷運站資料直接沿用 menmap 的 `mrt.json`。
+
+## 10. 待你決定的事項
+
+1. **前端框架**：React（本文預設；menmap 也是 React + MapLibre，可以搬不少地圖程式碼）或 SvelteKit？
+2. **登入**：Phase 1 用 Cloudflare Access（推薦），還是比照 menmap 做 Google OAuth？
+3. **目標範圍**：只有雙北？影響實價登錄匯入範圍與 591 搜尋條件。
+4. **M1 之後**要不要就先直接用起來，邊用邊決定 M2–M8 的順序？

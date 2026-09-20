@@ -52,3 +52,13 @@ Thumbs.db
 tmp/
 .cache/
 .turbo/
+
+# ---- Python collector ----
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ---- 採集資料（正本在家裡，不進 git）----
+data/
+!data/.gitkeep
