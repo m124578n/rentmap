@@ -11,6 +11,8 @@ interface Props {
   onSelect: (id: number | null) => void;
   theme: Theme;
   mrt: MrtData | null;
+  /** 左側面板寬度(px),平移到選中標記時避開它;手機面板在下方,傳 0 */
+  padLeft?: number;
 }
 
 /** 房源價格標記的顏色,依找房狀態 */
@@ -34,7 +36,7 @@ function priceLabel(rent: number | null) {
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
@@ -42,6 +44,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt }: Props) {
   const onSelectRef = useRef(onSelect);
   const mrtRef = useRef(mrt);
   const themeRef = useRef(theme);
+  const padRef = useRef(padLeft);
+  padRef.current = padLeft;
   onSelectRef.current = onSelect;
   mrtRef.current = mrt;
   themeRef.current = theme;
@@ -141,7 +145,16 @@ export function MapView({ items, selectedId, onSelect, theme, mrt }: Props) {
     if (!map) return;
     for (const [id, entry] of markersRef.current) entry.el.classList.toggle("is-selected", id === selectedId);
     const p = items.find((x) => x.id === selectedId);
-    if (p && p.lat != null && p.lng != null) map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 15), duration: 500 });
+    if (p && p.lat != null && p.lng != null) {
+      const narrow = window.innerWidth < 640;
+      map.easeTo({
+        center: [p.lng, p.lat],
+        zoom: Math.max(map.getZoom(), 15),
+        duration: 500,
+        // 桌機:面板在左邊;手機:面板在下面(約 60% 高)
+        padding: narrow ? { top: 0, bottom: Math.round(map.getContainer().clientHeight * 0.6), left: 0, right: 0 } : { top: 0, bottom: 0, left: padRef.current, right: 0 },
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 

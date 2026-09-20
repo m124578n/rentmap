@@ -28,7 +28,8 @@ await page.evaluate(async () => {
   for (let i = 0; i < 40 && !(m.loaded() && m.areTilesLoaded()); i++) await new Promise((r) => setTimeout(r, 500));
 });
 if (flags.click) {
-  await page.locator(flags.click).first().click();
+  // 標記會互相重疊,Playwright 的可點性檢查會卡住,直接觸發 click
+  await page.locator(flags.click).first().evaluate((el) => el.click());
   await page.waitForTimeout(1200);
 }
 await page.screenshot({ path: out });

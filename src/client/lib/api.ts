@@ -69,6 +69,8 @@ export interface PropertyDetail {
     sourceUrl: string | null;
     rent: number;
     depositMonths: number | null;
+    photosJson: string | null;
+    rawJson: string | null;
     contactName: string | null;
     contactPhone: string | null;
     contactLine: string | null;
