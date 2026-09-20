@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BUILDING_TYPES, CITIES, DISTRICTS, SOURCES, STAGES, type City } from "./constants";
+import { BUILDING_TYPES, CITIES, DISTRICTS, KINDS, SOURCES, STAGES, type City } from "./constants";
 
 /** 空字串當 undefined(HTML 表單送空欄位) */
 const optStr = z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().trim().max(500).optional());
@@ -18,6 +18,7 @@ const PropertyFields = z
     lat: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().min(-90).max(90).optional()),
     lng: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().min(-180).max(180).optional()),
 
+    kind: z.preprocess((v) => (v === "" ? undefined : v), z.enum(KINDS).optional()),
     building_type: z.preprocess((v) => (v === "" ? undefined : v), z.enum(BUILDING_TYPES).optional()),
     floor: optInt,
     total_floors: optInt,

@@ -22,7 +22,9 @@ npm run collect -- add https://rent.591.com.tw/<id>   # 抓一筆 591 推進本�
 
 - [x] M1 骨架:Vite + React + Hono + D1(Drizzle)、Google 登入、手動新增房源、列表、詳細頁、狀態切換
 - [x] M2 地圖:MapLibre + CARTO 亮暗底圖、雙北捷運路線與站點、價格標記、點選摘要卡、主題切換
-- [x] M3a 採集:591 parser + `collect add/list` + `/api/ingest/listings`(探測:`docs/design/2026-09-20-collector-spike.md`)
+- [x] M3a 採集:591 parser + `collect add/list --pages` + `/api/ingest/listings`(探測:`docs/design/2026-09-20-collector-spike.md`);`scripts/collect-taipei.sh` 批次抓台北市三種房型
+- [x] 篩選列(地圖 / 列表共用):房型、租金、行政區、房數、坪數、電梯 / 寵物 / 開伙、狀態
+- [x] 點標記 → 左側詳細面板(照片、狀態、規格、聯絡、屋況介紹)
 - [ ] M3b 貼 URL 佇列 + 採集機 watch;列表分頁 + 每日 sync;好房
 - [ ] M4 收藏 Kanban、照片上傳 R2
 - [ ] M5 實價登錄匯入、租金行情

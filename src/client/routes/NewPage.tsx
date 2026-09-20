@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ApiError, api } from "@/lib/api";
 import { PropertyInput } from "@shared/schemas";
-import { BUILDING_TYPES, CITIES, DISTRICTS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
+import { BUILDING_TYPES, CITIES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
 export function NewPage() {
@@ -107,6 +107,14 @@ export function NewPage() {
           </Field>
           <Field label="屋齡(年)">
             <input name="building_age" type="number" min={0} className="input" />
+          </Field>
+          <Field label="房型">
+            <select name="kind" className="input" defaultValue="">
+              <option value="">—</option>
+              {KINDS.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </select>
           </Field>
           <Field label="型態">
             <select name="building_type" className="input" defaultValue="">

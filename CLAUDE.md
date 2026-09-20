@@ -31,6 +31,8 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);parser
 | `npm run db:generate` | 改 `src/worker/db/schema.ts` 後產 migration |
 | `npm run db:migrate:local` | 套 migration 到本地 D1(`vite dev` 開著時不要跑,會撞 SQLite) |
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENT_HOUSE_API` |
+| `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
+| `bash scripts/collect-taipei.sh` | 台北市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
 
 ## 驗證順序(省 token)
 
@@ -45,6 +47,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 
 ## 已知坑
 
+- 改 Drizzle schema 前先確認沒有採集在跑:HMR 會讓 Worker 立刻用新 schema 查 D1,欄位還沒 migrate 就整個 ingest 壞掉。順序:採集跑完 → 停 dev → 改 schema → `db:generate` → `db:migrate:local` → 重開。
 - Tailwind v4 的 `@apply` 不能引用自訂 class(`.btn`),要重複 utility。
 - `@cloudflare/vitest-plugin` 需要 vitest 4.x,不能升 5。
 - `tsc -b` 偶爾吃到舊的 `.tsbuildinfo` 報假錯,刪掉重跑。

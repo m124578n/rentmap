@@ -15,6 +15,13 @@
       "when": 1789905949019,
       "tag": "0001_listing_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789907351997,
+      "tag": "0002_property_kind",
+      "breakpoints": true
     }
   ]
 }

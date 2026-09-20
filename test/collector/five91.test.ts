@@ -38,6 +38,7 @@ describe("591 detail", () => {
       total_floors: 3,
       building_age: 61,
       building_type: "公寓",
+      kind: "整層住家",
       has_elevator: false,
       has_parking: false,
       has_washer: false,

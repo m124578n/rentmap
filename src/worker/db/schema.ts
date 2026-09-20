@@ -32,6 +32,7 @@ export const properties = sqliteTable(
     lat: real("lat"),
     lng: real("lng"),
     geocodeSource: text("geocode_source"), // approx | manual | exact | null
+    kind: text("kind"), // 整層住家 | 獨立套房 | 分租套房 | 雅房 | 其他
     buildingType: text("building_type"),
     floor: integer("floor"),
     totalFloors: integer("total_floors"),

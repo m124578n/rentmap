@@ -112,6 +112,7 @@ export function parse591Detail(html: string, url: string): ImportedListing {
   const lat = num(d.positionRound?.lat);
   const lng = num(d.positionRound?.lng);
   const kindTxt = d.favData?.kindTxt ?? d.gtm_detail_data?.kind_name;
+  const kind = (["整層住家", "獨立套房", "分租套房", "雅房"] as const).find((k) => kindTxt?.includes(k)) ?? (kindTxt ? "其他" : undefined);
 
   const raw = {
     kind: d.kind,
@@ -137,6 +138,7 @@ export function parse591Detail(html: string, url: string): ImportedListing {
     address_text: addr || undefined,
     lat,
     lng,
+    kind,
     building_type: buildingType,
     floor: floor ? Number(floor[1]) : undefined,
     total_floors: floor?.[2] ? Number(floor[2]) : undefined,

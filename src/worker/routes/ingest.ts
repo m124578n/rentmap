@@ -43,6 +43,7 @@ function propertyValues(v: ImportedListing) {
     lat: v.lat ?? null,
     lng: v.lng ?? null,
     geocodeSource: v.lat != null && v.lng != null ? "approx" : null, // 591 給的是大概位置
+    kind: v.kind ?? null,
     buildingType: v.building_type ?? null,
     floor: v.floor ?? null,
     totalFloors: v.total_floors ?? null,

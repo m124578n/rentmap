@@ -39,3 +39,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
 
 export const BUILDING_TYPES = ["公寓", "電梯大樓", "華廈", "透天", "套房", "其他"] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
+
+/** 房型(591 的 kind):整層 / 獨立套房 / 分租套房 / 雅房 */
+export const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房", "其他"] as const;
+export type Kind = (typeof KINDS)[number];
