@@ -81,6 +81,12 @@ export interface PropertySummary {
   floor: number | null;
   total_floors: number | null;
   has_elevator: boolean | null;
+  pet_allowed: boolean | null;
+  cooking_allowed: boolean | null;
+  building_age: number | null;
+  building_type: string | null;
+  /** 整層住家 | 獨立套房 | 分租套房 | 雅房 | 其他;舊資料可能為 null */
+  kind?: string | null;
   mgmt_fee: number | null;
   rent: number | null;
   source: string | null;
