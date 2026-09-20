@@ -1,13 +1,15 @@
 /**
  * 視覺確認用:開 headless Chromium,本機登入,截指定路徑的圖。
- *   node scripts/shot.mjs [path=/] [out=data/shot.png] [--dark] [--click=.rh-marker]
+ *   node scripts/shot.mjs [--route=/list] [--out=data/shot.png] [--dark] [--click=.rh-marker]
+ * (路徑用 --route= 傳,因為 Git Bash 會把開頭的 / 轉成 C:/Program Files/Git/)
  * 需要 `npm run dev` 開著。只在版面 / 視覺改動後用,一張就好(省 token)。
  */
 import { chromium } from "playwright";
 
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")));
-const [route = "/", out = "data/shot.png"] = args.filter((a) => !a.startsWith("--"));
+const route = flags.route ?? "/";
+const out = flags.out ?? "data/shot.png";
 const base = process.env.RENT_HOUSE_API ?? "http://localhost:5173";
 
 const browser = await chromium.launch();

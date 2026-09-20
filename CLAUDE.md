@@ -36,7 +36,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);parser
 
 1. `npm run check` 過了就不用開瀏覽器確認編譯。
 2. API 行為用 `npm test` 或 curl;測試可以自己簽 session cookie(見 `test/properties.test.ts` 的 `signSession`)。
-3. 只有版面 / 視覺改動才截圖,一張就好:`npm run dev` 開著,`node scripts/shot.mjs / data/shot.png --click=.rh-marker`(`--dark` 切暗色),再用 Read 看圖。
+3. 只有版面 / 視覺改動才截圖,一張就好:`npm run dev` 開著,`node scripts/shot.mjs --route=/ --click=.rh-marker`(`--dark` 切暗色),再用 Read 看圖。
 
 ## 本機登入
 
