@@ -43,7 +43,7 @@ export function NewPage() {
   const err = (k: string) => errors[k] && <span className="text-xs text-red-600">{errors[k]}</span>;
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4">
+    <form onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4 p-4">
       <h1 className="text-xl font-semibold">新增房源</h1>
 
       <section className="card grid gap-3">

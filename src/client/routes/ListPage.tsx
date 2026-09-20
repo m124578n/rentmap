@@ -10,7 +10,7 @@ export function ListPage() {
   const items = q.data?.items ?? [];
   if (items.length === 0)
     return (
-      <div className="card text-center text-neutral-500">
+      <div className="card m-4 text-center text-neutral-500">
         還沒有房源。
         <Link to="/new" className="ml-1 text-emerald-600 underline">
           新增第一間
@@ -18,7 +18,7 @@ export function ListPage() {
       </div>
     );
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
+    <ul className="mx-auto grid max-w-5xl gap-3 p-4 sm:grid-cols-2">
       {items.map((p) => (
         <li key={p.id}>
           <Link to="/p/$id" params={{ id: String(p.id) }} className="card block hover:border-emerald-500">

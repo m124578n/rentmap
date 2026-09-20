@@ -1,25 +1,38 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Home, LogOut, Plus } from "lucide-react";
+import { Home, List, LogOut, Map, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
+import { useTheme } from "@/lib/useTheme";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
   const { user, enabled, dev, loading, login, devLogin, logout } = useAuth();
+  const { theme, toggle } = useTheme();
   const params = new URLSearchParams(window.location.search);
   const loginErr = params.get("login");
 
   return (
-    <div className="mx-auto flex min-h-full max-w-5xl flex-col">
+    <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <Link to="/" className="flex items-center gap-2 font-semibold">
           <Home size={18} /> 租屋筆記
         </Link>
-        <nav className="flex items-center gap-2">
+        <nav className="flex items-center gap-1 sm:gap-2">
           {user && (
-            <Link to="/new" className="btn-primary">
-              <Plus size={16} /> 新增房源
-            </Link>
+            <>
+              <Link to="/" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }} activeOptions={{ exact: true }}>
+                <Map size={16} /> <span className="hidden sm:inline">地圖</span>
+              </Link>
+              <Link to="/list" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
+                <List size={16} /> <span className="hidden sm:inline">列表</span>
+              </Link>
+              <Link to="/new" className="btn-primary">
+                <Plus size={16} /> <span className="hidden sm:inline">新增</span>
+              </Link>
+            </>
           )}
+          <button onClick={toggle} className="btn-ghost" aria-label="切換主題">
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           {user ? (
             <button onClick={logout} className="btn-ghost" title={user.name ?? ""}>
               {user.avatar && <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />}
@@ -39,15 +52,15 @@ export function Layout() {
           )}
         </nav>
       </header>
-      <main className="flex-1 px-4 py-4">
-        {loginErr === "denied" && <p className="card mb-4 border-red-300 text-red-700">這個 Google 帳號不在白名單裡。</p>}
-        {loginErr === "failed" && <p className="card mb-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
+      <main className="min-h-0 flex-1 overflow-auto">
+        {loginErr === "denied" && <p className="card m-4 border-red-300 text-red-700">這個 Google 帳號不在白名單裡。</p>}
+        {loginErr === "failed" && <p className="card m-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
         {loading ? (
-          <p className="text-neutral-500">載入中…</p>
+          <p className="p-4 text-neutral-500">載入中…</p>
         ) : user ? (
           <Outlet />
         ) : (
-          <div className="card text-center">
+          <div className="card m-4 text-center">
             <p className="mb-3">先登入才看得到你的房源。</p>
             {dev ? (
               <button onClick={devLogin} className="btn-primary">

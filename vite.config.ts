@@ -13,5 +13,7 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "src/shared"),
     },
   },
+  // maplibre-gl v6 的 web worker 在 Vite 預打包後載不到(dev 模式圖磚全空),排除掉讓它走原生 ESM
+  optimizeDeps: { exclude: ["maplibre-gl"] },
   server: { port: 5173, strictPort: true },
 });

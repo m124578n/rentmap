@@ -21,7 +21,7 @@ npm run collect -- add https://rent.591.com.tw/<id>   # 抓一筆 591 推進本�
 ## 目前進度
 
 - [x] M1 骨架:Vite + React + Hono + D1(Drizzle)、Google 登入、手動新增房源、列表、詳細頁、狀態切換
-- [ ] M2 地圖(MapLibre + CARTO)
+- [x] M2 地圖:MapLibre + CARTO 亮暗底圖、雙北捷運路線與站點、價格標記、點選摘要卡、主題切換
 - [x] M3a 採集:591 parser + `collect add/list` + `/api/ingest/listings`(探測:`docs/design/2026-09-20-collector-spike.md`)
 - [ ] M3b 貼 URL 佇列 + 採集機 watch;列表分頁 + 每日 sync;好房
 - [ ] M4 收藏 Kanban、照片上傳 R2

@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
+/* 暗色模式跟 <html data-theme="dark">(useTheme),不跟系統 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,
@@ -31,4 +37,50 @@ body {
 }
 .card {
   @apply rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900;
+}
+
+/* 地圖上的價格標記(MapView 用 HTML marker) */
+.rh-marker {
+  --c: #059669;
+  cursor: pointer;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--c);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  transition: transform 0.12s;
+}
+.rh-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  background: var(--c);
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translateX(-50%) rotate(45deg);
+}
+.rh-marker:hover,
+.rh-marker.is-selected {
+  transform: scale(1.15);
+  z-index: 1;
+}
+.rh-marker.is-selected {
+  outline: 3px solid rgb(16 185 129 / 0.45);
+}
+.rh-marker.is-rejected {
+  opacity: 0.55;
+}
+:root[data-theme="dark"] .rh-marker {
+  border-color: #111;
+}
+:root[data-theme="dark"] .rh-marker::after {
+  border-color: #111;
 }

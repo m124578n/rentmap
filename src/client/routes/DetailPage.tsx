@@ -31,7 +31,7 @@ export function DetailPage() {
   const main = listings[0];
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-4">
+    <div className="mx-auto grid max-w-3xl gap-4 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{p.title}</h1>
