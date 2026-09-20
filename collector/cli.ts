@@ -2,7 +2,8 @@
  * 家裡採集機 CLI(Node + TypeScript,和 Worker 共用 src/shared 的 Zod schema)。
  *
  *   npm run collect -- add <url> [--dry]     抓一個物件頁 → 驗證 → 推到 /api/ingest/listings(--dry 只印 JSON)
- *   npm run collect -- list <listUrl> [--dry] 抓一頁列表 → 逐筆抓物件頁 → 推上去
+ *   npm run collect -- list <listUrl> [--pages=1-5] [--dry]
+ *                                            抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
  *
  * 設定讀 .env:RENT_HOUSE_API(預設 http://localhost:5173)、INGEST_SECRET。
  */
@@ -52,24 +53,37 @@ async function main() {
     return;
   }
   if (cmd === "list" && arg) {
-    const { html } = await fetchHtml(arg);
-    const urls = parse591List(html);
-    console.log(`列表 ${urls.length} 筆`);
-    const items: ImportedListing[] = [];
-    for (const u of urls) {
-      try {
-        const l = await fetchListing(u);
-        console.log("  ✓", summary(l));
-        items.push(l);
-      } catch (e) {
-        console.log("  ✗", u, String(e));
+    const pagesArg = rest.find((r) => r.startsWith("--pages="))?.slice(8) ?? "1";
+    const [a, b] = pagesArg.split("-").map(Number);
+    const from = a || 1;
+    const to = b ?? from;
+    let total = { created: 0, updated: 0, failed: 0 };
+    for (let page = from; page <= to; page++) {
+      const url = page === 1 ? arg : `${arg}${arg.includes("?") ? "&" : "?"}page=${page}`;
+      const { html } = await fetchHtml(url);
+      const urls = parse591List(html);
+      console.log(`\n=== 第 ${page} 頁:${urls.length} 筆 ===`);
+      if (urls.length === 0) break;
+      const items: ImportedListing[] = [];
+      for (const u of urls) {
+        try {
+          const l = await fetchListing(u);
+          console.log("  ✓", summary(l));
+          items.push(l);
+        } catch (e) {
+          total.failed++;
+          console.log("  ✗", u, String(e));
+        }
       }
+      if (dry || items.length === 0) continue;
+      const r = await push(items);
+      total = { ...total, created: total.created + r.created, updated: total.updated + r.updated };
+      console.log(`  → 推入:新 ${r.created}、更新 ${r.updated}`);
     }
-    if (dry) return;
-    console.log(await push(items));
+    console.log("\n合計", total);
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--dry]");
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry]");
   process.exit(1);
 }
 
