@@ -4,7 +4,7 @@
  *   - "hb" (好房):Playwright + Nominatim geocode
  */
 import { ImportedListing } from "../../src/shared/schemas";
-import { fetchHtml } from "../lib/http";
+import { fetchHtml, politeDelay } from "../lib/http";
 import { withPage } from "../lib/browser";
 import { geocode } from "../lib/geocode";
 import { is591, parse591Detail, parse591List } from "./five91";
@@ -56,6 +56,13 @@ export const five91: Source = {
   },
 };
 
+/** 好房(CloudFront)一輪約 100 次載入就會回 403 一陣子:每次載入之間歇 6–10 秒,遇到 403 立刻停 */
+const HB_GAP_MS = 6000;
+async function hbBlocked(status: number | undefined, p: import("playwright").Page) {
+  if (status === 403 || status === 429 || status === 503) return true;
+  return /could not be satisfied|Access Denied/i.test(await p.title());
+}
+
 /** 好房分頁靠頁內 PM(n):第 1 頁直接 goto,之後在同一個 page 上 evaluate PM(n) 等內容換掉 */
 export const housefun: Source = {
   id: "hb",
@@ -63,8 +70,10 @@ export const housefun: Source = {
   matches: isHousefun,
   idFromUrl: (u) => u.match(/\/rent\/house\/(\d+)/)?.[1] ?? null,
   async listUrls(listUrl, page) {
+    await politeDelay(HB_GAP_MS);
     return withPage(async (p) => {
-      await p.goto(listUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+      const resp = await p.goto(listUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+      if (await hbBlocked(resp?.status(), p)) throw new Error("blocked: 好房回 403(CloudFront 限速),本輪停止");
       await p.waitForSelector("article.DataList", { timeout: 20000 });
       if (page > 1) {
         const before = await p.$$eval("article.DataList h3.title a", (as) => as.map((a) => (a as HTMLAnchorElement).href).join(","));
@@ -79,9 +88,11 @@ export const housefun: Source = {
     let html: string;
     let finalUrl: string;
     try {
+      await politeDelay(HB_GAP_MS);
       ({ html, finalUrl } = await withPage(async (p) => {
         const resp = await p.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
         if (resp && resp.status() === 404) return { html: "", finalUrl: "/errorPage" };
+        if (await hbBlocked(resp?.status(), p)) throw new Error("blocked");
         await p.waitForTimeout(1200);
         return { html: await p.content(), finalUrl: p.url() };
       }));

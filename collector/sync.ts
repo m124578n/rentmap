@@ -85,6 +85,8 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
     const seen = new Set<string>();
     let parseErrors = 0;
     let fetched = 0;
+    let consecutiveNet = 0;
+    let tripped = false; // 斷路器:連續網路失敗 / 被擋就停掉這個來源,不再硬打
     const active = await apiJson<{ items: ActiveItem[] }>(api, `/api/ingest/active?source=${src.id}`);
     const checkedAt = new Map(active.items.map((it) => [it.source_listing_id, it.last_checked_at ? Date.parse(it.last_checked_at) : 0]));
 
@@ -104,17 +106,30 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
         } else sum.failed++;
         log(`  ✗ ${url} ${r.kind} ${r.error.slice(0, 120)}`);
       }
+      if (r.kind === "net_error") {
+        consecutiveNet++;
+        if (/blocked/.test(r.error) || consecutiveNet >= 3) {
+          tripped = true;
+          log(`!! [${src.label}] 連續失敗 / 被擋,本輪停止這個來源`);
+        }
+      } else consecutiveNet = 0;
     };
 
     // 1. 掃列表
     for (const s of searches) {
+      if (tripped) break;
       for (let page = 1; page <= s.pages; page++) {
+        if (tripped) break;
         let urls: string[];
         try {
           urls = await src.listUrls(s.url, page);
         } catch (e) {
           log(`✗ 列表失敗 ${s.name} p${page}:${String(e).slice(0, 120)}`);
           sum.failed++;
+          if (/blocked/.test(String(e)) || ++consecutiveNet >= 3) {
+            tripped = true;
+            log(`!! [${src.label}] 列表連續失敗 / 被擋,本輪停止這個來源`);
+          }
           continue;
         }
         log(`=== [${src.label}] ${s.name} 第 ${page} 頁:${urls.length} 筆 ===`);
@@ -123,6 +138,7 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
         const seenOnly: string[] = [];
         const gone: string[] = [];
         for (const u of urls) {
+          if (tripped) break;
           sum.scannedUrls++;
           const id = src.idFromUrl(u) ?? "";
           const last = checkedAt.get(id);
@@ -148,6 +164,7 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
     const gone: string[] = [];
     const batch: ImportedListing[] = [];
     for (const it of stale) {
+      if (tripped) break;
       if (!it.source_url) continue;
       sum.rechecked++;
       await fetchInto(it.source_url, batch, gone);

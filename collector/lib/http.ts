@@ -5,7 +5,7 @@ let lastAt = 0;
 const MIN_GAP_MS = 2500;
 
 export async function politeDelay(minGap = MIN_GAP_MS) {
-  const wait = lastAt + minGap + Math.random() * 1500 - Date.now();
+  const wait = lastAt + minGap + Math.random() * (minGap > 4000 ? 4000 : 1500) - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastAt = Date.now();
 }
