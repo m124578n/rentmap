@@ -32,13 +32,18 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);parser
 | `npm run db:migrate:local` | 套 migration 到本地 D1(`vite dev` 開著時不要跑,會撞 SQLite) |
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENT_HOUSE_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
-| `bash scripts/collect-taipei.sh` | 台北市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
+| `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
+| `npm run collect -- sync` | 每日同步(searches.json);排程 `RentHouseDailySync` 每天 20:00 跑 `scripts/run_daily.ps1`,本機模式會自己起 / 關 dev server |
 
 ## 驗證順序(省 token)
 
 1. `npm run check` 過了就不用開瀏覽器確認編譯。
 2. API 行為用 `npm test` 或 curl;測試可以自己簽 session cookie(見 `test/properties.test.ts` 的 `signSession`)。
 3. 只有版面 / 視覺改動才截圖,一張就好:`npm run dev` 開著,`node scripts/shot.mjs --route=/ --click=.rh-marker`(`--dark` 切暗色),再用 Read 看圖。
+
+## 排程
+
+每天 20:00 Windows 工作排程 `RentHouseDailySync` 跑 `scripts/run_daily.ps1`(log 在 `data/logs/{date}-sync.log`)。**20:00 到約 20:40 不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENT_HOUSE_API` 改成正式站即可。
 
 ## 本機登入
 

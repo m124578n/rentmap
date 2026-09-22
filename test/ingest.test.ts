@@ -51,6 +51,25 @@ describe("ingest", () => {
     expect(prop).toEqual({ title: "改標題", geocode_source: "approx" });
   });
 
+  it("lists active listings and marks removed via /status", async () => {
+    await post({ items: [{ ...item, source_listing_id: "999003" }] });
+    const before = (await (await SELF.fetch(`${ORIGIN}/api/ingest/active?source=591`, { headers: { Authorization: "Bearer test-ingest" } })).json()) as {
+      items: { source_listing_id: string }[];
+    };
+    expect(before.items.map((i) => i.source_listing_id)).toContain("999003");
+
+    const r = await SELF.fetch(`${ORIGIN}/api/ingest/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-ingest" },
+      body: JSON.stringify({ items: [{ source: "591", source_listing_id: "999003", status: "removed" }] }),
+    });
+    expect(await r.json()).toEqual({ updated: 1 });
+    const after = (await (await SELF.fetch(`${ORIGIN}/api/ingest/active?source=591`, { headers: { Authorization: "Bearer test-ingest" } })).json()) as {
+      items: { source_listing_id: string }[];
+    };
+    expect(after.items.map((i) => i.source_listing_id)).not.toContain("999003");
+  });
+
   it("keeps manually corrected coordinates", async () => {
     const a = (await (await post({ items: [{ ...item, source_listing_id: "999002" }] })).json()) as { ids: number[] };
     const pid = a.ids[0]!;

@@ -33,6 +33,59 @@ ingest.post("/api/ingest/listings", async (c) => {
   return c.json({ created, updated, ids });
 });
 
+/** 採集機每日 sync 用:某來源目前還在刊登中的 listing 清單(重抓偵測下架 / 價格變動) */
+ingest.get("/api/ingest/active", async (c) => {
+  const source = c.req.query("source") ?? "591";
+  const rows = await db(c.env.DB)
+    .select({
+      source_listing_id: schema.listings.sourceListingId,
+      source_url: schema.listings.sourceUrl,
+      last_checked_at: schema.listings.lastCheckedAt,
+      rent: schema.listings.rent,
+    })
+    .from(schema.listings)
+    .where(and(eq(schema.listings.source, source), eq(schema.listings.status, "active")));
+  return c.json({ items: rows });
+});
+
+/** 列表上還看得到 → 只更新 last_seen_at(不重抓物件頁),省掉每天幾百次的抓取 */
+const SeenBody = z.object({ source: z.string(), ids: z.array(z.string()).min(1).max(1000) });
+ingest.post("/api/ingest/seen", async (c) => {
+  const parsed = SeenBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid" }, 400);
+  const d = db(c.env.DB);
+  const now = nowIso();
+  let n = 0;
+  for (const id of parsed.data.ids) {
+    const r = await d
+      .update(schema.listings)
+      .set({ lastSeenAt: now })
+      .where(and(eq(schema.listings.source, parsed.data.source), eq(schema.listings.sourceListingId, id)));
+    n += r.meta.changes ?? 0;
+  }
+  return c.json({ updated: n });
+});
+
+/** 採集機回報狀態(404 → removed);不帶完整資料 */
+const StatusBody = z.object({
+  items: z.array(z.object({ source: z.string(), source_listing_id: z.string(), status: z.enum(["active", "removed", "unknown"]) })).min(1).max(500),
+});
+ingest.post("/api/ingest/status", async (c) => {
+  const parsed = StatusBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid" }, 400);
+  const d = db(c.env.DB);
+  const now = nowIso();
+  let n = 0;
+  for (const it of parsed.data.items) {
+    const r = await d
+      .update(schema.listings)
+      .set({ status: it.status, lastCheckedAt: now })
+      .where(and(eq(schema.listings.source, it.source), eq(schema.listings.sourceListingId, it.source_listing_id)));
+    n += r.meta.changes ?? 0;
+  }
+  return c.json({ updated: n });
+});
+
 function propertyValues(v: ImportedListing) {
   return {
     title: v.title,

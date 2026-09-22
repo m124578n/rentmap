@@ -83,7 +83,13 @@ async function main() {
     console.log("\n合計", total);
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry]");
+  if (cmd === "sync") {
+    const { loadConfig, runSync } = await import("./sync");
+    if (!SECRET) throw new Error(".env 沒有 INGEST_SECRET");
+    await runSync({ base: API, secret: SECRET }, loadConfig());
+    return;
+  }
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync");
   process.exit(1);
 }
 
