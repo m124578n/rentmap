@@ -58,6 +58,8 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - `tsc -b` 偶爾吃到舊的 `.tsbuildinfo` 報假錯,刪掉重跑。
 - maplibre-gl v6 在 Vite 8 dev 模式要 `optimizeDeps.exclude`,否則 worker 載不到、圖磚全空(已設在 vite.config.ts)。
 - `import * as maplibregl from "maplibre-gl"`(v6 沒有 default export);GeoJSON 型別從 `geojson` 套件 import。
+- 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
+- Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。
 - 591 的 `window.__NUXT__` 是 JS 函式呼叫不是 JSON,要 `node:vm` 執行;Playwright 裡 stringify 會循環參照。
 - 型別:bindings 從 `worker-configuration.d.ts`(`npm run types` 產生)的 `Cloudflare.Env` 來,機密欄位在 `src/worker/env.ts` 用 `declare global` 補。

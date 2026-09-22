@@ -68,4 +68,5 @@
 ### 樂屋(rakuya.com.tw)
 - requests 403;Playwright headless(含真 Chrome / Edge channel)都停在 Cloudflare「請稍候...」驗證頁。
 - 可行路徑:headed 瀏覽器 + 持久化 profile(第一次人工過驗證,之後帶 `cf_clearance` cookie),或接 CDP 到你平常開著的 Chrome。會被 Cloudflare 的更新打斷,維護成本高。
-- **估:1 天起跳,且不保證穩定。** 建議先不做;591 + 好房已覆蓋大部分物件。
+- **2026-09-22 再試**:有視窗的真 Chrome + 持久化 profile,等 60 秒仍停在驗證頁;使用者手動點驗證框也會一直跳回,代表 Cloudflare 偵測到瀏覽器被自動化(CDP)控制,不是單純的 cookie 問題。
+- **結論:自動化這條路不做。** 之後若真要樂屋,只剩「使用者自己的瀏覽器」路線:bookmarklet 在樂屋頁面按一下,把 DOM 解析結果 POST 到 /api/ingest(需要先部署到有 HTTPS 的正式站)。
