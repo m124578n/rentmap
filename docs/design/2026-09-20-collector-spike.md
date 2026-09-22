@@ -63,7 +63,7 @@
 - 物件頁是舊式 ASP.NET,沒有 JSON-LD / 座標;欄位是「租 金:」「坪 數:」「樓 層:」「建物格局:」「型 態:」這種標籤文字,要做 DOM 文字解析;地址只到路名,座標要自己 geocode(Nominatim)。
 - 列表每頁只有約 10 筆,分頁參數還沒找到(列表用 ASP.NET postback 的可能性高)。
 - 分頁:頁內 JS `PM(n)`(AJAX POST `ashx/search/search.ashx`),在 Playwright 裡 evaluate 再等內容換掉。
-- **限速**:第一次每日 sync 在約 100 次頁面載入後整站回 403(CloudFront「The request could not be satisfied」),連首頁都擋,持續一段時間。對策:每次載入歇 6–10 秒、每天每城市只掃 3 頁、遇 403 立刻停掉本輪(sync 斷路器),隔天再抓。
+- **限速**:第一次每日 sync 在約 100 次頁面載入後整站回 403(CloudFront「The request could not be satisfied」),連首頁都擋,實測約 10 分鐘後解除(17:38 擋、17:49 恢復)。對策:每次載入歇 6–10 秒、每天每城市只掃 3 頁、遇 403 立刻停掉本輪(sync 斷路器),隔天再抓。
 - **已完成(2026-09-22)**:`collector/sources/housefun.ts`,fixture 測試 4 個;每筆約 5–7 秒(Playwright + 1 秒 Nominatim)。房型從標題 / 格局推(好房沒有整層 / 套房分類)。
 
 ### 樂屋(rakuya.com.tw)
