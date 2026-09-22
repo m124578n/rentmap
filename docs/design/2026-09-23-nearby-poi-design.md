@@ -49,17 +49,44 @@ OSM 的餐飲只有七八成，小店常缺，所以餐飲用三層疊起來：
 
 面板的「餐飲」一列顯示：OSM 數量 + 拉麵店數量（有評分的用星號標）+ Google Maps 按鈕。
 
-## 公車站要特別標記
+## 公車：重點是「住這裡可以搭哪幾路」
 
-公車跟捷運一樣是交通類，不混在一般 POI 裡，用自己的圖示（小巴士）與顏色，面板上獨立一列「公車」。
+使用者要的不是站牌位置，是**路線**：站在這間房，走幾分鐘內有哪些路線可搭。所以路線資料一開始就要進來，站牌只是載體。
 
-| 層 | 來源 | 有什麼 | 成本 |
-|---|---|---|---|
-| 1. 立即可用 | **591 物件頁的「位置與周邊 → 交通」** | 每個 591 房源最近的 2–3 個公車站（站名、距離公尺）。parser 現在只留了捷運，改成把 `traffic` 整組（bus + subway）存進 `raw_json`，每日 sync 三天內就會補齊 | 幾行程式 |
-| 2. 任意點 | **OSM `highway=bus_stop`**（雙北約 1 萬多個站牌，站名完整，部分有路線 `route_ref`） | 和其他 POI 一起下載進 `pois`，category = 公車，畫成獨立圖層 | 同 POI 下載 |
-| 3. 路線 | **TDX 運輸資料流通服務**（交通部，免費但要註冊拿金鑰）：站牌 → 經過的路線、到站時間 | 面板點站牌展開「經過路線：307、262、紅 30」 | 之後再說 |
+### 資料來源：交通部 TDX（免費，要註冊拿 client id / secret）
 
-面板的「公車」一列：最近 3 站 + 距離 + 步行分鐘；地圖畫半徑內的站牌。捷運照舊（已有 `mrt.json` 圖層與 591 的最近捷運站）。
+一次下載雙北全部路線與站牌，放 D1，一個月更新一次：
+- `Bus/Stop/City/{Taipei|NewTaipei}`：站牌（StopUID、站名、經緯度）
+- `Bus/StopOfRoute/City/{…}`：每條路線的站序（RouteUID、RouteName、方向、站牌清單）
+雙北約 1,100 條路線、1.8 萬個站牌、站牌×路線約 5 萬列。
+
+備案（不用金鑰）：data.taipei「公車站牌 / 路線站牌」CSV、data.ntpc.gov.tw 新北公車站牌；格式兩市不同，先用 TDX 一套解決。
+OSM 的 `highway=bus_stop` 有站名但路線資料不全，只當備援。
+
+### 資料模型
+
+```
+bus_stops        stop_uid, name, city, lat, lng            index (lat, lng)
+bus_routes       route_uid, name(307|紅30|…), city, kind(一般|幹線|快速|…)
+bus_stop_routes  stop_uid, route_uid, direction(0|1)      index (stop_uid)、index (route_uid)
+```
+
+### 查詢：`GET /api/nearby/bus?lat=&lng=&radius=400`
+1. bbox 篩 `bus_stops`，算距離，留半徑內（預設 400m ≈ 步行 6 分）。
+2. JOIN `bus_stop_routes`，彙整成兩種輸出：
+   - **路線清單**（主角）：`[{route: "307", nearest_stop: "黎明社教中心", distance_m: 101, walk_min: 2}, …]`，同路線只留最近的站，依距離排序。
+   - **站牌清單**：`[{stop, distance_m, routes: ["307","262"]}, …]`。
+3. KV 快取 1 天（key 同 POI）。
+
+### 介面
+- 面板「公車」區塊：一排路線徽章（`307` `262` `紅30` `藍7`…），每個徽章下小字「黎明社教中心 · 2 分」；徽章數量多就顯示前 12 個加「還有 8 條」。點徽章 → 地圖上高亮那條路線經過的附近站牌（之後再畫整條路線幾何）。
+- 站牌本身在地圖上用巴士圖示畫半徑內的。
+- 篩選列：「有經過 〔307▾〕 的公車」多選；「我的地點」之後可做「有公車直達公司」（兩點附近路線交集）。
+- 591 的「最近公車站」（`positionRound.data[traffic]`）順手存進 `raw_json.traffic` 當備援顯示，但主體是 TDX。
+
+### 之後
+- 到站時間（TDX `EstimatedTimeOfArrival`，即時）；路線幾何（TDX `Shape`）畫在地圖上。
+- 「有公車直達公司」：房源 400m 內路線 ∩ 公司 400m 內路線，且方向對。
 
 ## 資料模型
 
@@ -93,8 +120,8 @@ my_places       id, user_id, name(公司|爸媽家|…), lat, lng, icon, transpo
 
 ## 分階段
 
-0. **公車快速版**：591 parser 把 `positionRound.data[traffic]` 整組存進 `raw_json.traffic`，面板顯示最近公車站。約 1 小時。
-1. **PoI 資料**（含 OSM 公車站牌）：`scripts/fetch_pois.ts`（Overpass 分類分批抓 → `POST /api/ingest/pois` 覆蓋式更新）+ `pois` 表 + `/api/nearby`。約半天。
+0. **公車路線**（優先）：註冊 TDX → `scripts/fetch_bus.ts` 下載雙北站牌與路線站序 → 三張表 + `/api/nearby/bus` → 面板路線徽章。約半天到一天。591 parser 順手存 `raw_json.traffic`。
+1. **PoI 資料**：`scripts/fetch_pois.ts`（Overpass 分類分批抓 → `POST /api/ingest/pois` 覆蓋式更新）+ `pois` 表 + `/api/nearby`。約半天。
 2. **面板生活機能區塊 + 地圖畫點**：約半天。
 3. **我的地點**：表 + API + 地圖標記 + 面板距離 + 篩選。約半天。
 4. 之後：通勤時間（路徑 API）、公園 / 醫院用多邊形算「最近邊界」而不是中心點、把「附近有什麼」餵進 AI 分析（M7）。
