@@ -91,7 +91,7 @@ export const housefun: Source = {
     if (isHousefunGone(finalUrl, html)) return { kind: "gone" };
     try {
       const { geocode_query, ...rest } = parseHousefunDetail(html, url);
-      const geo = geocode_query ? await geocode(geocode_query) : null;
+      const geo = geocode_query && rest.city && rest.district ? await geocode(rest.city, rest.district, rest.road) : null;
       return validate({ ...rest, lat: geo?.lat, lng: geo?.lng });
     } catch (e) {
       return { kind: "parse_error", error: String(e) };
