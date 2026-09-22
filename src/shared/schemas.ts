@@ -68,6 +68,15 @@ export type ImportedListing = z.infer<typeof ImportedListing>;
 export const StageInput = z.object({ stage: z.enum(STAGES), note: optStr });
 export type StageInput = z.infer<typeof StageInput>;
 
+/** 收藏欄位(部分更新:沒帶的欄位不動) */
+export const FavoriteInput = z.object({
+  stage: z.enum(STAGES).optional(),
+  priority: z.number().int().min(0).max(3).nullable().optional(), // 0–3 星
+  note: z.string().max(2000).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
+});
+export type FavoriteInput = z.infer<typeof FavoriteInput>;
+
 /** API 回傳的房源列表項目 */
 export interface PropertySummary {
   id: number;
@@ -94,6 +103,10 @@ export interface PropertySummary {
   source_url: string | null;
   listing_status: string | null;
   stage: string | null;
+  priority: number | null;
+  fav_note: string | null;
+  tags: string[];
+  fav_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }

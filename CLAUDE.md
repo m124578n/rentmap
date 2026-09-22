@@ -54,6 +54,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 ## 已知坑
 
 - 改 Drizzle schema 前先確認沒有採集在跑:HMR 會讓 Worker 立刻用新 schema 查 D1,欄位還沒 migrate 就整個 ingest 壞掉。順序:採集跑完 → 停 dev → 改 schema → `db:generate` → `db:migrate:local` → 重開。
+- Tailwind v4 + Vite 8 dev:**新增的檔案**裡的 class 不會被掃到(`w-64`、`sm:hidden` 沒產生),要重開 dev server。改既有檔案沒這問題。
 - Tailwind v4 的 `@apply` 不能引用自訂 class(`.btn`),要重複 utility。
 - `@cloudflare/vitest-plugin` 需要 vitest 4.x,不能升 5。
 - `tsc -b` 偶爾吃到舊的 `.tsbuildinfo` 報假錯,刪掉重跑。

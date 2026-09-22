@@ -3,12 +3,14 @@
  *   GET    /api/properties            列表(含目前租金、來源、我的狀態)
  *   POST   /api/properties            手動新增(property + 一筆 listing,並自動收藏成 saved)
  *   GET    /api/properties/:id        詳細(property + listings + favorite)
- *   PUT    /api/properties/:id/stage  改狀態
+ *   PUT    /api/properties/:id/stage  改狀態(舊,等同 favorite 只帶 stage)
+ *   PUT    /api/properties/:id/favorite  收藏 / 部分更新(stage、priority、note、tags)
+ *   DELETE /api/properties/:id/favorite  取消收藏
  *   DELETE /api/properties/:id        刪除(連同 listings、favorite)
  */
 import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { PropertyInput, StageInput, type PropertySummary } from "@shared/schemas";
+import { FavoriteInput, PropertyInput, StageInput, type PropertySummary } from "@shared/schemas";
 import type { AppEnv } from "../env";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
@@ -48,13 +50,18 @@ properties.get("/api/properties", async (c) => {
       source_url: sql<string | null>`(SELECT source_url FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       listing_status: sql<string | null>`(SELECT status FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       stage: f.stage,
+      priority: f.priority,
+      fav_note: f.note,
+      tags_json: f.tagsJson,
+      fav_updated_at: f.updatedAt,
       created_at: p.createdAt,
       updated_at: p.updatedAt,
     })
     .from(p)
     .leftJoin(f, and(eq(f.propertyId, p.id), eq(f.userId, user.id)))
     .orderBy(desc(p.updatedAt));
-  return c.json({ items: rows satisfies PropertySummary[] });
+  const items: PropertySummary[] = rows.map(({ tags_json, ...r }) => ({ ...r, tags: safeTags(tags_json) }));
+  return c.json({ items });
 });
 
 properties.post("/api/properties", async (c) => {
@@ -162,9 +169,48 @@ properties.put("/api/properties/:id/stage", async (c) => {
   return c.json({ ok: true });
 });
 
+properties.put("/api/properties/:id/favorite", async (c) => {
+  const user = c.get("user");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  const parsed = FavoriteInput.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
+  const v = parsed.data;
+  const now = nowIso();
+  const set: Partial<typeof schema.favorites.$inferInsert> = { updatedAt: now };
+  if (v.stage !== undefined) set.stage = v.stage;
+  if (v.priority !== undefined) set.priority = v.priority;
+  if (v.note !== undefined) set.note = v.note;
+  if (v.tags !== undefined) set.tagsJson = JSON.stringify(v.tags);
+  await db(c.env.DB)
+    .insert(schema.favorites)
+    .values({ userId: user.id, propertyId: id, stage: v.stage ?? "saved", priority: v.priority ?? null, note: v.note ?? null, tagsJson: v.tags ? JSON.stringify(v.tags) : null, updatedAt: now })
+    .onConflictDoUpdate({ target: [schema.favorites.userId, schema.favorites.propertyId], set });
+  const fav = await db(c.env.DB).query.favorites.findFirst({ where: and(eq(schema.favorites.propertyId, id), eq(schema.favorites.userId, user.id)) });
+  return c.json({ favorite: fav });
+});
+
+properties.delete("/api/properties/:id/favorite", async (c) => {
+  const user = c.get("user");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  await db(c.env.DB).delete(schema.favorites).where(and(eq(schema.favorites.propertyId, id), eq(schema.favorites.userId, user.id)));
+  return c.json({ ok: true });
+});
+
 properties.delete("/api/properties/:id", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
   await db(c.env.DB).delete(schema.properties).where(eq(schema.properties.id, id));
   return c.json({ ok: true });
 });
+
+function safeTags(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}

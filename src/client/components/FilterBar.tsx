@@ -23,6 +23,9 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
           <SlidersHorizontal size={14} /> 篩選{n ? ` ${n}` : ""}
           <ChevronDown size={14} className={open ? "rotate-180 transition" : "transition"} />
         </button>
+        <Chip on={f.favOnly} onClick={() => setFilters({ favOnly: !f.favOnly })}>
+          ♥ 只看收藏
+        </Chip>
         {KINDS.map((k) => (
           <Chip key={k} on={f.kinds.includes(k)} onClick={() => toggleIn("kinds", k)}>
             {k}

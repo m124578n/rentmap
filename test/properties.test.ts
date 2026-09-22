@@ -91,6 +91,18 @@ describe("properties", () => {
     const after = (await (await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).json()) as { favorite: { stage: string } };
     expect(after.favorite.stage).toBe("contacted");
 
+    // favorite:部分更新與取消
+    const fav = await SELF.fetch(`${ORIGIN}/api/properties/${id}/favorite`, authed({ method: "PUT", body: JSON.stringify({ priority: 3, note: "採光好", tags: ["近捷運"] }) }));
+    expect(fav.status).toBe(200);
+    const favBody = (await fav.json()) as { favorite: { stage: string; priority: number; note: string; tagsJson: string } };
+    expect(favBody.favorite).toMatchObject({ stage: "contacted", priority: 3, note: "採光好", tagsJson: JSON.stringify(["近捷運"]) });
+    const listed = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed())).json()) as { items: { id: number; priority: number; tags: string[]; fav_note: string }[] };
+    expect(listed.items.find((i) => i.id === id)).toMatchObject({ priority: 3, tags: ["近捷運"], fav_note: "採光好" });
+    const unfav = await SELF.fetch(`${ORIGIN}/api/properties/${id}/favorite`, authed({ method: "DELETE" }));
+    expect(unfav.status).toBe(200);
+    const noFav = (await (await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).json()) as { favorite: unknown };
+    expect(noFav.favorite).toBeNull();
+
     const del = await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed({ method: "DELETE" }));
     expect(del.status).toBe(200);
     expect((await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).status).toBe(404);

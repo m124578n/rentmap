@@ -15,7 +15,8 @@ interface Props {
   padLeft?: number;
 }
 
-/** 房源價格標記的顏色,依找房狀態 */
+/** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
+const NEUTRAL = "#6b7280";
 const STAGE_COLOR: Record<string, string> = {
   saved: "#059669",
   contacted: "#d97706",
@@ -106,7 +107,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0 }
       if (p.lat == null || p.lng == null) continue;
       seen.add(p.id);
       bounds.extend([p.lng, p.lat]);
-      const color = STAGE_COLOR[p.stage ?? "saved"] ?? STAGE_COLOR.saved!;
+      const color = p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL;
       let entry = markers.get(p.id);
       if (!entry) {
         const el = document.createElement("button");
@@ -126,6 +127,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0 }
       entry.el.title = p.title;
       entry.el.style.setProperty("--c", color);
       entry.el.classList.toggle("is-rejected", p.stage === "rejected");
+      entry.el.classList.toggle("is-fav", !!p.stage);
+      entry.el.classList.toggle("is-top", (p.priority ?? 0) >= 3);
     }
     for (const [id, entry] of markers) {
       if (!seen.has(id)) {

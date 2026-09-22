@@ -14,6 +14,7 @@ export interface Filters {
   cooking: boolean;
   hideRejected: boolean;
   stages: string[]; // 空 = 全部
+  favOnly: boolean; // 只看收藏(有 stage 的)
 }
 
 export const EMPTY: Filters = {
@@ -28,6 +29,7 @@ export const EMPTY: Filters = {
   cooking: false,
   hideRejected: true,
   stages: [],
+  favOnly: false,
 };
 
 const KEY = "rent-filters";
@@ -81,6 +83,7 @@ export function activeCount(f: Filters): number {
   if (f.cooking) n++;
   if (f.stages.length) n++;
   if (!f.hideRejected) n++;
+  if (f.favOnly) n++;
   return n;
 }
 
@@ -95,6 +98,7 @@ export function applyFilters(items: PropertySummary[], f: Filters): PropertySumm
     if (f.elevator && p.has_elevator !== true) return false;
     if (f.pet && p.pet_allowed !== true) return false;
     if (f.cooking && p.cooking_allowed !== true) return false;
+    if (f.favOnly && !p.stage) return false;
     if (f.hideRejected && p.stage === "rejected") return false;
     if (f.stages.length && !(p.stage && f.stages.includes(p.stage))) return false;
     return true;

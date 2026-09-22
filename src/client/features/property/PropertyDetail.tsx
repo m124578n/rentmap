@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ExternalLink, Maximize2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { SOURCE_LABEL, STAGES, STAGE_LABEL, type Source, type Stage } from "@shared/constants";
+import { SOURCE_LABEL, type Source } from "@shared/constants";
+import { FavoritePanel } from "./FavoritePanel";
 
 interface Props {
   id: number;
@@ -16,11 +17,6 @@ export function PropertyDetail({ id, onClose }: Props) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["property", id], queryFn: () => api.getProperty(id), enabled: Number.isInteger(id) });
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["property", id] });
-    qc.invalidateQueries({ queryKey: ["properties"] });
-  };
-  const setStage = useMutation({ mutationFn: (stage: Stage) => api.setStage(id, { stage }), onSuccess: invalidate });
   const del = useMutation({
     mutationFn: () => api.deleteProperty(id),
     onSuccess: () => {
@@ -65,22 +61,7 @@ export function PropertyDetail({ id, onClose }: Props) {
 
       {extra?.market_hint && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">591:{extra.market_hint}</p>}
 
-      <section>
-        <h2 className="mb-1.5 text-xs font-medium text-neutral-500">狀態</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {STAGES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStage.mutate(s)}
-              className={`rounded-full px-2.5 py-0.5 text-xs ${
-                favorite?.stage === s ? "bg-emerald-600 text-white" : "border border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-              }`}
-            >
-              {STAGE_LABEL[s]}
-            </button>
-          ))}
-        </div>
-      </section>
+      <FavoritePanel id={id} favorite={favorite} />
 
       <section className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
         <Row k="坪數" v={p.sizePing != null ? `${p.sizePing} 坪` : null} />

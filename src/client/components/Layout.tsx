@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Home, List, LogOut, Map, Moon, Plus, Sun } from "lucide-react";
+import { Home, Kanban, List, LogOut, Map, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 
@@ -24,6 +24,9 @@ export function Layout() {
               </Link>
               <Link to="/list" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
                 <List size={16} /> <span className="hidden sm:inline">列表</span>
+              </Link>
+              <Link to="/board" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
+                <Kanban size={16} /> <span className="hidden sm:inline">看板</span>
               </Link>
               <Link to="/new" className="btn-primary">
                 <Plus size={16} /> <span className="hidden sm:inline">新增</span>

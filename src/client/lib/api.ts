@@ -1,4 +1,4 @@
-import type { PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { FavoriteInput, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 
 export class ApiError extends Error {
   constructor(
@@ -29,6 +29,9 @@ export const api = {
   getProperty: (id: number) => req<PropertyDetail>(`/api/properties/${id}`),
   setStage: (id: number, input: StageInput) =>
     req<{ ok: true }>(`/api/properties/${id}/stage`, { method: "PUT", body: JSON.stringify(input) }),
+  setFavorite: (id: number, input: FavoriteInput) =>
+    req<{ favorite: Favorite }>(`/api/properties/${id}/favorite`, { method: "PUT", body: JSON.stringify(input) }),
+  removeFavorite: (id: number) => req<{ ok: true }>(`/api/properties/${id}/favorite`, { method: "DELETE" }),
   deleteProperty: (id: number) => req<{ ok: true }>(`/api/properties/${id}`, { method: "DELETE" }),
 };
 
@@ -78,5 +81,13 @@ export interface PropertyDetail {
     firstSeenAt: string;
     lastSeenAt: string;
   }[];
-  favorite: { stage: string; note: string | null; updatedAt: string } | null;
+  favorite: Favorite | null;
+}
+
+export interface Favorite {
+  stage: string;
+  priority: number | null;
+  note: string | null;
+  tagsJson: string | null;
+  updatedAt: string;
 }
