@@ -62,7 +62,8 @@
 - 純 fetch 有憑證問題(站方憑證缺 SKI),Playwright headless 可以。每頁約 6–8 秒。
 - 物件頁是舊式 ASP.NET,沒有 JSON-LD / 座標;欄位是「租 金:」「坪 數:」「樓 層:」「建物格局:」「型 態:」這種標籤文字,要做 DOM 文字解析;地址只到路名,座標要自己 geocode(Nominatim)。
 - 列表每頁只有約 10 筆,分頁參數還沒找到(列表用 ASP.NET postback 的可能性高)。
-- **估:1 天**(parser + fixture 測試 + Playwright runner + 分頁),抓取速度是 591 的一半。
+- 分頁:頁內 JS `PM(n)`(AJAX POST `ashx/search/search.ashx`),在 Playwright 裡 evaluate 再等內容換掉。
+- **已完成(2026-09-22)**:`collector/sources/housefun.ts`,fixture 測試 4 個;每筆約 5–7 秒(Playwright + 1 秒 Nominatim)。房型從標題 / 格局推(好房沒有整層 / 套房分類)。
 
 ### 樂屋(rakuya.com.tw)
 - requests 403;Playwright headless(含真 Chrome / Edge channel)都停在 Cloudflare「請稍候...」驗證頁。

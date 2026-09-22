@@ -26,7 +26,8 @@ npm run collect -- add https://rent.591.com.tw/<id>   # 抓一筆 591 推進本�
 - [x] 篩選列(地圖 / 列表共用):房型、租金、行政區、房數、坪數、電梯 / 寵物 / 開伙、狀態
 - [x] 點標記 → 左側詳細面板(照片、狀態、規格、聯絡、屋況介紹)
 - [x] 每日 sync:`npm run collect -- sync`(`collector/searches.json` 雙北六組條件 + 重抓偵測下架 / 漲跌價);Windows 排程 `RentHouseDailySync` 每天 20:00(`scripts/register_task.ps1`)
-- [ ] M3b 貼 URL 佇列 + 採集機 watch;好房(Playwright);樂屋(被 Cloudflare 擋)
+- [x] 好房(hb):Playwright 抓列表(頁內 `PM(n)` 分頁)與物件頁,Nominatim 定位到路名;`collect add/list/sync` 自動依網址判斷來源
+- [ ] M3b 貼 URL 佇列 + 採集機 watch;樂屋(被 Cloudflare 擋,待試 headed + 持久化 profile)
 - [ ] M4 收藏 Kanban、照片上傳 R2
 - [ ] M5 實價登錄匯入、租金行情
 - [ ] M6 需求設定與符合度

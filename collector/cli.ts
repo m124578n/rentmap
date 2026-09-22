@@ -1,17 +1,17 @@
 /**
  * 家裡採集機 CLI(Node + TypeScript,和 Worker 共用 src/shared 的 Zod schema)。
  *
- *   npm run collect -- add <url> [--dry]     抓一個物件頁 → 驗證 → 推到 /api/ingest/listings(--dry 只印 JSON)
- *   npm run collect -- list <listUrl> [--pages=1-5] [--dry]
- *                                            抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
+ *   npm run collect -- add <url> [--dry]                 抓一個物件頁(591 / 好房自動判斷)→ 推 ingest(--dry 只印 JSON)
+ *   npm run collect -- list <listUrl> [--pages=1-5] [--dry] 抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
+ *   npm run collect -- sync                              每日同步(collector/searches.json)
  *
  * 設定讀 .env:RENT_HOUSE_API(預設 http://localhost:5173)、INGEST_SECRET。
  */
 import fs from "node:fs";
 import path from "node:path";
-import { ImportedListing } from "../src/shared/schemas";
-import { fetchHtml } from "./lib/http";
-import { is591, parse591Detail, parse591List } from "./sources/five91";
+import type { ImportedListing } from "../src/shared/schemas";
+import { closeBrowser } from "./lib/browser";
+import { sourceFor } from "./sources";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 if (fs.existsSync(path.join(ROOT, ".env"))) process.loadEnvFile(path.join(ROOT, ".env"));
@@ -19,12 +19,12 @@ const API = process.env.RENT_HOUSE_API ?? "http://localhost:5173";
 const SECRET = process.env.INGEST_SECRET ?? "";
 
 async function fetchListing(url: string): Promise<ImportedListing> {
-  if (!is591(url)) throw new Error(`目前只支援 591 物件頁:${url}`);
-  const { status, html } = await fetchHtml(url);
-  if (status !== 200) throw new Error(`HTTP ${status}`);
-  const parsed = ImportedListing.safeParse(parse591Detail(html, url));
-  if (!parsed.success) throw new Error(`解析結果不合 schema:${JSON.stringify(parsed.error.issues.slice(0, 5))}`);
-  return parsed.data;
+  const src = sourceFor(url);
+  if (!src) throw new Error(`不支援的網址(目前支援 591、好房):${url}`);
+  const r = await src.fetchDetail(url);
+  if (r.kind === "ok") return r.listing;
+  if (r.kind === "gone") throw new Error("物件不存在 / 已下架");
+  throw new Error(`${r.kind}:${r.error}`);
 }
 
 async function push(items: ImportedListing[]): Promise<{ created: number; updated: number; ids: number[] }> {
@@ -39,7 +39,7 @@ async function push(items: ImportedListing[]): Promise<{ created: number; update
 }
 
 function summary(l: ImportedListing) {
-  return `${l.title} | ${l.city}${l.district}${l.road ?? ""} | $${l.rent} | ${l.size_ping ?? "?"}坪 ${l.rooms ?? "?"}房 | ${l.floor ?? "?"}/${l.total_floors ?? "?"}F | 電梯:${l.has_elevator ?? "?"} | ${l.lat},${l.lng}`;
+  return `[${l.source}] ${l.title} | ${l.city}${l.district}${l.road ?? ""} | $${l.rent} | ${l.kind ?? "?"} ${l.size_ping ?? "?"}坪 ${l.rooms ?? "?"}房 | ${l.floor ?? "?"}/${l.total_floors ?? "?"}F | 電梯:${l.has_elevator ?? "?"} | ${l.lat ?? "?"},${l.lng ?? "?"}`;
 }
 
 async function main() {
@@ -53,16 +53,16 @@ async function main() {
     return;
   }
   if (cmd === "list" && arg) {
+    const src = sourceFor(arg);
+    if (!src) throw new Error(`不支援的列表網址:${arg}`);
     const pagesArg = rest.find((r) => r.startsWith("--pages="))?.slice(8) ?? "1";
     const [a, b] = pagesArg.split("-").map(Number);
     const from = a || 1;
     const to = b ?? from;
     let total = { created: 0, updated: 0, failed: 0 };
     for (let page = from; page <= to; page++) {
-      const url = page === 1 ? arg : `${arg}${arg.includes("?") ? "&" : "?"}page=${page}`;
-      const { html } = await fetchHtml(url);
-      const urls = parse591List(html);
-      console.log(`\n=== 第 ${page} 頁:${urls.length} 筆 ===`);
+      const urls = await src.listUrls(arg, page);
+      console.log(`\n=== [${src.label}] 第 ${page} 頁:${urls.length} 筆 ===`);
       if (urls.length === 0) break;
       const items: ImportedListing[] = [];
       for (const u of urls) {
@@ -93,7 +93,9 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((e) => {
-  console.error(String(e));
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(String(e));
+    process.exitCode = 1;
+  })
+  .finally(() => closeBrowser());
