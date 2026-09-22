@@ -1,8 +1,8 @@
 # 每日採集:collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
 # 由 Windows 工作排程器每天 20:00 觸發(見 register_task.ps1)。log 在 data/logs/{date}-sync.log。
 #
-# 尚未部署前,RENT_HOUSE_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
-# 部署後把 .env 的 RENT_HOUSE_API 改成正式站網址,就不會再碰 dev server。
+# 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
+# 部署後把 .env 的 RENTMAP_API 改成正式站網址,就不會再碰 dev server。
 
 $ErrorActionPreference = "Continue"
 $repo = Split-Path -Parent $PSScriptRoot
@@ -13,7 +13,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "utf-8"
 
 # 跑的期間不讓電腦閒置自動睡眠
-$power = Add-Type -Namespace RentHouse -Name Power -PassThru -MemberDefinition `
+$power = Add-Type -Namespace Rentmap -Name Power -PassThru -MemberDefinition `
     '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
 $null = $power::SetThreadExecutionState([uint32]2147483649)
 
@@ -31,13 +31,13 @@ function Log {
     }
 }
 
-"=== rent-house daily sync @ $(Get-Date -Format o) ===" | Log
+"=== rentmap daily sync @ $(Get-Date -Format o) ===" | Log
 
-# 讀 .env 的 RENT_HOUSE_API
+# 讀 .env 的 RENTMAP_API
 $api = "http://localhost:5173"
 $envFile = Join-Path $repo ".env"
 if (Test-Path $envFile) {
-    foreach ($l in Get-Content $envFile) { if ($l -match '^RENT_HOUSE_API=(.+)$') { $api = $Matches[1].Trim() } }
+    foreach ($l in Get-Content $envFile) { if ($l -match '^RENTMAP_API=(.+)$') { $api = $Matches[1].Trim() } }
 }
 $isLocal = $api -match '^https?://localhost'
 

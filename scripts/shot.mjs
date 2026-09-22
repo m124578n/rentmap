@@ -11,7 +11,7 @@ const flags = Object.fromEntries(args.filter((a) => a.startsWith("--")).map((a) 
 // Git Bash 會把 --route=/x 轉成 C:/Program Files/Git/x,這裡還原(或跑之前設 MSYS_NO_PATHCONV=1)
 const route = (flags.route ?? "/").replace(/^[A-Za-z]:\/Program Files\/Git/, "") || "/";
 const out = flags.out ?? "data/shot.png";
-const base = process.env.RENT_HOUSE_API ?? "http://localhost:5173";
+const base = process.env.RENTMAP_API ?? "http://localhost:5173";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });

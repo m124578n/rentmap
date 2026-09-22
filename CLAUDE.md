@@ -1,4 +1,6 @@
-# 給 Claude 的工作守則(rent-house / 租屋筆記)
+# 給 Claude 的工作守則(rentmap / 租屋筆記)
+
+repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不要改名,Claude 的專案記憶綁在路徑上)。
 
 設計與進度在 `docs/design/2026-09-20-architecture.md`。這份只放「怎麼工作」。
 
@@ -31,10 +33,10 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm test` | Workers 環境的整合測試 |
 | `npm run db:generate` | 改 `src/worker/db/schema.ts` 後產 migration |
 | `npm run db:migrate:local` | 套 migration 到本地 D1(`vite dev` 開著時不要跑,會撞 SQLite) |
-| `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENT_HOUSE_API` |
+| `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENTMAP_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
-| `npm run collect -- sync` | 每日同步(searches.json);排程 `RentHouseDailySync` 每天 20:00 跑 `scripts/run_daily.ps1`,本機模式會自己起 / 關 dev server |
+| `npm run collect -- sync` | 每日同步(searches.json);排程 `RentmapDailySync` 每天 20:00 跑 `scripts/run_daily.ps1`,本機模式會自己起 / 關 dev server |
 
 ## 驗證順序(省 token)
 
@@ -44,7 +46,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 
 ## 排程
 
-每天 20:00 Windows 工作排程 `RentHouseDailySync` 跑 `scripts/run_daily.ps1`(log 在 `data/logs/{date}-sync.log`)。**20:00 到約 20:40 不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENT_HOUSE_API` 改成正式站即可。
+每天 20:00 Windows 工作排程 `RentmapDailySync` 跑 `scripts/run_daily.ps1`(log 在 `data/logs/{date}-sync.log`)。**20:00 到約 20:40 不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
 
 ## 本機登入
 

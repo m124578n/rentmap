@@ -1,5 +1,5 @@
 {
-  "name": "rent-house",
+  "name": "rentmap",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,9 +8,9 @@
     "build": "tsc -b && vite build",
     "check": "tsc -b",
     "test": "vitest run",
-    "types": "wrangler types --include-runtime=false",
+    "types": "node scripts/types.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply rent-house-db --local",
+    "db:migrate:local": "wrangler d1 migrations apply rentmap-db --local",
     "deploy": "echo 部署前先問過使用者 && exit 1",
     "collect": "tsx collector/cli.ts"
   },

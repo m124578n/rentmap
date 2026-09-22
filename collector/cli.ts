@@ -5,7 +5,7 @@
  *   npm run collect -- list <listUrl> [--pages=1-5] [--dry] 抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
  *   npm run collect -- sync                              每日同步(collector/searches.json)
  *
- * 設定讀 .env:RENT_HOUSE_API(預設 http://localhost:5173)、INGEST_SECRET。
+ * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +15,7 @@ import { sourceFor } from "./sources";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 if (fs.existsSync(path.join(ROOT, ".env"))) process.loadEnvFile(path.join(ROOT, ".env"));
-const API = process.env.RENT_HOUSE_API ?? "http://localhost:5173";
+const API = process.env.RENTMAP_API ?? "http://localhost:5173";
 const SECRET = process.env.INGEST_SECRET ?? "";
 
 async function fetchListing(url: string): Promise<ImportedListing> {

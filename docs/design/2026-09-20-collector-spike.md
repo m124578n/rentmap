@@ -31,7 +31,7 @@
 ## 因此調整的架構
 
 - **collector 改用 TypeScript(Node)**,不用 Python:要執行 `__NUXT__` 的 JS,而且能直接 import `src/shared/schemas.ts` 的 Zod schema,採集端與 ingest 端同一份驗證。
-- `npm run collect -- add <url> [--dry]`、`npm run collect -- list <listUrl> [--dry]`;`.env` 放 `RENT_HOUSE_API` 與 `INGEST_SECRET`。
+- `npm run collect -- add <url> [--dry]`、`npm run collect -- list <listUrl> [--dry]`;`.env` 放 `RENTMAP_API` 與 `INGEST_SECRET`。
 - Worker 新增 `POST /api/ingest/listings`(bearer),依 `(source, source_listing_id)` upsert,租金變動寫 `listing_price_history`,手動修正過的座標不被覆蓋。
 - 抓取間隔 2.5–4 秒隨機,5xx / 429 退避重試。
 

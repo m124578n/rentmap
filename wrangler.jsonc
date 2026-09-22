@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "rent-house",
+  "name": "rentmap",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -17,8 +17,8 @@
     "ADMIN_EMAILS": "m23568n@gmail.com"
   },
   // database_id 先留佔位:本機 dev 走 .wrangler/state 的本地 SQLite,不會碰遠端。
-  // 正式的 id 等使用者同意部署後 `wrangler d1 create rent-house-db` 再填。
+  // 正式的 id 等使用者同意部署後 `wrangler d1 create rentmap-db` 再填。
   "d1_databases": [
-    { "binding": "DB", "database_name": "rent-house-db", "database_id": "local-placeholder", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "rentmap-db", "database_id": "local-placeholder", "migrations_dir": "migrations" }
   ]
 }

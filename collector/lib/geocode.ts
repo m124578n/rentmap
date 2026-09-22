@@ -31,7 +31,7 @@ async function query(q: string): Promise<{ lat: number; lon: number; display_nam
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastAt = Date.now();
   const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=tw&q=${encodeURIComponent(q)}`, {
-    headers: { "User-Agent": "rent-house/0.1 (personal rental notes; local)", "Accept-Language": "zh-TW" },
+    headers: { "User-Agent": "rentmap/0.1 (personal rental notes; local)", "Accept-Language": "zh-TW" },
     signal: AbortSignal.timeout(15000),
   });
   return ((await res.json()) as { lat: string; lon: string; display_name: string }[]).map((r) => ({ lat: Number(r.lat), lon: Number(r.lon), display_name: r.display_name }));

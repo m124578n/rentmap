@@ -54,7 +54,7 @@
           └────────────────────┬─────────────────────┘
                                ▼
           ┌──────────────────────────────────────────┐
-          │  Worker: rent-house（Hono + Static Assets）│
+          │  Worker: rentmap（Hono + Static Assets）    │
           │   /            → React SPA                │◀──── 瀏覽器 / 手機
           │   /api/*       → 業務 API                  │
           │   /api/ingest  → 採集機寫入（bearer，不走 session）│
@@ -76,7 +76,7 @@
 ## 3. 專案結構
 
 ```
-rent-house/
+rentmap/
 ├── docs/design/              設計文件
 ├── migrations/               D1 SQL migrations（Drizzle 產生）
 ├── collector/                家裡跑的採集（Node + TS，`npm run collect`）
@@ -259,9 +259,9 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 
 | 資源 | 名稱 | 用途 |
 |---|---|---|
-| Worker | `rent-house` | 前端 + API |
-| D1 | `rent-house-db` | 主資料 |
-| KV | `rent-house-cache` | Geocoding / AI / 匯入快取 |
+| Worker | `rentmap` | 前端 + API |
+| D1 | `rentmap-db` | 主資料 |
+| KV | `rentmap-cache` | Geocoding / AI / 匯入快取 |
 | Secrets | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ANTHROPIC_API_KEY`, `INGEST_SECRET` | 用 `wrangler secret put`；`INGEST_SECRET` 同一把放家裡 `.env`；Google OAuth 可與 menmap 同一組 client 只加 redirect URI |
 | 家裡排程 | Task Scheduler，每日一次 `collector sync` + `publish` | 比照 menmap `run_daily.ps1` |
 
