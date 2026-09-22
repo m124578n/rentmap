@@ -158,6 +158,8 @@ stage enum：`saved → contacted → scheduled → visited → considering → 
 **mrt_stations** — `id, name, line, lat, lng`
 **rent_stats** — 內政部租賃實價登錄：`id, city, district, road, building_type, size_ping, rooms, floor, total_floors, building_age, rent, rent_per_ping, date, has_elevator, has_mgmt, raw_json`
 
+生活機能（設計見 `2026-09-23-nearby-poi-design.md`）：`pois`（OSM 一次下載，約 5 萬筆）、`my_places`（公司、家人住處等，算距離用）。
+
 Phase 4 再加：`moves, move_items, movers, mover_quotes, move_checklist_items`。
 
 ---
