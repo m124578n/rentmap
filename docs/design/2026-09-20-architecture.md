@@ -26,8 +26,8 @@
 | 地圖 | **MapLibre GL JS** + **CARTO** Positron / Dark Matter GL style | 與 menmap 相同：免金鑰、向量圖磚、亮暗兩套；沿用 menmap 的 `localizeBasemap`（地名強制中文、關掉聚落層）與 PWA 快取規則（CARTO 條款端側快取 ≤ 30 天） |
 | API | **Hono** | Workers 上最輕量、型別友善；可用 RPC client 讓前後端共享型別 |
 | 資料庫 | **D1**（SQLite） + **Drizzle ORM** | 免費額度充足（5 GB）；Drizzle 有 D1 migration 工具 |
-| 照片 / 錄音 | **R2** | 看房照片、錄音直傳；免出口流量費 |
 | 快取 | **KV** | Geocoding 結果、URL 解析結果、AI 分析結果快取 |
+| 檔案 | **不存任何檔案**（決定 2026-09-22） | 照片只存來源連結；看房紀錄只有文字、評分、checklist。不用 R2，省掉檔案管理 |
 | 驗證 | **JSON Schema / Zod**（`shared/` 共用） | 前後端同一份 schema |
 | AI 分析 | **Anthropic API**（`claude-sonnet-5`）| 結構化輸出 JSON（優點 / 缺點 / 價差原因）；金鑰放 Worker secret |
 | 登入 | **Google OAuth**（比照 menmap：Worker 端 OAuth flow + HS256 JWT session cookie）| 一開始就是正式帳號系統，Phase 3 公開評論不用換；程式碼從 menmap 搬 |
@@ -116,7 +116,6 @@ Phase 1 就用這個結構，但去重演算法留到 Phase 3；Phase 1 每個 L
 ```
 Property 1──n Listing 1──n ListingPriceHistory
    │
-   ├──n Photo
    ├──1 Favorite (pipeline 狀態)
    ├──n Contact / ContactLog
    ├──n Visit 1──n VisitChecklistItem
@@ -139,8 +138,6 @@ RentStat (實價登錄租賃，參考資料)
 **listing_price_history** — `listing_id, rent, seen_at`
 
 **pending_urls** — `id, user_id, url, source, status (pending|fetching|done|failed), error, requested_at, done_at`（採集機 poll 用）
-
-**photos** — `id, property_id, visit_id?, r2_key, kind (listing|visit), caption, taken_at`
 
 **users** — `id, google_sub, email, name, avatar, created_at`
 
@@ -241,7 +238,7 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 | M1 | 專案骨架：Vite + React + Hono + D1 + Drizzle；手動新增房源表單；房源列表 | 能記錄房源 |
 | M2 | 地圖：MapLibre、價格標記、點擊看摘要、Geocoding | 地圖上看房源 |
 | M3 | collector：貼 URL → pending → 採集機抓 591 → ingest；`watch` 模式 | 一鍵存房源 |
-| M4 | 收藏 / 狀態流程（Kanban）；房源詳細頁；照片上傳 R2 | 找房 CRM |
+| M4 | 收藏 / 狀態流程（Kanban）；房源詳細頁 | 找房 CRM |
 | M5 | 實價登錄匯入；捷運站資料；租金行情卡 | 知道價格合不合理 |
 | M6 | 需求設定 + 權重；地圖 🟢🟡🔴 | 篩掉不符合的 |
 | M7 | AI 分析 | 看得懂的優缺點 |
@@ -264,7 +261,6 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 |---|---|---|
 | Worker | `rent-house` | 前端 + API |
 | D1 | `rent-house-db` | 主資料 |
-| R2 | `rent-house-photos` | 照片、錄音 |
 | KV | `rent-house-cache` | Geocoding / AI / 匯入快取 |
 | Secrets | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ANTHROPIC_API_KEY`, `INGEST_SECRET` | 用 `wrangler secret put`；`INGEST_SECRET` 同一把放家裡 `.env`；Google OAuth 可與 menmap 同一組 client 只加 redirect URI |
 | 家裡排程 | Task Scheduler，每日一次 `collector sync` + `publish` | 比照 menmap `run_daily.ps1` |
@@ -294,4 +290,5 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 - 捷運站資料直接沿用 menmap 的 `mrt.json`。
 - 前端 React + MapLibre，與 menmap 相同，地圖程式碼可搬。
 - 登入用 Google OAuth，比照 menmap 實作；Phase 1 只有 `ADMIN_EMAILS` 白名單能登入。本機開發用 `DEV_USER_EMAIL` 免 Google。
+- 不存任何檔案（照片、錄音）：照片只留來源連結，看房紀錄純文字（2026-09-22）。
 - 目標範圍只有雙北（台北市、新北市）：實價登錄只匯入雙北，`mrt.json` 只取雙北路線，591 搜尋條件也只設雙北。

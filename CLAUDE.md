@@ -7,6 +7,7 @@
 - **使用者說「好」之前不部署、不建任何雲端資源**:不跑 `wrangler deploy`、`d1 create`、`r2 bucket create`、
   `secret put`。本機一律用 `vite dev` 的本地模擬(`.wrangler/state`)。
 - 不用 superpowers 那套流程(已全域停用)。直接做,設計討論用文件與簡短說明。
+- **不存任何檔案**:不用 R2,照片只存來源 URL,看房紀錄純文字。不要提議照片 / 錄音上傳。
 - 採集在家裡這台跑(`collector/`,Node + TS;591 純 fetch,不用 Playwright),Worker 不抓外站。地圖用 CARTO,不用 Google Maps / MapTiler。
 - 能從 menmap(`../menmap`)抄的就抄:地圖 `localizeBasemap`、`mrt.json`、採集架構、OAuth。
 

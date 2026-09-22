@@ -74,7 +74,7 @@ export const listings = sqliteTable(
     rent: integer("rent").notNull(),
     depositMonths: real("deposit_months"),
     rawJson: text("raw_json"),
-    photosJson: text("photos_json"), // 來源的照片 URL 陣列(JSON,只存連結不下載);使用者自己拍的照片在 photos 表(R2)
+    photosJson: text("photos_json"), // 來源的照片 URL 陣列(JSON)。只存連結不下載;整個系統不存任何檔案(決定:2026-09-22)
     contactName: text("contact_name"),
     contactPhone: text("contact_phone"),
     contactLine: text("contact_line"),
