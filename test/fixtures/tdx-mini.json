@@ -1,0 +1,54 @@
+{
+  "routes": [
+    { "RouteUID": "TPE10723", "RouteName": { "Zh_tw": "307", "En": "307" }, "DepartureStopNameZh": "撫遠街", "DestinationStopNameZh": "板橋前站", "City": "Taipei" },
+    { "RouteUID": "TPE15680", "RouteName": { "Zh_tw": "紅30", "En": "R30" }, "DepartureStopNameZh": "捷運忠孝新生站", "DestinationStopNameZh": "捷運忠孝新生站", "City": "Taipei" }
+  ],
+  "stopOfRoute": [
+    {
+      "RouteUID": "TPE10723", "RouteName": { "Zh_tw": "307" }, "SubRouteUID": "TPE107230", "SubRouteName": { "Zh_tw": "307去程" }, "Direction": 0, "City": "Taipei",
+      "Stops": [
+        { "StopUID": "TPE38001", "StationID": "1001", "StopName": { "Zh_tw": "撫遠街" }, "StopSequence": 1, "StopPosition": { "PositionLat": 25.0610, "PositionLon": 121.5700 } },
+        { "StopUID": "TPE38003", "StationID": "1003", "StopName": { "Zh_tw": "松山高中" }, "StopSequence": 3, "StopPosition": { "PositionLat": 25.0450, "PositionLon": 121.5650 } },
+        { "StopUID": "TPE38002", "StationID": "1002", "StopName": { "Zh_tw": "松山車站" }, "StopSequence": 2, "StopPosition": { "PositionLat": 25.0500, "PositionLon": 121.5680 } },
+        { "StopUID": "TPE38009", "StopName": { "Zh_tw": "沒座標" }, "StopSequence": 4, "StopPosition": { "PositionLat": 0, "PositionLon": 0 } }
+      ]
+    },
+    {
+      "RouteUID": "TPE10723", "RouteName": { "Zh_tw": "307" }, "SubRouteUID": "TPE107230", "SubRouteName": { "Zh_tw": "307返程" }, "Direction": 1, "City": "Taipei",
+      "Stops": [
+        { "StopUID": "TPE38101", "StopName": { "Zh_tw": "松山高中" }, "StopSequence": 1, "StopPosition": { "PositionLat": 25.0452, "PositionLon": 121.5652 } },
+        { "StopUID": "TPE38102", "StopName": { "Zh_tw": "撫遠街" }, "StopSequence": 2, "StopPosition": { "PositionLat": 25.0612, "PositionLon": 121.5702 } }
+      ]
+    },
+    {
+      "RouteUID": "TPE15680", "RouteName": { "Zh_tw": "紅30" }, "Direction": 0, "City": "Taipei",
+      "Stops": [
+        { "StopUID": "TPE50001", "StopName": { "Zh_tw": "捷運忠孝新生站" }, "StopSequence": 1, "StopPosition": { "PositionLat": 25.0420, "PositionLon": 121.5330 } },
+        { "StopUID": "TPE50002", "StopName": { "Zh_tw": "華山文創園區" }, "StopSequence": 2, "StopPosition": { "PositionLat": 25.0440, "PositionLon": 121.5290 } }
+      ]
+    }
+  ],
+  "shapes": [
+    { "RouteUID": "TPE10723", "SubRouteUID": "TPE107230", "Direction": 0, "Geometry": "LINESTRING(121.57 25.061,121.5690 25.0555,121.568 25.05,121.5665 25.0475,121.565 25.045)" },
+    { "RouteUID": "TPE15680", "Geometry": "MULTILINESTRING((121.533 25.042,121.531 25.043),(121.531 25.043,121.529 25.044))" }
+  ],
+  "schedules": [
+    {
+      "RouteUID": "TPE10723", "SubRouteUID": "TPE107230", "Direction": 0,
+      "Frequencys": [
+        { "StartTime": "05:30", "EndTime": "07:00", "MinHeadwayMins": 8, "MaxHeadwayMins": 12, "ServiceDay": { "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1, "Saturday": 0, "Sunday": 0 } },
+        { "StartTime": "07:00", "EndTime": "09:00", "MinHeadwayMins": 3, "MaxHeadwayMins": 6, "ServiceDay": { "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1, "Saturday": 0, "Sunday": 0 } },
+        { "StartTime": "09:00", "EndTime": "23:00", "MinHeadwayMins": 8, "MaxHeadwayMins": 15, "ServiceDay": { "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1, "Saturday": 0, "Sunday": 0 } },
+        { "StartTime": "06:00", "EndTime": "23:00", "MinHeadwayMins": 10, "MaxHeadwayMins": 20, "ServiceDay": { "Monday": 0, "Saturday": 1, "Sunday": 1 } }
+      ]
+    },
+    {
+      "RouteUID": "TPE15680", "Direction": 0,
+      "Timetables": [
+        { "ServiceDay": { "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1 }, "StopTimes": [ { "StopSequence": 1, "DepartureTime": "07:10" }, { "StopSequence": 2, "ArrivalTime": "07:16" } ] },
+        { "ServiceDay": { "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1 }, "StopTimes": [ { "StopSequence": 1, "DepartureTime": "07:40" } ] },
+        { "ServiceDay": { "Saturday": 1 }, "StopTimes": [ { "StopSequence": 1, "DepartureTime": "9:00" } ] }
+      ]
+    }
+  ]
+}

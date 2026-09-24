@@ -141,3 +141,57 @@ export const pendingUrls = sqliteTable(
   },
   (t) => [index("pending_urls_status_idx").on(t.status)],
 );
+
+/**
+ * 公車路線方向(TDX 雙北市區公車,採集機 `collect bus` 覆蓋式匯入;version 是那次匯入的時間戳,commit 時刪掉舊版)。
+ * key = `{SubRouteUID 或 RouteUID}:{Direction}`
+ */
+export const busRoutes = sqliteTable("bus_routes", {
+  key: text("key").primaryKey(),
+  routeUid: text("route_uid").notNull(),
+  name: text("name").notNull(),
+  city: text("city").notNull(),
+  direction: integer("direction").notNull(),
+  fromName: text("from_name"),
+  toName: text("to_name"),
+  stopCount: integer("stop_count").notNull(),
+  lengthM: integer("length_m").notNull(),
+  shapeJson: text("shape_json").notNull(), // [[lng,lat],…] 已簡化
+  scheduleJson: text("schedule_json"), // shared/bus.ts Schedule
+  version: text("version").notNull(),
+});
+
+/** 路線方向上的每一站(站牌 × 路線 × 方向);附近查詢走 (lat, lng) 索引 */
+export const busRouteStops = sqliteTable(
+  "bus_route_stops",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    routeKey: text("route_key").notNull(),
+    seq: integer("seq").notNull(),
+    stopUid: text("stop_uid").notNull(),
+    stationId: text("station_id"),
+    name: text("name").notNull(),
+    lat: real("lat").notNull(),
+    lng: real("lng").notNull(),
+    distM: integer("dist_m").notNull(),
+    tMin: integer("t_min"),
+    version: text("version").notNull(),
+  },
+  (t) => [uniqueIndex("brs_route_seq_uq").on(t.routeKey, t.seq), index("brs_latlng_idx").on(t.lat, t.lng)],
+);
+
+/** 我的地點(公司、爸媽家…),用來算通勤 */
+export const myPlaces = sqliteTable(
+  "my_places",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    lat: real("lat").notNull(),
+    lng: real("lng").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("my_places_user_idx").on(t.userId)],
+);

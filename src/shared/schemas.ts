@@ -116,3 +116,14 @@ export interface SessionUser {
   name: string | null;
   avatar: string | null;
 }
+
+/** 我的地點(公司、爸媽家…) */
+export const PlaceInput = z.object({
+  name: z.string().trim().min(1).max(30),
+  lat: z.number().min(21).max(26.5),
+  lng: z.number().min(119).max(122.5),
+});
+export type PlaceInput = z.infer<typeof PlaceInput>;
+export interface Place extends PlaceInput {
+  id: number;
+}

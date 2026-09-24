@@ -4,8 +4,9 @@
  *   npm run collect -- add <url> [--dry]                 抓一個物件頁(591 / 好房自動判斷)→ 推 ingest(--dry 只印 JSON)
  *   npm run collect -- list <listUrl> [--pages=1-5] [--dry] 抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
  *   npm run collect -- sync                              每日同步(collector/searches.json)
+ *   npm run collect -- bus [--dry] [--refresh]           下載雙北公車(TDX)→ 覆蓋式推入(一個月一次就好)
  *
- * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET。
+ * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET;公車另讀 TDX_CLIENT_ID / TDX_CLIENT_SECRET。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -89,7 +90,12 @@ async function main() {
     await runSync({ base: API, secret: SECRET }, loadConfig());
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync");
+  if (cmd === "bus") {
+    const { runBus } = await import("./bus/index");
+    await runBus({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
+    return;
+  }
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync | collect bus [--dry]");
   process.exit(1);
 }
 

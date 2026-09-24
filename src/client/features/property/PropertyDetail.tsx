@@ -4,16 +4,20 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ExternalLink, Maximize2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { SOURCE_LABEL, type Source } from "@shared/constants";
+import { BusSection } from "@/features/bus/BusSection";
+import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
 
 interface Props {
   id: number;
   /** 地圖左側面板模式:有關閉鈕與「全頁」連結 */
   onClose?: () => void;
+  /** 地圖頁才有:公車區塊選了路線就畫到地圖上 */
+  onBusOverlay?: (o: BusOverlay | null) => void;
 }
 
 /** 房源詳細:照片、狀態、規格、來源與聯絡、備註。DetailPage 與地圖左側面板共用。 */
-export function PropertyDetail({ id, onClose }: Props) {
+export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["property", id], queryFn: () => api.getProperty(id), enabled: Number.isInteger(id) });
@@ -90,6 +94,8 @@ export function PropertyDetail({ id, onClose }: Props) {
           ))}
         </p>
       )}
+
+      {p.lat != null && p.lng != null && <BusSection key={id} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
 
       {main && (
         <section className="text-sm">

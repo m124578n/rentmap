@@ -22,6 +22,13 @@
       "when": 1789907351997,
       "tag": "0002_property_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790235313876,
+      "tag": "0003_bus_and_places",
+      "breakpoints": true
     }
   ]
 }
