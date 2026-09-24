@@ -36,7 +36,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENTMAP_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
-| `npm run collect -- sync` | 每日同步(searches.json);排程 `RentmapDailySync` 每天 20:00 跑 `scripts/run_daily.ps1`,本機模式會自己起 / 關 dev server |
+| `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(12:30 好房、20:00 台北、21:30 新北、23:00 重抓);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)
 
@@ -46,7 +46,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 
 ## 排程
 
-每天 20:00 Windows 工作排程 `RentmapDailySync` 跑 `scripts/run_daily.ps1`(log 在 `data/logs/{date}-sync.log`)。**20:00 到約 20:40 不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
+Windows 工作排程 `RentmapSync-*` 四個時段(12:30、20:00、21:30、23:00)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
 
 ## 本機登入
 
@@ -63,6 +63,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - maplibre-gl v6 在 Vite 8 dev 模式要 `optimizeDeps.exclude`,否則 worker 載不到、圖磚全空(已設在 vite.config.ts)。
 - `import * as maplibregl from "maplibre-gl"`(v6 沒有 default export);GeoJSON 型別從 `geojson` 套件 import。
 - 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
+- `.ps1` 一定要存成 **UTF-8 with BOM**:PowerShell 5.1 沒 BOM 會用 ANSI 讀,中文字串直接讓腳本語法錯誤(register_task.ps1 踩過)。
 - Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。

@@ -13,12 +13,17 @@ import type { ImportedListing } from "../src/shared/schemas";
 import { sourceById, type Source } from "./sources";
 
 interface Search {
+  group?: string;
   name: string;
   source?: string; // 預設 591
   url: string;
   pages: number;
 }
+interface GroupCfg {
+  recheck: { source: string; maxPerRun: number }[];
+}
 interface Config {
+  groups?: Record<string, GroupCfg>;
   searches: Search[];
   recheck: { hours: number; maxPerRun: number; detailRefreshDays: number };
 }
@@ -56,7 +61,15 @@ async function apiJson<T>(api: Api, p: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function runSync(api: Api, cfg: Config, log: (s: string) => void = console.log): Promise<SyncSummary> {
+/**
+ * @param group 只跑 searches.json 裡這一組(列表 + 該組設定的重抓);不給就全部跑(舊行為,重抓上限用 cfg.recheck.maxPerRun)
+ */
+export async function runSync(api: Api, cfg: Config, log: (s: string) => void = console.log, group?: string): Promise<SyncSummary> {
+  const groupCfg = group ? cfg.groups?.[group] : undefined;
+  if (group && !groupCfg) throw new Error(`searches.json 沒有 group「${group}」;可用:${Object.keys(cfg.groups ?? {}).join(", ")}`);
+  const recheckMax = (srcId: string): number =>
+    group ? (groupCfg!.recheck.find((r) => r.source === srcId)?.maxPerRun ?? 0) : cfg.recheck.maxPerRun;
+  if (group) log(`=== group: ${group} ===`);
   const t0 = Date.now();
   const sum: SyncSummary = { scannedUrls: 0, skipped: 0, created: 0, updated: 0, removed: 0, rechecked: 0, failed: 0, parseErrors: 0, seconds: 0 };
   const freshCutoff = Date.now() - (cfg.recheck.detailRefreshDays ?? 3) * 86400_000;
@@ -72,13 +85,19 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
 
   // 依來源分組處理(各來源自己的活躍清單、seen、下架)
   const bySource = new Map<Source, Search[]>();
-  for (const s of cfg.searches) {
+  const searches = group ? cfg.searches.filter((s) => s.group === group) : cfg.searches;
+  for (const s of searches) {
     const src = sourceById(s.source ?? "591");
     if (!src) {
       log(`✗ 未知來源 ${s.source}:${s.name}`);
       continue;
     }
     bySource.set(src, [...(bySource.get(src) ?? []), s]);
+  }
+  // 只有重抓、沒有列表的來源(例如 recheck 組)也要跑
+  for (const r of groupCfg?.recheck ?? []) {
+    const src = sourceById(r.source);
+    if (src && !bySource.has(src)) bySource.set(src, []);
   }
 
   for (const [src, searches] of bySource) {
@@ -159,7 +178,7 @@ export async function runSync(api: Api, cfg: Config, log: (s: string) => void = 
     const stale = active.items
       .filter((it) => !seen.has(it.source_listing_id) && (!it.last_checked_at || Date.parse(it.last_checked_at) < staleCutoff))
       .sort((a, b) => (a.last_checked_at ?? "").localeCompare(b.last_checked_at ?? ""))
-      .slice(0, cfg.recheck.maxPerRun);
+      .slice(0, recheckMax(src.id));
     log(`=== [${src.label}] 重抓:活躍 ${active.items.length},列表沒掃到且逾期 ${stale.length} ===`);
     const gone: string[] = [];
     const batch: ImportedListing[] = [];

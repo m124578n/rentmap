@@ -3,7 +3,7 @@
  *
  *   npm run collect -- add <url> [--dry]                 抓一個物件頁(591 / 好房自動判斷)→ 推 ingest(--dry 只印 JSON)
  *   npm run collect -- list <listUrl> [--pages=1-5] [--dry] 抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
- *   npm run collect -- sync                              每日同步(collector/searches.json)
+ *   npm run collect -- sync [--group=taipei]             每日同步(collector/searches.json);不給 group 就全部
  *
  * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET。
  */
@@ -86,10 +86,11 @@ async function main() {
   if (cmd === "sync") {
     const { loadConfig, runSync } = await import("./sync");
     if (!SECRET) throw new Error(".env 沒有 INGEST_SECRET");
-    await runSync({ base: API, secret: SECRET }, loadConfig());
+    const group = [arg, ...rest].find((r) => r?.startsWith("--group="))?.slice(8);
+    await runSync({ base: API, secret: SECRET }, loadConfig(), console.log, group);
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync");
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun]");
   process.exit(1);
 }
 

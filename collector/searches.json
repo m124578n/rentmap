@@ -1,51 +1,87 @@
 {
-  "_doc": "每日 sync 要掃的搜尋條件。source 預設 591(region 1 台北市、3 新北市;kind 1 整層住家、2 獨立套房、3 分租套房);hb = 好房(每頁約 10 筆,Playwright,較慢)。pages 是每次掃幾頁。",
+  "_doc": "每日 sync 分四組、四個時段跑(見 scripts/register_task.ps1),每組量小、對站方友善。source 預設 591(region 1 台北市、3 新北市;kind 1 整層住家、2 獨立套房、3 分租套房);hb = 好房(Playwright,約 50 次載入就會被 403 一陣子)。",
+  "groups": {
+    "taipei": {
+      "_doc": "20:00 591 台北列表 + 新物件",
+      "recheck": []
+    },
+    "newtaipei": {
+      "_doc": "21:30 591 新北列表 + 新物件",
+      "recheck": []
+    },
+    "recheck": {
+      "_doc": "23:00 591 活躍物件重抓(下架 / 漲跌價)",
+      "recheck": [
+        {
+          "source": "591",
+          "maxPerRun": 150
+        }
+      ]
+    },
+    "housefun": {
+      "_doc": "12:30 好房列表 + 重抓,總量壓在 40 次載入內",
+      "recheck": [
+        {
+          "source": "hb",
+          "maxPerRun": 15
+        }
+      ]
+    }
+  },
   "searches": [
     {
+      "group": "taipei",
       "name": "台北 整層住家",
       "url": "https://rent.591.com.tw/list?region=1&kind=1",
       "pages": 5
     },
     {
+      "group": "taipei",
       "name": "台北 獨立套房",
       "url": "https://rent.591.com.tw/list?region=1&kind=2",
       "pages": 5
     },
     {
+      "group": "taipei",
       "name": "台北 分租套房",
       "url": "https://rent.591.com.tw/list?region=1&kind=3",
       "pages": 3
     },
     {
+      "group": "newtaipei",
       "name": "新北 整層住家",
       "url": "https://rent.591.com.tw/list?region=3&kind=1",
       "pages": 5
     },
     {
+      "group": "newtaipei",
       "name": "新北 獨立套房",
       "url": "https://rent.591.com.tw/list?region=3&kind=2",
       "pages": 5
     },
     {
+      "group": "newtaipei",
       "name": "新北 分租套房",
       "url": "https://rent.591.com.tw/list?region=3&kind=3",
       "pages": 3
     },
     {
+      "group": "housefun",
       "name": "好房 台北市",
       "source": "hb",
       "url": "https://rent.housefun.com.tw/region/%E5%8F%B0%E5%8C%97%E5%B8%82/",
-      "pages": 3
+      "pages": 2
     },
     {
+      "group": "housefun",
       "name": "好房 新北市",
       "source": "hb",
       "url": "https://rent.housefun.com.tw/region/%E6%96%B0%E5%8C%97%E5%B8%82/",
-      "pages": 3
+      "pages": 2
     }
   ],
   "recheck": {
-    "_doc": "detailRefreshDays:列表上還看得到的物件,幾天重抓一次物件頁(偵測漲跌價)。hours / maxPerRun:列表沒掃到的活躍物件,超過 hours 小時沒確認就重抓(不存在 → 下架),每個來源每輪最多 maxPerRun 筆。",
+    "_doc": "detailRefreshDays:列表上還看得到的物件,幾天重抓一次物件頁(偵測漲跌價)。hours:列表沒掃到的活躍物件,超過幾小時沒確認才重抓。maxPerRun 由各 group 決定(不分組跑時用這裡的 300)。",
     "detailRefreshDays": 3,
     "hours": 44,
     "maxPerRun": 300

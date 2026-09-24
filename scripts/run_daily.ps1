@@ -1,8 +1,10 @@
-# 每日採集:collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
-# 由 Windows 工作排程器每天 20:00 觸發(見 register_task.ps1)。log 在 data/logs/{date}-sync.log。
+﻿# 每日採集:collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
+# 由 Windows 工作排程器分四個時段觸發(見 register_task.ps1),每次帶 -Group。log 在 data/logs/{date}-sync-{group}.log。
 #
 # 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
 # 部署後把 .env 的 RENTMAP_API 改成正式站網址,就不會再碰 dev server。
+
+param([string]$Group = "")   # taipei | newtaipei | recheck | housefun;空 = 全部(舊行為)
 
 $ErrorActionPreference = "Continue"
 $repo = Split-Path -Parent $PSScriptRoot
@@ -20,7 +22,8 @@ $null = $power::SetThreadExecutionState([uint32]2147483649)
 $logDir = Join-Path $repo "data\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stamp = Get-Date -Format "yyyy-MM-dd"
-$log = Join-Path $logDir "$stamp-sync.log"
+$suffix = if ($Group) { "-$Group" } else { "" }
+$log = Join-Path $logDir "$stamp-sync$suffix.log"
 
 function Log {
     param([Parameter(ValueFromPipeline = $true)] $line)
@@ -31,7 +34,7 @@ function Log {
     }
 }
 
-"=== rentmap daily sync @ $(Get-Date -Format o) ===" | Log
+"=== rentmap daily sync [$Group] @ $(Get-Date -Format o) ===" | Log
 
 # 讀 .env 的 RENTMAP_API
 $api = "http://localhost:5173"
@@ -59,7 +62,7 @@ if ($isLocal) {
 
 "--- collect sync ---" | Log
 try {
-    & npm run collect -- sync 2>&1 | Log
+    if ($Group) { & npm run collect -- sync "--group=$Group" 2>&1 | Log } else { & npm run collect -- sync 2>&1 | Log }
 } catch {
     "!! sync 失敗:$_" | Log
 }
