@@ -1,4 +1,4 @@
-﻿# 每日採集:git pull → (lock 有變才 npm install)→ collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
+﻿# 每日採集:等網路 → git pull → (lock 有變才 npm install)→ collector sync → 跑完閒置就自動睡眠(排程會把睡眠中的電腦喚醒)(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
 # 由 Windows 工作排程器分四個時段觸發(見 register_task.ps1),每次帶 -Group。log 在 data/logs/{date}-sync-{group}.log。
 #
 # 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
@@ -39,6 +39,13 @@ function Log {
 # 第一步:拉最新程式(其他機器或 Claude 推上去的改動)。ff-only 失敗就照舊版跑,不擋採集。
 # package-lock 有變才 npm install(不然每天白跑)。
 $lockBefore = (Get-FileHash (Join-Path $repo "package-lock.json") -ErrorAction SilentlyContinue).Hash
+# 從睡眠被喚醒時網路要幾秒才回來,先等(最多 90 秒)
+$netOk = $false
+for ($i = 0; $i -lt 18; $i++) {
+    try { $null = Invoke-WebRequest -Uri "https://www.cloudflare.com/cdn-cgi/trace" -UseBasicParsing -TimeoutSec 4; $netOk = $true; break } catch { Start-Sleep -Seconds 5 }
+}
+if (-not $netOk) { "!! 網路 90 秒內沒連上,仍嘗試繼續" | Log }
+
 "--- git pull ---" | Log
 try { & git pull --ff-only 2>&1 | Log } catch { "!! git pull 失敗:$_" | Log }
 $lockAfter = (Get-FileHash (Join-Path $repo "package-lock.json") -ErrorAction SilentlyContinue).Hash
@@ -88,3 +95,29 @@ if ($devProc) {
 
 $null = $power::SetThreadExecutionState([uint32]2147483648)
 "=== done @ $(Get-Date -Format o) ===" | Log
+
+# 跑完自動睡眠(電腦插電時「閒置後睡眠」是永不,被排程喚醒後不會自己睡回去)。三道保險:
+#   1. 連續 10 分鐘沒有鍵盤 / 滑鼠輸入(使用者在用就不睡)
+#   2. menmap 的排程 RamenDailySnapshot 還在跑就不睡(20:00 起約 1.5 小時)
+#   3. 其他 RentmapSync-* 還在跑就不睡
+# 設 $env:NO_AUTO_SLEEP="1" 可停用。
+if ($env:NO_AUTO_SLEEP -ne "1") {
+    Add-Type -Namespace RentmapIdle -Name Input -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+[DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+public static uint IdleMs() { LASTINPUTINFO i = new LASTINPUTINFO(); i.cbSize = (uint)Marshal.SizeOf(i); GetLastInputInfo(ref i); return (uint)Environment.TickCount - i.dwTime; }
+'@
+    $idleMin = [RentmapIdle.Input]::IdleMs() / 60000
+    $others = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskName -eq "RamenDailySnapshot" -or $_.TaskName -like "RentmapSync-*") -and $_.State -eq "Running" }
+    if ($idleMin -lt 10) {
+        "自動睡眠:略過(最近 $([math]::Round($idleMin,1)) 分鐘內有人在用電腦)" | Log
+    } elseif ($others) {
+        "自動睡眠:略過(還在跑:$($others.TaskName -join ', '))" | Log
+    } else {
+        "自動睡眠:閒置 $([math]::Round($idleMin,0)) 分鐘,30 秒後進入睡眠" | Log
+        Start-Sleep -Seconds 30
+        Add-Type -AssemblyName System.Windows.Forms
+        # 用 Forms 的 SetSuspendState(Suspend):rundll32 powrprof 在有休眠的機器上會變成休眠,喚醒計時器叫不醒
+        $null = [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)
+    }
+}
