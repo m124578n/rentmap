@@ -46,7 +46,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 
 ## 排程
 
-Windows 工作排程 `RentmapSync-*` 四個時段(12:30、20:00、21:30、23:00)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
+Windows 工作排程 `RentmapSync-*` 四個時段(12:30、20:00、21:30、23:00)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。排程會把睡眠中的電腦喚醒(WakeToRun,電源設定「允許喚醒計時器」已啟用),`run_daily.ps1` 開頭先等網路、`git pull`,結尾在「閒置 ≥10 分鐘且 menmap / 其他 rentmap 排程沒在跑」時自動睡眠(`$env:NO_AUTO_SLEEP=1` 可關)。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
 
 ## 本機登入
 
