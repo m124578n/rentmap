@@ -1,4 +1,5 @@
-import type { FavoriteInput, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { FavoriteInput, Place, PlaceInput, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 
 export class ApiError extends Error {
   constructor(
@@ -33,6 +34,17 @@ export const api = {
     req<{ favorite: Favorite }>(`/api/properties/${id}/favorite`, { method: "PUT", body: JSON.stringify(input) }),
   removeFavorite: (id: number) => req<{ ok: true }>(`/api/properties/${id}/favorite`, { method: "DELETE" }),
   deleteProperty: (id: number) => req<{ ok: true }>(`/api/properties/${id}`, { method: "DELETE" }),
+
+  busNearby: (q: { lat: number; lng: number; radius: number; to?: { lat: number; lng: number } | null }) => {
+    const p = new URLSearchParams({ lat: String(q.lat), lng: String(q.lng), radius: String(q.radius) });
+    if (q.to) p.set("to_lat", String(q.to.lat)), p.set("to_lng", String(q.to.lng));
+    return req<NearbyBusResponse>(`/api/bus/nearby?${p}`);
+  },
+  busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
+
+  listPlaces: () => req<{ items: Place[] }>("/api/places"),
+  createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),
+  deletePlace: (id: number) => req<{ ok: true }>(`/api/places/${id}`, { method: "DELETE" }),
 };
 
 /** 詳細頁回傳。欄位對應 worker/db/schema.ts 的 camelCase。 */
