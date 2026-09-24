@@ -1,4 +1,4 @@
-﻿# 每日採集:collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
+﻿# 每日採集:git pull → (lock 有變才 npm install)→ collector sync(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
 # 由 Windows 工作排程器分四個時段觸發(見 register_task.ps1),每次帶 -Group。log 在 data/logs/{date}-sync-{group}.log。
 #
 # 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
@@ -35,6 +35,17 @@ function Log {
 }
 
 "=== rentmap daily sync [$Group] @ $(Get-Date -Format o) ===" | Log
+
+# 第一步:拉最新程式(其他機器或 Claude 推上去的改動)。ff-only 失敗就照舊版跑,不擋採集。
+# package-lock 有變才 npm install(不然每天白跑)。
+$lockBefore = (Get-FileHash (Join-Path $repo "package-lock.json") -ErrorAction SilentlyContinue).Hash
+"--- git pull ---" | Log
+try { & git pull --ff-only 2>&1 | Log } catch { "!! git pull 失敗:$_" | Log }
+$lockAfter = (Get-FileHash (Join-Path $repo "package-lock.json") -ErrorAction SilentlyContinue).Hash
+if ($lockBefore -ne $lockAfter) {
+    "package-lock 有變,npm install" | Log
+    try { & npm install --no-audit --no-fund 2>&1 | Log } catch { "!! npm install 失敗:$_" | Log }
+}
 
 # 讀 .env 的 RENTMAP_API
 $api = "http://localhost:5173"
