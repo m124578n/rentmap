@@ -29,6 +29,13 @@
       "when": 1790235313876,
       "tag": "0003_bus_and_places",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790394432147,
+      "tag": "0004_place_address",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,9 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Home, Kanban, List, LogOut, Map, Moon, Plus, Sun } from "lucide-react";
+import { Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
+import { openPlacesDialog } from "@/features/places/places";
+import { PlacesDialogHost } from "@/features/places/PlacesDialog";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
@@ -28,6 +30,9 @@ export function Layout() {
               <Link to="/board" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
                 <Kanban size={16} /> <span className="hidden sm:inline">看板</span>
               </Link>
+              <button onClick={openPlacesDialog} className="btn-ghost" title="我的地點(公司…)">
+                <MapPin size={16} /> <span className="hidden sm:inline">我的地點</span>
+              </button>
               <Link to="/new" className="btn-primary">
                 <Plus size={16} /> <span className="hidden sm:inline">新增</span>
               </Link>
@@ -61,7 +66,10 @@ export function Layout() {
         {loading ? (
           <p className="p-4 text-neutral-500">載入中…</p>
         ) : user ? (
-          <Outlet />
+          <>
+            <Outlet />
+            <PlacesDialogHost />
+          </>
         ) : (
           <div className="card m-4 text-center">
             <p className="mb-3">先登入才看得到你的房源。</p>

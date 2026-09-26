@@ -18,7 +18,7 @@ import {
   type NearbyRoute,
 } from "@shared/bus";
 import type { BusOverlay } from "@/features/map/busLayer";
-import { useCommuteTarget, usePlaces } from "./places";
+import { openPlacesDialog, useCommuteTarget, usePlaces } from "@/features/places/places";
 
 interface Props {
   lat: number;
@@ -173,9 +173,12 @@ function Commute({
 }) {
   if (places.length === 0) {
     return (
-      <p className="rounded bg-blue-50 px-2 py-1.5 text-xs text-blue-900 dark:bg-blue-950 dark:text-blue-200">
-        想看通勤:在地圖上<b>按右鍵(手機長按)</b>把公司存成「我的地點」,這裡就會列出直達的公車、要坐多久。
-      </p>
+      <div className="rounded border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+        <p>看通勤要先設定公司地址:設好後這裡會列出直達的公車、要坐多久。</p>
+        <button onClick={openPlacesDialog} className="mt-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+          輸入公司地址
+        </button>
+      </div>
     );
   }
   const target = places.find((p) => p.id === targetId);
@@ -192,6 +195,9 @@ function Commute({
             {p.name}
           </button>
         ))}
+        <button onClick={openPlacesDialog} className="ml-auto text-neutral-500 underline">
+          管理
+        </button>
       </div>
       {target && options && options.length === 0 && (
         <p className="mt-1.5 text-xs text-neutral-500">

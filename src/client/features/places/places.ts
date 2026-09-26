@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PlaceUpdate } from "@shared/schemas";
 import { api } from "@/lib/api";
 
 /** 我的地點(公司、爸媽家…) */
@@ -12,6 +13,7 @@ export function usePlaceMutations() {
   const done = () => qc.invalidateQueries({ queryKey: ["places"] });
   return {
     create: useMutation({ mutationFn: api.createPlace, onSuccess: done }),
+    update: useMutation({ mutationFn: ({ id, ...input }: PlaceUpdate & { id: number }) => api.updatePlace(id, input), onSuccess: done }),
     remove: useMutation({ mutationFn: api.deletePlace, onSuccess: done }),
   };
 }
@@ -47,4 +49,19 @@ export function useCommuteTarget(): [number | null, (id: number | null) => void]
     return () => window.removeEventListener(EVT, on);
   }, []);
   return [id, setCommuteTarget];
+}
+
+// 「我的地點」對話框:任何地方都能叫出來(公車區塊、頂欄、地圖上的地點標記),Layout 裡放一個 PlacesDialogHost
+const OPEN_EVT = "rentmap:places-dialog";
+export function openPlacesDialog() {
+  window.dispatchEvent(new Event(OPEN_EVT));
+}
+export function usePlacesDialogOpen(): [boolean, (v: boolean) => void] {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setOpen(true);
+    window.addEventListener(OPEN_EVT, on);
+    return () => window.removeEventListener(OPEN_EVT, on);
+  }, []);
+  return [open, setOpen];
 }

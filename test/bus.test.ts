@@ -152,8 +152,16 @@ describe("places", () => {
     const list = (await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] };
     expect(list.items.map((p) => p.name)).toEqual(["公司"]);
 
+    const patched = await SELF.fetch(
+      `${ORIGIN}/api/places/${place.id}`,
+      authed({ method: "PATCH", body: JSON.stringify({ address: "台北市中正區忠孝西路一段49號", lat: 25.0461, lng: 121.5173 }) }),
+    );
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { place: Place }).place).toMatchObject({ name: "公司", address: "台北市中正區忠孝西路一段49號", lng: 121.5173 });
+
     expect((await SELF.fetch(`${ORIGIN}/api/places/${place.id}`, authed({ method: "DELETE" }))).status).toBe(200);
     expect((await SELF.fetch(`${ORIGIN}/api/places/${place.id}`, authed({ method: "DELETE" }))).status).toBe(404);
+    expect((await SELF.fetch(`${ORIGIN}/api/places/${place.id}`, authed({ method: "PATCH", body: JSON.stringify({ name: "x" }) }))).status).toBe(404);
   });
 
   it("rejects points outside Taiwan", async () => {

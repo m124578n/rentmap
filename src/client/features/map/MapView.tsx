@@ -18,8 +18,6 @@ interface Props {
   busOverlay?: BusOverlay | null;
   /** 我的地點(公司…) */
   places?: Place[];
-  /** 右鍵 / 長按地圖某點 */
-  onContextMenu?: (p: { lat: number; lng: number }) => void;
   onPlaceClick?: (p: Place) => void;
 }
 
@@ -45,7 +43,7 @@ function priceLabel(rent: number | null) {
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, busOverlay = null, places = [], onContextMenu, onPlaceClick }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, busOverlay = null, places = [], onPlaceClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
@@ -55,12 +53,10 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const themeRef = useRef(theme);
   const padRef = useRef(padLeft);
   const busRef = useRef(busOverlay);
-  const ctxRef = useRef(onContextMenu);
   const placeClickRef = useRef(onPlaceClick);
   const placeMarkersRef = useRef<maplibregl.Marker[]>([]);
   padRef.current = padLeft;
   busRef.current = busOverlay;
-  ctxRef.current = onContextMenu;
   placeClickRef.current = onPlaceClick;
   onSelectRef.current = onSelect;
   mrtRef.current = mrt;
@@ -85,19 +81,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
     });
     map.on("click", () => onSelectRef.current(null));
-    // 右鍵(桌機)/ 長按(手機;iOS 不會觸發 contextmenu,自己計時)
-    map.on("contextmenu", (e) => ctxRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }));
-    let pressTimer: ReturnType<typeof setTimeout> | undefined;
-    const cancelPress = () => clearTimeout(pressTimer);
-    map.on("touchstart", (e) => {
-      cancelPress();
-      if (e.originalEvent.touches.length !== 1) return;
-      const at = e.lngLat;
-      pressTimer = setTimeout(() => ctxRef.current?.({ lat: at.lat, lng: at.lng }), 650);
-    });
-    map.on("touchend", cancelPress);
-    map.on("touchmove", cancelPress);
-    map.on("movestart", cancelPress);
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -154,7 +138,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       el.type = "button";
       el.className = "rh-place";
       el.textContent = p.name;
-      el.title = `${p.name}(點一下管理)`;
+      el.title = `${p.name}(點一下修改)`;
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         placeClickRef.current?.(p);

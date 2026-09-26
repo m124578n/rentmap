@@ -1,4 +1,4 @@
-import type { FavoriteInput, Place, PlaceInput, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 
 export class ApiError extends Error {
@@ -44,6 +44,7 @@ export const api = {
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),
+  updatePlace: (id: number, input: PlaceUpdate) => req<{ place: Place }>(`/api/places/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deletePlace: (id: number) => req<{ ok: true }>(`/api/places/${id}`, { method: "DELETE" }),
 };
 
