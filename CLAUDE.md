@@ -43,7 +43,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
 | `npm run collect -- rent-stats [--seasons=4] [--dry]` | 內政部租賃實價登錄(雙北最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
-| `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(12:30 好房、20:00 台北、21:30 新北、23:00 重抓);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
+| `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(20:00 台北、21:30 新北、23:00 重抓;housefun 組已不排程);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)
 
@@ -53,7 +53,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 
 ## 排程
 
-Windows 工作排程 `RentmapSync-*` 四個時段(12:30、20:00、21:30、23:00)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。排程會把睡眠中的電腦喚醒(WakeToRun,電源設定「允許喚醒計時器」已啟用),`run_daily.ps1` 開頭先等網路、`git pull`,結尾在「閒置 ≥10 分鐘且 menmap / 其他 rentmap 排程沒在跑」時自動睡眠(`$env:NO_AUTO_SLEEP=1` 可關)。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
+Windows 工作排程 `RentmapSync-*` 三個時段(20:00 台北、21:30 新北、23:00 重抓;好房中午那組 2026-09-29 取消,`collect sync --group=housefun` 仍可手動跑)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。排程會把睡眠中的電腦喚醒(WakeToRun,電源設定「允許喚醒計時器」已啟用),`run_daily.ps1` 開頭先等網路、`git pull`,結尾在「閒置 ≥10 分鐘且 menmap / 其他 rentmap 排程沒在跑」時自動睡眠(`$env:NO_AUTO_SLEEP=1` 可關)。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
 
 ## 本機登入
 
