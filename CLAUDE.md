@@ -40,7 +40,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENTMAP_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
-| `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次;`.env` 的 `TDX_CLIENT_ID/SECRET`,沒填用匿名額度;原始檔快取 `data/tdx/`) |
+| `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(12:30 好房、20:00 台北、21:30 新北、23:00 重抓);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)
