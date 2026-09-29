@@ -1,4 +1,4 @@
-﻿# 每日採集:等網路 → git pull → (lock 有變才 npm install)→ collector sync → 跑完閒置就自動睡眠(排程會把睡眠中的電腦喚醒)(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
+﻿# 每日採集:等網路 → git pull → (lock 有變才 npm install)→ (dev 沒開時套本地 migration)→ collector sync → 跑完閒置就自動睡眠(排程會把睡眠中的電腦喚醒)(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
 # 由 Windows 工作排程器分四個時段觸發(見 register_task.ps1),每次帶 -Group。log 在 data/logs/{date}-sync-{group}.log。
 #
 # 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
@@ -67,7 +67,11 @@ $devProc = $null
 if ($isLocal) {
     $up = $false
     try { $null = Invoke-WebRequest -Uri "$api/api/health" -UseBasicParsing -TimeoutSec 3; $up = $true } catch {}
+    if ($up) { "dev server 已在跑,略過 migrate(有新 migration 請自行停 dev 後 npm run db:migrate:local)" | Log }
     if (-not $up) {
+        # git pull 可能帶來新的 migration:dev server 沒開時先套到本地 D1(開著時不能套,會撞 SQLite)
+        "--- db:migrate:local ---" | Log
+        try { & npm run db:migrate:local 2>&1 | Log } catch { "!! migrate 失敗:$_" | Log }
         "dev server 沒開,啟動 vite dev" | Log
         $devProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npx vite dev" -WorkingDirectory $repo -WindowStyle Hidden -PassThru
         for ($i = 0; $i -lt 60; $i++) {
