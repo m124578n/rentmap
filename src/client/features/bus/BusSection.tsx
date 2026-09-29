@@ -48,6 +48,7 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
   const [pick, setPick] = useState<Pick | null>(null);
   const [openRoute, setOpenRoute] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   // 關掉面板 / 換房源 → 清掉地圖上的路線
   useEffect(() => () => onOverlay?.(null), [onOverlay]);
@@ -59,13 +60,33 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
   const shown = showAll ? routes : routes.slice(0, BADGES_SHOWN);
   const open = routes.find((r) => r.name === openRoute) ?? null;
 
+  // 預設收起:有了「通勤」區塊之後,附近有哪些公車是次要資訊
+  if (!expanded)
+    return (
+      <section className="text-sm">
+        <button onClick={() => setExpanded(true)} className="flex w-full items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">
+          <Bus size={14} /> 附近公車
+          {q.data?.has_data && <span>· {radius}m 內 {routes.length} 條</span>}
+          <ChevronDown size={14} className="ml-auto" />
+        </button>
+      </section>
+    );
+
   return (
     <section className="text-sm">
       <div className="mb-1.5 flex items-center justify-between">
-        <h2 className="flex items-center gap-1 text-xs font-medium text-neutral-500">
-          <Bus size={14} /> 公車
+        <button
+          onClick={() => {
+            setExpanded(false);
+            setPick(null);
+            setOpenRoute(null);
+          }}
+          className="flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+        >
+          <Bus size={14} /> 附近公車
           {q.data && q.data.has_data && <span>· {radius}m 內 {routes.length} 條</span>}
-        </h2>
+          <ChevronUp size={14} />
+        </button>
         <div className="flex gap-1">
           {[400, 800].map((r) => (
             <button

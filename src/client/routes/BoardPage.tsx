@@ -1,10 +1,12 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
 import { api } from "@/lib/api";
 import type { PropertySummary } from "@shared/schemas";
 import { STAGES, STAGE_LABEL, type Stage } from "@shared/constants";
+import { useCommute } from "@/features/commute/useCommute";
+import { CommuteLines } from "@/features/commute/CommuteLines";
 
 /** 找房看板:收藏的房源依狀態分欄,拖曳換狀態(原生 HTML5 DnD,手機用卡片上的「移到」選單)。 */
 export function BoardPage() {
@@ -16,6 +18,14 @@ export function BoardPage() {
   });
   const [dragId, setDragId] = useState<number | null>(null);
   const [over, setOver] = useState<Stage | null>(null);
+  const commute = useCommute();
+  const scroller = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(true);
+  const onScroll = () => {
+    const el = scroller.current;
+    if (el) setMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+  useEffect(onScroll, [q.data]);
 
   const cols = useMemo(() => {
     const favs = (q.data?.items ?? []).filter((p) => p.stage);
@@ -47,37 +57,51 @@ export function BoardPage() {
     );
 
   return (
-    <div className="flex h-full gap-3 overflow-x-auto p-4">
-      {STAGES.map((stage) => {
-        const list = cols.get(stage) ?? [];
-        return (
-          <section
-            key={stage}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (over !== stage) setOver(stage);
-            }}
-            onDragLeave={() => setOver(null)}
-            onDrop={onDrop(stage)}
-            className={`flex w-64 min-w-0 shrink-0 flex-col rounded-lg border ${over === stage ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30" : "border-neutral-200 bg-neutral-100/60 dark:border-neutral-800 dark:bg-neutral-900/60"}`}
-          >
-            <h2 className="flex items-center justify-between px-3 py-2 text-sm font-medium">
-              {STAGE_LABEL[stage]}
-              <span className="rounded-full bg-white px-1.5 text-xs text-neutral-500 dark:bg-neutral-800">{list.length}</span>
-            </h2>
-            <div className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              {list.map((p) => (
-                <Card key={p.id} p={p} onDragStart={() => setDragId(p.id)} onMove={(s) => move.mutate({ id: p.id, stage: s })} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+    <div className="relative flex h-full flex-col">
+      <p className="px-4 pt-3 text-xs text-neutral-500">
+        {total} 間收藏 · {STAGES.length} 個狀態{moreRight ? ",左右捲動看全部" : ""}
+        <span className="hidden sm:inline"> · 拖曳卡片換狀態</span>
+      </p>
+      <div ref={scroller} onScroll={onScroll} className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4 pt-2">
+        {STAGES.map((stage) => {
+          const list = cols.get(stage) ?? [];
+          return (
+            <section
+              key={stage}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (over !== stage) setOver(stage);
+              }}
+              onDragLeave={() => setOver(null)}
+              onDrop={onDrop(stage)}
+              className={`flex max-h-full w-64 min-w-0 shrink-0 flex-col rounded-lg border ${over === stage ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30" : "border-neutral-200 bg-neutral-100/60 dark:border-neutral-800 dark:bg-neutral-900/60"}`}
+            >
+              <h2 className="flex items-center justify-between px-3 py-2 text-sm font-medium">
+                {STAGE_LABEL[stage]}
+                <span className="rounded-full bg-white px-1.5 text-xs text-neutral-500 dark:bg-neutral-800">{list.length}</span>
+              </h2>
+              <div className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+                {list.map((p) => (
+                  <Card
+                    key={p.id}
+                    p={p}
+                    onDragStart={() => setDragId(p.id)}
+                    onMove={(s) => move.mutate({ id: p.id, stage: s })}
+                    commute={commute.places.length > 0 ? <CommuteLines propertyId={p.id} places={commute.places} matrix={commute.matrix} hasCoords={p.lat != null && p.lng != null} /> : null}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      {/* 右邊還有欄位時的淡出提示 */}
+      {moreRight && <div className="pointer-events-none absolute top-8 right-0 bottom-0 w-10 bg-gradient-to-l from-neutral-50 dark:from-neutral-950" />}
     </div>
   );
 }
 
-function Card({ p, onDragStart, onMove }: { p: PropertySummary; onDragStart: () => void; onMove: (s: Stage) => void }) {
+function Card({ p, onDragStart, onMove, commute }: { p: PropertySummary; onDragStart: () => void; onMove: (s: Stage) => void; commute: ReactNode }) {
   return (
     <article
       draggable
@@ -114,6 +138,7 @@ function Card({ p, onDragStart, onMove }: { p: PropertySummary; onDragStart: () 
           ))}
         </p>
       )}
+      {commute}
       {p.fav_note && <p className="mt-1 line-clamp-2 text-xs text-neutral-600 dark:text-neutral-400">{p.fav_note}</p>}
       {p.listing_status === "removed" && <p className="mt-1 text-xs text-red-600">已下架</p>}
       <select

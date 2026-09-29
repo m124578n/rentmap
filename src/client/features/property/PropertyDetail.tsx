@@ -62,6 +62,9 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         )}
       </div>
 
+      {/* 通勤是做決定最關鍵的,放最前面 */}
+      {p.lat != null && p.lng != null && <CommuteSection key={`c${id}`} lat={p.lat} lng={p.lng} propertyId={id} onOverlay={onBusOverlay} />}
+
       {photos.length > 0 && <PhotoStrip photos={photos} />}
 
       {extra?.market_hint && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">591:{extra.market_hint}</p>}
@@ -96,12 +99,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         </p>
       )}
 
-      {p.lat != null && p.lng != null && (
-        <>
-          <CommuteSection key={`c${id}`} lat={p.lat} lng={p.lng} propertyId={id} onOverlay={onBusOverlay} />
-          <BusSection key={`b${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />
-        </>
-      )}
+      {p.lat != null && p.lng != null && <BusSection key={`b${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
 
       {main && (
         <section className="text-sm">
