@@ -34,6 +34,7 @@ function Log {
     }
 }
 
+$scriptStart = Get-Date
 "=== rentmap daily sync [$Group] @ $(Get-Date -Format o) ===" | Log
 
 # 第一步:拉最新程式(其他機器或 Claude 推上去的改動)。ff-only 失敗就照舊版跑,不擋採集。
@@ -101,9 +102,9 @@ $null = $power::SetThreadExecutionState([uint32]2147483648)
 "=== done @ $(Get-Date -Format o) ===" | Log
 
 # 跑完自動睡眠(電腦插電時「閒置後睡眠」是永不,被排程喚醒後不會自己睡回去)。三道保險:
-#   1. 連續 10 分鐘沒有鍵盤 / 滑鼠輸入(使用者在用就不睡)
+#   1. 腳本開始跑之後沒有任何鍵盤 / 滑鼠輸入(使用者在用就不睡;喚醒會重設最後輸入時間,所以不能用固定 10 分鐘)
 #   2. menmap 的排程 RamenDailySnapshot 還在跑就不睡(20:00 起約 1.5 小時)
-#   3. 其他 RentmapSync-* 還在跑就不睡
+#   3. 其他 RentmapSync-* 還在跑就不睡(自己這組除外)
 # 設 $env:NO_AUTO_SLEEP="1" 可停用。
 if ($env:NO_AUTO_SLEEP -ne "1") {
     Add-Type -Namespace RentmapIdle -Name Input -MemberDefinition @'
@@ -111,14 +112,21 @@ if ($env:NO_AUTO_SLEEP -ne "1") {
 [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 public static uint IdleMs() { LASTINPUTINFO i = new LASTINPUTINFO(); i.cbSize = (uint)Marshal.SizeOf(i); GetLastInputInfo(ref i); return (uint)Environment.TickCount - i.dwTime; }
 '@
+    # 從睡眠喚醒時 Windows 會把「最後輸入時間」重設成喚醒那一刻,所以不能看「閒置 ≥10 分鐘」,
+    # 要看「這支腳本開始跑之後有沒有人動過」:閒置時間 ≥ 腳本已跑的時間(留 20 秒誤差)= 沒人動過。
     $idleMin = [RentmapIdle.Input]::IdleMs() / 60000
-    $others = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskName -eq "RamenDailySnapshot" -or $_.TaskName -like "RentmapSync-*") -and $_.State -eq "Running" }
-    if ($idleMin -lt 10) {
-        "自動睡眠:略過(最近 $([math]::Round($idleMin,1)) 分鐘內有人在用電腦)" | Log
+    $ranMin = ((Get-Date) - $scriptStart).TotalMinutes
+    $untouched = $idleMin -ge ($ranMin - 0.34)
+    # 自己這個排程正在跑是正常的,要排除;只看 menmap 與「其他」rentmap 組
+    $others = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+        ($_.TaskName -eq "RamenDailySnapshot" -or ($_.TaskName -like "RentmapSync-*" -and $_.TaskName -notlike "*$Group")) -and $_.State -eq "Running"
+    }
+    if (-not $untouched) {
+        "自動睡眠:略過(腳本跑了 $([math]::Round($ranMin,1)) 分鐘,但最近 $([math]::Round($idleMin,1)) 分鐘內有人在用電腦)" | Log
     } elseif ($others) {
         "自動睡眠:略過(還在跑:$($others.TaskName -join ', '))" | Log
     } else {
-        "自動睡眠:閒置 $([math]::Round($idleMin,0)) 分鐘,30 秒後進入睡眠" | Log
+        "自動睡眠:腳本開始後沒人動過電腦(閒置 $([math]::Round($idleMin,1)) 分鐘),30 秒後進入睡眠" | Log
         Start-Sleep -Seconds 30
         Add-Type -AssemblyName System.Windows.Forms
         # 用 Forms 的 SetSuspendState(Suspend):rundll32 powrprof 在有休眠的機器上會變成休眠,喚醒計時器叫不醒

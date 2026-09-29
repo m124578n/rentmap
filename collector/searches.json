@@ -6,11 +6,16 @@
       "recheck": []
     },
     "newtaipei": {
-      "_doc": "21:30 591 新北列表 + 新物件",
-      "recheck": []
+      "_doc": "21:30 591 新北列表 + 新物件 + 活躍物件重抓 80 筆(23:00 那組已取消,併到這裡)",
+      "recheck": [
+        {
+          "source": "591",
+          "maxPerRun": 80
+        }
+      ]
     },
     "recheck": {
-      "_doc": "23:00 591 活躍物件重抓(下架 / 漲跌價)",
+      "_doc": "(已不排程,手動 --group=recheck 用)591 活躍物件重抓",
       "recheck": [
         {
           "source": "591",
@@ -19,7 +24,7 @@
       ]
     },
     "housefun": {
-      "_doc": "12:30 好房列表 + 重抓,總量壓在 40 次載入內",
+      "_doc": "(已不排程,手動 --group=housefun 用)好房列表 + 重抓",
       "recheck": [
         {
           "source": "hb",

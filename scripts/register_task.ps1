@@ -11,13 +11,15 @@ $jobs = @(
     # 好房中午那組 2026-09-29 取消(使用者決定);要恢復把這行加回來,並 Unregister 後重跑
     # @{ Name = "RentmapSync-Housefun";  Group = "housefun";  At = "12:30PM"; Desc = "好房列表 2+2 頁 + 重抓 15 筆(約 40 次載入,避開 403)" },
     @{ Name = "RentmapSync-Taipei";    Group = "taipei";    At = "8:00PM";  Desc = "591 台北三種房型列表 + 新物件" },
-    @{ Name = "RentmapSync-NewTaipei"; Group = "newtaipei"; At = "9:30PM";  Desc = "591 新北三種房型列表 + 新物件" },
-    @{ Name = "RentmapSync-Recheck";   Group = "recheck";   At = "11:00PM"; Desc = "591 活躍物件重抓最多 150 筆(下架 / 漲跌價)" }
+    @{ Name = "RentmapSync-NewTaipei"; Group = "newtaipei"; At = "9:30PM";  Desc = "591 新北三種房型列表 + 新物件" }
+    # 23:00 重抓 2026-09-29 取消(減少喚醒次數);重抓改併入 21:30 新北組(searches.json 的 newtaipei.recheck)
+    # @{ Name = "RentmapSync-Recheck";   Group = "recheck";   At = "11:00PM"; Desc = "591 活躍物件重抓最多 150 筆(下架 / 漲跌價)" }
 )
 
 # 舊的 / 取消的排程
 Unregister-ScheduledTask -TaskName "RentmapDailySync" -Confirm:$false -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName "RentmapSync-Housefun" -Confirm:$false -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "RentmapSync-Recheck" -Confirm:$false -ErrorAction SilentlyContinue
 
 foreach ($j in $jobs) {
     $action = New-ScheduledTaskAction -Execute "powershell.exe" `
