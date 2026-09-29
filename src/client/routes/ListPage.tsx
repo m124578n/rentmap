@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { applyFilters, setFilters, sortItems, useFilters, type SortKey } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
 import { CommuteLines } from "@/features/commute/CommuteLines";
+import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
 import { SOURCE_LABEL, STAGE_LABEL, type Source, type Stage } from "@shared/constants";
 
@@ -25,6 +26,8 @@ export function ListPage() {
             <select value={filters.sort} onChange={(e) => setFilters({ sort: e.target.value as SortKey })} className="rounded border border-neutral-300 bg-transparent px-1.5 py-1 dark:border-neutral-700">
               <option value="updated">最近更新</option>
               <option value="rent">租金低 → 高</option>
+              <option value="newest">剛刊登的在前</option>
+              <option value="drop">降價最多的在前</option>
               <option value="commute" disabled={commute.places.length === 0}>
                 通勤短 → 長{commute.places.length > 1 ? "(取最久的地點)" : ""}
               </option>
@@ -74,6 +77,9 @@ export function ListPage() {
                     {p.mgmt_fee != null && <span>管理費 {p.mgmt_fee}</span>}
                   </p>
                   {commute.places.length > 0 && <CommuteLines propertyId={p.id} places={commute.places} matrix={commute.matrix} hasCoords={p.lat != null && p.lng != null} />}
+                  <div className="mt-1.5">
+                    <ListingBadges p={p} />
+                  </div>
                   <p className="mt-2 flex gap-2 text-xs">
                     {p.stage && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{STAGE_LABEL[p.stage as Stage] ?? p.stage}</span>}
                     {p.source && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{SOURCE_LABEL[p.source as Source] ?? p.source}</span>}

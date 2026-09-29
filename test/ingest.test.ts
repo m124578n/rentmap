@@ -78,4 +78,17 @@ describe("ingest", () => {
     const prop = await env.DB.prepare("SELECT lat, lng, geocode_source FROM properties WHERE id = ?").bind(pid).first<{ lat: number; lng: number; geocode_source: string }>();
     expect(prop).toEqual({ lat: 1, lng: 2, geocode_source: "manual" });
   });
+
+  it("stores the source posted date, keeping the earliest across re-posts", async () => {
+    const id = "999010";
+    await post({ items: [{ ...item, source_listing_id: id, source_posted_at: "2026/08/15 10:00" }] });
+    const q = () => env.DB.prepare("SELECT posted_at FROM listings WHERE source_listing_id = ?").bind(id).first<{ posted_at: string | null }>();
+    expect((await q())?.posted_at).toBe("2026-08-15");
+    // 重新刊登:591 日期變新 → 保留較早的
+    await post({ items: [{ ...item, source_listing_id: id, source_posted_at: "2026/09/20" }] });
+    expect((await q())?.posted_at).toBe("2026-08-15");
+    // 沒給 / 看不懂 → 不覆蓋
+    await post({ items: [{ ...item, source_listing_id: id }] });
+    expect((await q())?.posted_at).toBe("2026-08-15");
+  });
 });

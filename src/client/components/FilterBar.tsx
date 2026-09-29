@@ -34,6 +34,12 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         <Chip on={f.favOnly} onClick={() => setFilters({ favOnly: !f.favOnly })}>
           ♥ 只看收藏
         </Chip>
+        <Chip on={f.newOnly} onClick={() => setFilters({ newOnly: !f.newOnly })}>
+          新上架
+        </Chip>
+        <Chip on={f.priceDrop} onClick={() => setFilters({ priceDrop: !f.priceDrop })}>
+          ↓ 降過價
+        </Chip>
         {KINDS.map((k) => (
           <Chip key={k} on={f.kinds.includes(k)} onClick={() => toggleIn("kinds", k)}>
             {k}

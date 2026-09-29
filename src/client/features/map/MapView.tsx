@@ -5,6 +5,7 @@ import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
+import { priceOf } from "@/features/listing/age";
 
 interface Props {
   items: PropertySummary[];
@@ -179,7 +180,9 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       } else {
         entry.marker.setLngLat([p.lng, p.lat]);
       }
-      entry.el.textContent = priceLabel(p.rent);
+      const drop = (priceOf(p)?.totalDelta ?? 0) < 0;
+      entry.el.textContent = (drop ? "↓" : "") + priceLabel(p.rent);
+      entry.el.classList.toggle("is-drop", drop);
       entry.el.title = p.title;
       entry.el.style.setProperty("--c", color);
       entry.el.classList.toggle("is-rejected", p.stage === "rejected");

@@ -79,6 +79,7 @@ export const listings = sqliteTable(
     contactPhone: text("contact_phone"),
     contactLine: text("contact_line"),
     status: text("status").notNull().default("active"), // active | removed | unknown
+    postedAt: text("posted_at"), // 來源寫的刊登日 YYYY-MM-DD(591 有,好房沒有);沒有就看 first_seen_at
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
     lastCheckedAt: text("last_checked_at"),

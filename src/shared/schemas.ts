@@ -102,6 +102,12 @@ export interface PropertySummary {
   source: string | null;
   source_url: string | null;
   listing_status: string | null;
+  /** 來源的刊登日 YYYY-MM-DD(591 才有) */
+  posted_at: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  /** 價格紀錄(時間排序) */
+  price_history: { rent: number; at: string }[];
   stage: string | null;
   priority: number | null;
   fav_note: string | null;

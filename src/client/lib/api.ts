@@ -92,10 +92,12 @@ export interface PropertyDetail {
     contactPhone: string | null;
     contactLine: string | null;
     status: string;
+    postedAt: string | null;
     firstSeenAt: string;
     lastSeenAt: string;
   }[];
   favorite: Favorite | null;
+  price_history: { rent: number; at: string }[];
 }
 
 export interface Favorite {
