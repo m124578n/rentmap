@@ -1,5 +1,5 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
-import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
+import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
@@ -38,6 +38,8 @@ export const api = {
 
   busNearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyBusResponse>(`/api/bus/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
+  busNames: () => req<{ bus: string[]; mrt: string[] }>("/api/bus/names"),
+  busAlong: (names: string[], radius = 400) => req<AlongResponse>(`/api/bus/along?names=${encodeURIComponent(names.join(","))}&radius=${radius}`),
 
   commute: (when: CommuteWhen, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}`),
   commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen }) =>

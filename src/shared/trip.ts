@@ -36,6 +36,8 @@ export type TripLeg =
       min: number;
       wait: number;
       name: string;
+      /** 子路線說明(莒光、區間…) */
+      variant: string | null;
       key: string;
       to_name: string | null;
       from: string;

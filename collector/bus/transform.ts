@@ -64,6 +64,22 @@ export function cleanRouteName(s: string) {
   return s.replace(/[((]?(去程|返程|去|返)[))]?$/, "").trim();
 }
 
+/**
+ * 子路線名 → 說明(去掉主路線名、結尾的「往{終點}」、純方向字)。TDX 的 SubRouteName 常是
+ * 「307莒光往撫遠街」「669狗狗公車」「12返程半」「279路」;主路線名另外放 name。
+ */
+export function routeVariant(name: string, sub: string, toName: string | null): string | null {
+  let rest = sub.trim();
+  if (!rest || rest === name) return null;
+  if (rest.startsWith(name)) rest = rest.slice(name.length);
+  rest = rest.trim().replace(/^[-–\s]+/, "");
+  if (toName && rest.endsWith(`往${toName}`)) rest = rest.slice(0, -(`往${toName}`.length));
+  // 「莒光往板橋前站」→「莒光」(方向另外有 to_name);「往劍潭經文大」這種整段都是說明的保留
+  rest = rest.replace(/^(.+?)往[^往經()()]+$/, "$1");
+  rest = cleanRouteName(rest).replace(/^[((](.*)[))]$/, "$1").trim();
+  return rest && rest !== "路" ? rest : null;
+}
+
 /** WKT 取出所有 [lng, lat](MULTILINESTRING 各段接起來) */
 export function parseWkt(wkt: string | undefined): [number, number][] {
   if (!wkt) return [];
@@ -230,7 +246,7 @@ export function transformCity(city: string, data: TdxCity): { routes: BusRouteIn
     seen.add(key);
 
     const route = routeByUid.get(sor.RouteUID);
-    const name = cleanRouteName(zh(sor.SubRouteName)) || cleanRouteName(zh(sor.RouteName)) || zh(route?.RouteName) || sor.RouteUID;
+    const name = cleanRouteName(zh(route?.RouteName) || zh(sor.RouteName)) || cleanRouteName(zh(sor.SubRouteName)) || sor.RouteUID;
     const sched = buildSchedule(schedBy.get(key) ?? schedBy.get(`${sor.RouteUID}:${dir}`) ?? []);
 
     let dist = 0;
@@ -260,6 +276,7 @@ export function transformCity(city: string, data: TdxCity): { routes: BusRouteIn
       key,
       route_uid: sor.RouteUID,
       name,
+      variant: routeVariant(name, zh(sor.SubRouteName), zh(pts[pts.length - 1]!.StopName) || null),
       city,
       direction: dir,
       from_name: zh(pts[0]!.StopName) || null,

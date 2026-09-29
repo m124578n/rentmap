@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { applyFilters, setFilters, sortItems, useFilters, type SortKey } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
+import { useAlong } from "@/features/bus/useAlong";
 import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
@@ -14,7 +15,8 @@ export function ListPage() {
   const filters = useFilters();
   const all = q.data?.items ?? [];
   const commute = useCommute();
-  const items = useMemo(() => sortItems(applyFilters(all, filters, commute.ctx), filters, commute.ctx), [all, filters, commute.ctx]);
+  const along = useAlong();
+  const items = useMemo(() => sortItems(applyFilters(all, filters, commute.ctx, along.ids), filters, commute.ctx), [all, filters, commute.ctx, along.ids]);
 
   return (
     <div className="flex h-full flex-col">

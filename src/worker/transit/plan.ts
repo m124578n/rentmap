@@ -248,6 +248,7 @@ function busLeg(p: Plan, y: number, a: number, extraWait = 0): TripLeg {
     min: Math.max(1, Math.round(net.sT[a]! - net.sT[y]!)),
     wait: p.waits[net.sRoute[y]!]! + extraWait,
     name: r.name,
+    variant: r.variant,
     key: r.key,
     to_name: r.toName,
     from: net.sName[y]!,

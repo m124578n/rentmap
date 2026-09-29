@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BusRouteIn, BusStopIn, serviceWait, summarizeDay, walkMin } from "../../src/shared/bus";
-import { buildSchedule, cleanRouteName, parseWkt, pickShape, simplify, transformCity, type TdxCity } from "../../collector/bus/transform";
+import { buildSchedule, cleanRouteName, parseWkt, pickShape, routeVariant, simplify, transformCity, type TdxCity } from "../../collector/bus/transform";
 
 const data = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "fixtures", "tdx-mini.json"), "utf8")) as TdxCity;
 const { routes, stops } = transformCity("Taipei", data);
@@ -79,6 +79,17 @@ describe("helpers", () => {
     expect(pickShape(undefined, [main, short], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.6, 25]]);
     expect(pickShape(undefined, [main], at(121.5), at(121.56))).toEqual([]);
     expect(pickShape(short, [main], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.53, 25]]);
+  });
+  it("routeVariant: 子路線名拆成說明", () => {
+    expect(routeVariant("307", "307莒光往撫遠街", "撫遠街")).toBe("莒光");
+    expect(routeVariant("307", "307莒光往板橋前站", "臺北客運板橋前站(藝文)")).toBe("莒光");
+    expect(routeVariant("紅5", "紅5往劍潭經文大", "劍潭")).toBe("往劍潭經文大");
+    expect(routeVariant("669", "669狗狗公車", null)).toBe("狗狗公車");
+    expect(routeVariant("12", "12返程半", null)).toBe("返程半");
+    expect(routeVariant("306", "306(三重)", null)).toBe("三重");
+    expect(routeVariant("279", "279路", null)).toBeNull();
+    expect(routeVariant("307", "307去程", null)).toBeNull();
+    expect(routeVariant("紅30", "紅30", null)).toBeNull();
   });
   it("serviceWait: 依時段的班距,沒車回 null", () => {
     const bands = { wd: { bands: [{ s: "06:00", e: "09:00", min: 4, max: 8 }, { s: "09:00", e: "22:00", min: 10, max: 20 }] } };

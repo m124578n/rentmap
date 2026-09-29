@@ -164,7 +164,7 @@ function RouteCard({ route, pick, setPick, onOverlay }: { route: NearbyRoute; pi
             onClick={() => setPick({ key: d.key, boardSeq: d.stop.seq })}
             className={`rounded-full px-2 py-0.5 text-xs ${d.key === dir.key ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"}`}
           >
-            往 {d.to_name ?? "?"}
+            {d.variant && <span className="mr-1 opacity-70">{d.variant}</span>}往 {d.to_name ?? "?"}
           </button>
         ))}
       </div>

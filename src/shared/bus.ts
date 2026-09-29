@@ -24,7 +24,8 @@ export type Schedule = z.infer<typeof Schedule>;
 export const BusRouteIn = z.object({
   key: z.string().min(1).max(80),
   route_uid: z.string().min(1).max(40),
-  name: z.string().min(1).max(60), // 顯示名(307、紅30、307莒光…)
+  name: z.string().min(1).max(60), // 主路線名(307、紅30);同名視為同一路
+  variant: z.string().max(80).nullable().optional(), // 子路線說明(莒光、經天母國中、返程半…),主線 null
   city: z.string().max(20),
   direction: z.number().int().min(0).max(2),
   from_name: z.string().max(60).nullable(),
@@ -74,6 +75,8 @@ export interface NearbyStop {
 export interface NearbyRouteDir {
   key: string;
   direction: number;
+  /** 子路線說明(莒光、區間…);主線 null */
+  variant: string | null;
   from_name: string | null;
   to_name: string | null;
   stop: NearbyStop;
@@ -100,6 +103,7 @@ export interface BusRouteDetail {
     key: string;
     route_uid: string;
     name: string;
+    variant: string | null;
     city: string;
     direction: number;
     from_name: string | null;
@@ -110,6 +114,16 @@ export interface BusRouteDetail {
   };
   stops: { seq: number; name: string; lat: number; lng: number; dist_m: number; t_min: number | null }[];
 }
+
+/** GET /api/bus/along:哪些房源走得到這些路線(任一條) */
+export interface AlongResponse {
+  radius: number;
+  /** 每個查詢字對到什麼:公車主路線名(幾個路線方向)、捷運線名,或都沒對到 */
+  queries: { q: string; kind: "bus" | "mrt" | null; label: string | null; dirs: number }[];
+  ids: number[];
+}
+/** 捷運線用的步行範圍(比公車寬,捷運站本來就比較疏) */
+export const ALONG_MRT_R = 800;
 
 // ---- 小工具 ----
 

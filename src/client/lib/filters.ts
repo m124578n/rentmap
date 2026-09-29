@@ -27,6 +27,8 @@ export interface Filters {
   commuteSide: CommuteSide;
   /** 上班、下班各自的日子與出發時間(方向固定:上班 住處 → 地點,下班 地點 → 住處) */
   commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
+  /** 經過這些路線(任一條):公車主路線名(307)或捷運線名(板南線);走得到才留 */
+  alongRoutes: string[];
   /** 列表排序 */
   sort: SortKey;
 }
@@ -50,6 +52,7 @@ export const EMPTY: Filters = {
   newOnly: false,
   commuteMax: null,
   commutePlaces: [],
+  alongRoutes: [],
   commuteSide: "go",
   commuteTimes: {
     go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
@@ -119,6 +122,7 @@ export function activeCount(f: Filters): number {
   if (f.priceDrop) n++;
   if (f.newOnly) n++;
   if (f.commuteMax != null) n++;
+  if (f.alongRoutes.length) n++;
   return n;
 }
 
@@ -144,8 +148,10 @@ export function worstCommute(p: PropertySummary, f: Filters, ctx: CommuteCtx | u
   return worst;
 }
 
-export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
+/** along = 走得到 alongRoutes 的房源 id(useAlong);undefined = 還沒查到,先不濾 */
+export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, along?: Set<number>): PropertySummary[] {
   return items.filter((p) => {
+    if (f.alongRoutes.length && along && !along.has(p.id)) return false;
     if (f.commuteMax != null) {
       const w = worstCommute(p, f, ctx);
       // 資料還沒到(undefined)先不濾,免得畫面閃空

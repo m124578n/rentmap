@@ -8,6 +8,7 @@ import { parseSchedule } from "../busdata";
 export interface BusRoute {
   key: string;
   name: string;
+  variant: string | null;
   toName: string | null;
   /** 班表(等車依時段在 plan.ts 算) */
   schedule: Schedule | null;
@@ -67,9 +68,10 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
   const v = `${head.v}#${head.n}`;
   if (cache && cache.version === v) return cache;
 
-  const { results: rrows } = await DB.prepare("SELECT key, name, to_name, schedule_json FROM bus_routes").all<{
+  const { results: rrows } = await DB.prepare("SELECT key, name, variant, to_name, schedule_json FROM bus_routes").all<{
     key: string;
     name: string;
+    variant: string | null;
     to_name: string | null;
     schedule_json: string | null;
   }>();
@@ -87,7 +89,7 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
   const routeIdx = new Map<string, number>();
   for (const r of rrows) {
     routeIdx.set(r.key, routes.length);
-    routes.push({ key: r.key, name: r.name, toName: r.to_name, schedule: parseSchedule(r.schedule_json), start: 0, end: 0 });
+    routes.push({ key: r.key, name: r.name, variant: r.variant, toName: r.to_name, schedule: parseSchedule(r.schedule_json), start: 0, end: 0 });
   }
   const n = srows.length;
   const net: BusNet = {

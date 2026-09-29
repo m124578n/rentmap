@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
+import type { AlongResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
 import type { CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
 
@@ -276,6 +276,31 @@ describe("commute (bus + MRT, up to one transfer)", () => {
     // 捷運轉公車 / 公車轉捷運 方向也要翻
     for (const t of r.trips) if (t.kind === "bus+mrt") expect(t.legs.find((l) => l.mode !== "walk")!.mode).toBe("bus");
     for (const t of r.trips) if (t.kind === "mrt+bus") expect(t.legs.find((l) => l.mode !== "walk")!.mode).toBe("mrt");
+  });
+
+  it("along: 經過某路線的房源(公車主路線名、捷運線名)", async () => {
+    const all = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed())).json()) as { items: { id: number; title: string }[] };
+    const near = all.items.find((p) => p.title === "房 near")!.id;
+    const along = async (q: string) => (await (await SELF.fetch(`${ORIGIN}/api/bus/along?${q}`, authed())).json()) as AlongResponse;
+
+    const r = await along(`names=${encodeURIComponent("307,紅30,不存在")}&radius=300`);
+    expect(r.queries).toEqual([
+      { q: "307", kind: "bus", label: "307", dirs: 2 },
+      { q: "紅30", kind: "bus", label: "紅30", dirs: 1 },
+      { q: "不存在", kind: null, label: null, dirs: 0 },
+    ]);
+    expect(r.ids).toEqual([near]);
+    // 板南線:龍山寺站約 560m,在捷運 800m 內;文湖線很遠
+    expect((await along(`names=${encodeURIComponent("板南")}`)).ids).toEqual([near]);
+    expect((await along(`names=${encodeURIComponent("文湖線")}`)).ids).toEqual([]);
+    expect((await along(`names=${encodeURIComponent("不存在")}`)).ids).toEqual([]);
+    // 前綴只接非數字 / 字母:「紅3」不是紅30、「30」不是 307
+    expect((await along(`names=${encodeURIComponent("紅3,30")}`)).queries.map((q) => q.kind)).toEqual([null, null]);
+    expect((await SELF.fetch(`${ORIGIN}/api/bus/along`, authed())).status).toBe(400);
+
+    const names = (await (await SELF.fetch(`${ORIGIN}/api/bus/names`, authed())).json()) as { bus: string[]; mrt: string[] };
+    expect(names.bus).toEqual(expect.arrayContaining(["307", "紅30"]));
+    expect(names.mrt).toContain("板南線");
   });
 
   it("requires login and a valid place", async () => {

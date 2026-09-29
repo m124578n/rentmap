@@ -271,6 +271,7 @@ function TripDetail({ trip }: { trip: Trip }) {
             <div>
               <Bus size={12} className="mr-1 inline" />
               等約 {l.wait} 分,搭 <b>{l.name}</b>
+              {l.variant && <span className="text-neutral-500">({l.variant})</span>}
               {l.to_name && <span className="text-neutral-500">(往{l.to_name})</span>}:{l.from} → {l.to},{l.stops} 站 {l.exact ? "" : "約 "}
               {l.min} 分
               <button onClick={() => setTimes(times === i ? null : i)} className="ml-1.5 text-emerald-700 underline dark:text-emerald-400">

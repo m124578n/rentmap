@@ -19,6 +19,7 @@ export interface RouteMeta {
   key: string;
   route_uid: string;
   name: string;
+  variant: string | null;
   city: string;
   direction: number;
   from_name: string | null;
@@ -48,7 +49,7 @@ export async function routeMetas(DB: D1Database, keys: string[]): Promise<Map<st
   for (let i = 0; i < keys.length; i += 90) {
     const chunk = keys.slice(i, i + 90);
     const { results } = await DB.prepare(
-      `SELECT key, route_uid, name, city, direction, from_name, to_name, schedule_json FROM bus_routes WHERE key IN (${chunk.map(() => "?").join(",")})`,
+      `SELECT key, route_uid, name, variant, city, direction, from_name, to_name, schedule_json FROM bus_routes WHERE key IN (${chunk.map(() => "?").join(",")})`,
     )
       .bind(...chunk)
       .all<RouteMeta>();

@@ -150,7 +150,8 @@ export const pendingUrls = sqliteTable(
 export const busRoutes = sqliteTable("bus_routes", {
   key: text("key").primaryKey(),
   routeUid: text("route_uid").notNull(),
-  name: text("name").notNull(),
+  name: text("name").notNull(), // 主路線名(307、紅5),同名視為同一路
+  variant: text("variant"), // 子路線說明(莒光、經天母國中、區間…);主線為 null
   city: text("city").notNull(),
   direction: integer("direction").notNull(),
   fromName: text("from_name"),

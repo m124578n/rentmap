@@ -5,6 +5,9 @@
  *   GET /api/bus/nearby?lat=&lng=&radius=400 → 半徑內可搭的路線(同路線同方向只留最近的站),依距離排序
  *       (通勤怎麼搭改由 /api/commute/trips 算,含轉乘)
  *   GET /api/bus/routes/:key  → 一條路線方向的線形、全部站、時刻表
+ *   GET /api/bus/names        → 篩選用建議:公車主路線名 + 捷運線名
+ *   GET /api/bus/along?names=307,板南線&radius=400 → 走得到這些路線(任一條)的房源 id
+ *       公車看半徑內有沒有該路線任一方向的站;捷運看 800m 內有沒有該線的站
  *
  * 採集機推入(bearer INGEST_SECRET),覆蓋式:
  *   POST /api/ingest/bus/routes  { version, items: BusRouteIn[] }
@@ -13,9 +16,10 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { BusRouteIn, BusStopIn, summarizeDay, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
+import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type AlongResponse, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { mrtGraph } from "../transit/mrt";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
@@ -55,7 +59,7 @@ bus.get("/api/bus/nearby", async (c) => {
       groups.set(m.name, g);
     }
     g.distance_m = Math.min(g.distance_m, h.distance_m);
-    g.dirs.push({ key, direction: m.direction, from_name: m.from_name, to_name: m.to_name, stop: toStop(h), wd: summaries.get(key) ?? null });
+    g.dirs.push({ key, direction: m.direction, variant: m.variant ?? null, from_name: m.from_name, to_name: m.to_name, stop: toStop(h), wd: summaries.get(key) ?? null });
   }
   const routes = [...groups.values()]
     .map((g) => ({ ...g, dirs: g.dirs.sort((a, b) => a.direction - b.direction) }))
@@ -70,7 +74,7 @@ bus.get("/api/bus/nearby", async (c) => {
 bus.get("/api/bus/routes/:key", async (c) => {
   const key = c.req.param("key");
   const r = await c.env.DB.prepare(
-    "SELECT key, route_uid, name, city, direction, from_name, to_name, length_m, shape_json, schedule_json FROM bus_routes WHERE key = ?",
+    "SELECT key, route_uid, name, variant, city, direction, from_name, to_name, length_m, shape_json, schedule_json FROM bus_routes WHERE key = ?",
   )
     .bind(key)
     .first<RouteMeta & { length_m: number; shape_json: string }>();
@@ -83,6 +87,7 @@ bus.get("/api/bus/routes/:key", async (c) => {
       key: r.key,
       route_uid: r.route_uid,
       name: r.name,
+      variant: r.variant ?? null,
       city: r.city,
       direction: r.direction,
       from_name: r.from_name,
@@ -94,6 +99,90 @@ bus.get("/api/bus/routes/:key", async (c) => {
     stops: results,
   };
   c.header("Cache-Control", "private, max-age=3600");
+  return c.json(body);
+});
+
+bus.get("/api/bus/names", async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT DISTINCT name FROM bus_routes").all<{ name: string }>();
+  const g = mrtGraph();
+  const body = {
+    bus: results.map((r) => r.name).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true })),
+    mrt: Object.values(g.lineName),
+  };
+  c.header("Cache-Control", "private, max-age=3600");
+  return c.json(body);
+});
+
+/** 「板南」「板南線」「BL」都對到板南線 */
+function mrtLineOf(q: string): { code: string; name: string } | null {
+  const g = mrtGraph();
+  for (const [code, name] of Object.entries(g.lineName))
+    if (name === q || name === `${q}線` || code === q.toUpperCase() || `捷運${name}` === q) return { code, name };
+  return null;
+}
+
+bus.get("/api/bus/along", async (c) => {
+  const qs = [...new Set((c.req.query("names") ?? "").split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 10);
+  if (!qs.length) return c.json({ error: "names required" }, 400);
+  const radius = Math.min(1000, Math.max(100, num(c.req.query("radius")) || 400));
+  const DB = c.env.DB;
+
+  // 「307」也要對到「307西藏三民」(TDX 把同一路的另一種走法建成另一條路線),但「紅3」不能對到「紅30」
+  const busQs = qs.filter((q) => !mrtLineOf(q)).map((q) => q.toUpperCase());
+  const dirCount = new Map<string, number>();
+  const matched = new Map<string, Set<string>>();
+  const pts: { lat: number; lng: number; r: number }[] = [];
+  if (busQs.length) {
+    const { results: rows } = await DB.prepare(
+      `SELECT r.key, r.name, j.value AS q FROM bus_routes r JOIN json_each(?) j
+         ON UPPER(r.name) = j.value
+         OR (substr(UPPER(r.name), 1, length(j.value)) = j.value AND substr(r.name, length(j.value) + 1, 1) NOT GLOB '[0-9A-Za-z]')`,
+    )
+      .bind(JSON.stringify(busQs))
+      .all<{ key: string; name: string; q: string }>();
+    for (const r of rows) (matched.get(r.q) ?? matched.set(r.q, new Set()).get(r.q)!).add(r.name);
+    const { results } = await DB.prepare("SELECT DISTINCT lat, lng FROM bus_route_stops WHERE route_key IN (SELECT value FROM json_each(?))")
+      .bind(JSON.stringify([...new Set(rows.map((r) => r.key))]))
+      .all<{ lat: number; lng: number }>();
+    for (const r of results) pts.push({ ...r, r: radius });
+    for (const r of rows) (dirCount.set(r.q, (dirCount.get(r.q) ?? 0) + 1));
+  }
+  const g = mrtGraph();
+  const queries: AlongResponse["queries"] = qs.map((q) => {
+    const line = mrtLineOf(q);
+    if (line) {
+      const sts = g.stations.filter((s) => s.lines.includes(line.code));
+      for (const s of sts) pts.push({ lat: s.lat, lng: s.lng, r: Math.max(radius, ALONG_MRT_R) });
+      return { q, kind: "mrt", label: `捷運${line.name}`, dirs: sts.length ? 1 : 0 };
+    }
+    const names = [...(matched.get(q.toUpperCase()) ?? [])].sort((a, b) => a.length - b.length || a.localeCompare(b, "zh-Hant"));
+    const n = dirCount.get(q.toUpperCase()) ?? 0;
+    return { q, kind: n ? "bus" : null, label: n ? names.slice(0, 3).join("、") + (names.length > 3 ? " 等" : "") : null, dirs: n };
+  });
+
+  // 站點進網格(約 1.1km 一格),房源只看附近九格
+  const CELL = 0.01;
+  const grid = new Map<string, typeof pts>();
+  for (const p of pts) {
+    const k = `${Math.floor(p.lat / CELL)}:${Math.floor(p.lng / CELL)}`;
+    (grid.get(k) ?? grid.set(k, []).get(k)!).push(p);
+  }
+  const { results: props } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+  const ids: number[] = [];
+  for (const h of props) {
+    const y = Math.floor(h.lat / CELL);
+    const x = Math.floor(h.lng / CELL);
+    let hit = false;
+    for (let dy = -1; dy <= 1 && !hit; dy++)
+      for (let dx = -1; dx <= 1 && !hit; dx++)
+        for (const p of grid.get(`${y + dy}:${x + dx}`) ?? [])
+          if (haversine(h.lat, h.lng, p.lat, p.lng) <= p.r) {
+            hit = true;
+            break;
+          }
+    if (hit) ids.push(h.id);
+  }
+  const body: AlongResponse = { radius, queries, ids };
   return c.json(body);
 });
 
@@ -110,8 +199,8 @@ bus.post("/api/ingest/bus/routes", async (c) => {
   const { version, items } = parsed.data;
   const rows = items.map((r) => ({ ...r, shape: JSON.stringify(r.shape), schedule: r.schedule ? JSON.stringify(r.schedule) : null }));
   await c.env.DB.prepare(
-    `INSERT OR REPLACE INTO bus_routes (key, route_uid, name, city, direction, from_name, to_name, stop_count, length_m, shape_json, schedule_json, version)
-     SELECT j.value ->> 'key', j.value ->> 'route_uid', j.value ->> 'name', j.value ->> 'city', j.value ->> 'direction',
+    `INSERT OR REPLACE INTO bus_routes (key, route_uid, name, variant, city, direction, from_name, to_name, stop_count, length_m, shape_json, schedule_json, version)
+     SELECT j.value ->> 'key', j.value ->> 'route_uid', j.value ->> 'name', j.value ->> 'variant', j.value ->> 'city', j.value ->> 'direction',
             j.value ->> 'from_name', j.value ->> 'to_name', j.value ->> 'stop_count', j.value ->> 'length_m',
             j.value ->> 'shape', j.value ->> 'schedule', ?1
      FROM json_each(?2) AS j`,
