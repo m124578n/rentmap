@@ -199,3 +199,26 @@ export function fmtHeadway(h: [number, number] | null) {
   if (!h) return null;
   return h[0] === h[1] ? `${h[0]} 分` : `${h[0]}–${h[1]} 分`;
 }
+
+/** 一間房到一個地點的最佳直達(GET /api/commute) */
+export interface CommuteBest {
+  total_min: number;
+  name: string;
+  to_name: string | null;
+  board: string;
+  board_walk: number;
+  alight: string;
+  alight_walk: number;
+  ride_min: number;
+  wait_min: number;
+  stops: number;
+  /** 其他也能直達的路線(依總時間,最多 3 條) */
+  others: string[];
+}
+
+export interface CommuteMatrix {
+  radius: number;
+  has_bus: boolean;
+  /** items[propertyId][placeId];null = 沒有直達(或房源沒座標) */
+  items: Record<string, Record<string, CommuteBest | null>>;
+}

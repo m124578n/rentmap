@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
+import type { CommuteMatrix } from "@shared/bus";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
 export interface Filters {
@@ -15,7 +16,14 @@ export interface Filters {
   hideRejected: boolean;
   stages: string[]; // 空 = 全部
   favOnly: boolean; // 只看收藏(有 stage 的)
+  /** 公車直達通勤上限(分);算的地點見 commutePlaces。沒直達的房源會被濾掉 */
+  commuteMax: number | null;
+  commutePlaces: number[]; // 空 = 我的全部地點(每個都要在上限內)
+  /** 列表排序 */
+  sort: SortKey;
 }
+
+export type SortKey = "updated" | "rent" | "commute";
 
 export const EMPTY: Filters = {
   kinds: [],
@@ -30,6 +38,9 @@ export const EMPTY: Filters = {
   hideRejected: true,
   stages: [],
   favOnly: false,
+  commuteMax: null,
+  commutePlaces: [],
+  sort: "updated",
 };
 
 const KEY = "rent-filters";
@@ -57,7 +68,7 @@ export function setFilters(patch: Partial<Filters>) {
 }
 
 export function resetFilters() {
-  setFilters(EMPTY);
+  setFilters({ ...EMPTY, sort: current.sort });
 }
 
 export function useFilters(): Filters {
@@ -84,11 +95,39 @@ export function activeCount(f: Filters): number {
   if (f.stages.length) n++;
   if (!f.hideRejected) n++;
   if (f.favOnly) n++;
+  if (f.commuteMax != null) n++;
   return n;
 }
 
-export function applyFilters(items: PropertySummary[], f: Filters): PropertySummary[] {
+/** 通勤篩選 / 排序要用的資料(useCommute 的結果 + 我的全部地點) */
+export interface CommuteCtx {
+  matrix: CommuteMatrix | undefined;
+  placeIds: number[];
+}
+
+/** 這間房到「要算的地點」裡最久的那個(分);任何一個沒直達 → null;沒資料 → undefined */
+export function worstCommute(p: PropertySummary, f: Filters, ctx: CommuteCtx | undefined): number | null | undefined {
+  if (!ctx?.matrix || ctx.placeIds.length === 0) return undefined;
+  const ids = f.commutePlaces.filter((id) => ctx.placeIds.includes(id));
+  const use = ids.length ? ids : ctx.placeIds;
+  const row = ctx.matrix.items[p.id];
+  if (!row) return null;
+  let worst = 0;
+  for (const id of use) {
+    const b = row[id];
+    if (!b) return null;
+    worst = Math.max(worst, b.total_min);
+  }
+  return worst;
+}
+
+export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
   return items.filter((p) => {
+    if (f.commuteMax != null) {
+      const w = worstCommute(p, f, ctx);
+      // 資料還沒到(undefined)先不濾,免得畫面閃空
+      if (w === null || (w !== undefined && w > f.commuteMax)) return false;
+    }
     if (f.kinds.length && !(p.kind && f.kinds.includes(p.kind))) return false;
     if (f.rentMin != null && (p.rent == null || p.rent < f.rentMin)) return false;
     if (f.rentMax != null && (p.rent == null || p.rent > f.rentMax)) return false;
@@ -103,4 +142,30 @@ export function applyFilters(items: PropertySummary[], f: Filters): PropertySumm
     if (f.stages.length && !(p.stage && f.stages.includes(p.stage))) return false;
     return true;
   });
+}
+
+export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
+  if (f.sort === "rent") return [...items].sort((a, b) => (a.rent ?? Infinity) - (b.rent ?? Infinity));
+  if (f.sort === "commute") {
+    const key = (p: PropertySummary) => commuteSortKey(p, f, ctx);
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
+  return items; // API 已經依更新時間排好
+}
+
+/** 排序用:先比「幾個地點沒有直達」(少的在前),再比有直達的地點裡最久的分鐘。全部沒直達 / 沒座標排最後 */
+function commuteSortKey(p: PropertySummary, f: Filters, ctx?: CommuteCtx): number {
+  if (!ctx?.matrix || ctx.placeIds.length === 0) return 0;
+  const ids = f.commutePlaces.filter((id) => ctx.placeIds.includes(id));
+  const use = ids.length ? ids : ctx.placeIds;
+  const row = ctx.matrix.items[p.id];
+  if (!row) return Infinity;
+  let missing = 0;
+  let worst = 0;
+  for (const id of use) {
+    const b = row[id];
+    if (b) worst = Math.max(worst, b.total_min);
+    else missing++;
+  }
+  return missing === use.length ? Infinity : missing * 10000 + worst;
 }

@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { applyFilters, useFilters } from "@/lib/filters";
+import { useCommute } from "@/features/commute/useCommute";
 import { FilterBar } from "@/components/FilterBar";
 import { MapView } from "@/features/map/MapView";
 import { useMrt } from "@/features/map/mrt";
@@ -23,7 +24,8 @@ export function MapPage() {
   const [busOverlay, setBusOverlay] = useState<BusOverlay | null>(null);
   const places = usePlaces();
   const all = q.data?.items ?? [];
-  const items = useMemo(() => applyFilters(all, filters), [all, filters]);
+  const commute = useCommute();
+  const items = useMemo(() => applyFilters(all, filters, commute.ctx), [all, filters, commute.ctx]);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
   const panelOpen = selectedId != null;
 

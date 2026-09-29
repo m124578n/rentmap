@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
+import type { BusRouteDetail, BusRouteIn, BusStopIn, CommuteMatrix, NearbyBusResponse } from "../src/shared/bus";
 import type { Place } from "../src/shared/schemas";
 
 const ORIGIN = "http://localhost:5173";
@@ -167,5 +167,50 @@ describe("places", () => {
   it("rejects points outside Taiwan", async () => {
     const res = await SELF.fetch(`${ORIGIN}/api/places`, authed({ method: "POST", body: JSON.stringify({ name: "x", lat: 35, lng: 139 }) }));
     expect(res.status).toBe(400);
+  });
+});
+
+describe("commute matrix", () => {
+  it("every property × every place, best direct route or null", async () => {
+    const listing = (id: string, lat: number | undefined, lng: number | undefined) => ({
+      source: "591",
+      source_listing_id: id,
+      source_url: `https://rent.591.com.tw/${id}`,
+      title: `房 ${id}`,
+      city: "台北市",
+      district: "大安區",
+      rent: 20000,
+      ...(lat != null ? { lat, lng } : {}),
+    });
+    const ing = await SELF.fetch(`${ORIGIN}/api/ingest/listings`, {
+      method: "POST",
+      headers: ingestHeaders,
+      body: JSON.stringify({ items: [listing("near", LAT + 0.0003, lngAt(1)), listing("nocoord", undefined, undefined)] }),
+    });
+    const { ids } = (await ing.json()) as { ids: number[] };
+    const [near, nocoord] = ids as [number, number];
+
+    const mk = async (name: string, lat: number, lng: number) =>
+      ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed({ method: "POST", body: JSON.stringify({ name, lat, lng }) }))).json()) as { place: Place }).place.id;
+    const office = await mk("公司", LAT, lngAt(8));
+    const far = await mk("遠方", 25.2, 121.7);
+
+    const res = await SELF.fetch(`${ORIGIN}/api/commute?radius=300`, authed());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as CommuteMatrix;
+    expect(body.has_bus).toBe(true);
+    expect(body.items[nocoord]).toBeUndefined();
+    const best = body.items[near]![office]!;
+    expect(best).toMatchObject({ name: "307", board: "站1", alight: "站8", stops: 7, ride_min: 14 });
+    // 和單點 API 算出來的一樣
+    const single = (await (
+      await SELF.fetch(`${ORIGIN}/api/bus/nearby?lat=${LAT + 0.0003}&lng=${lngAt(1)}&radius=300&to_lat=${LAT}&to_lng=${lngAt(8)}`, authed())
+    ).json()) as NearbyBusResponse;
+    expect(best.total_min).toBe(single.commute![0]!.total_min);
+    expect(body.items[near]![far]).toBeNull();
+  });
+
+  it("requires login", async () => {
+    expect((await SELF.fetch(`${ORIGIN}/api/commute`)).status).toBe(401);
   });
 });

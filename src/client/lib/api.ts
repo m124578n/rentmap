@@ -1,5 +1,5 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
-import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
+import type { BusRouteDetail, CommuteMatrix, NearbyBusResponse } from "@shared/bus";
 
 export class ApiError extends Error {
   constructor(
@@ -41,6 +41,8 @@ export const api = {
     return req<NearbyBusResponse>(`/api/bus/nearby?${p}`);
   },
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
+
+  commute: (radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),

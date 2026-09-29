@@ -12,6 +12,7 @@ import {
   haversine,
   toMin,
   type BusRouteDetail,
+  type CommuteBest,
   type CommuteOption,
   type DaySummary,
   type DayType,
@@ -19,10 +20,12 @@ import {
 } from "@shared/bus";
 import type { BusOverlay } from "@/features/map/busLayer";
 import { openPlacesDialog, useCommuteTarget, usePlaces } from "@/features/places/places";
+import { useCommute } from "@/features/commute/useCommute";
 
 interface Props {
   lat: number;
   lng: number;
+  propertyId?: number;
   /** 地圖頁才有:把選中的路線畫到地圖上 */
   onOverlay?: (o: BusOverlay | null) => void;
 }
@@ -41,8 +44,9 @@ const BADGES_SHOWN = 16;
  *   通勤 → 選了目的地(我的地點)就列出直達的路線,依「走路 + 等車 + 坐車 + 走路」排序
  *   附近路線 → 徽章,點了看方向、班距、預估經過時刻,地圖畫整條路線
  */
-export function BusSection({ lat, lng, onOverlay }: Props) {
+export function BusSection({ lat, lng, propertyId, onOverlay }: Props) {
   const [radius, setRadius] = useState(400);
+  const commute = useCommute();
   const places = usePlaces();
   const [targetId, setTarget] = useCommuteTarget();
   const target = places.data?.items.find((p) => p.id === targetId) ?? null;
@@ -107,6 +111,7 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
             setPick={setPick}
             radius={radius}
             onOverlay={onOverlay}
+            summary={propertyId != null && commute.matrix ? (commute.matrix.items[propertyId] ?? {}) : undefined}
           />
 
           {routes.length === 0 ? (
@@ -161,6 +166,7 @@ function Commute({
   setPick,
   radius,
   onOverlay,
+  summary,
 }: {
   options: CommuteOption[] | null;
   places: { id: number; name: string }[];
@@ -170,6 +176,8 @@ function Commute({
   setPick: (p: Pick | null) => void;
   radius: number;
   onOverlay?: (o: BusOverlay | null) => void;
+  /** 批次算好的每個地點最佳直達(/api/commute,半徑 400m);undefined = 還沒算好 */
+  summary: Record<string, CommuteBest | null> | undefined;
 }) {
   if (places.length === 0) {
     return (
@@ -181,61 +189,80 @@ function Commute({
       </div>
     );
   }
-  const target = places.find((p) => p.id === targetId);
   return (
     <div className="rounded border border-blue-200 p-2 dark:border-blue-900">
-      <div className="flex flex-wrap items-center gap-1 text-xs">
-        <span className="text-neutral-500">通勤到</span>
-        {places.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setTarget(targetId === p.id ? null : p.id)}
-            className={`rounded-full px-2 py-0.5 ${targetId === p.id ? "bg-blue-600 text-white" : "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"}`}
-          >
-            {p.name}
-          </button>
-        ))}
-        <button onClick={openPlacesDialog} className="ml-auto text-neutral-500 underline">
-          管理
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="text-neutral-500">通勤(公車直達)</span>
+        <button onClick={openPlacesDialog} className="text-neutral-500 underline">
+          管理地點
         </button>
       </div>
-      {target && options && options.length === 0 && (
-        <p className="mt-1.5 text-xs text-neutral-500">
-          {radius}m 內沒有直達「{target.name}」的公車(目的地那頭找 500m 內的站)。{radius < 800 ? "試試 800m。" : ""}
-        </p>
-      )}
-      {target && options && options.length > 0 && (
-        <ul className="mt-1.5 grid gap-1">
-          {options.map((o) => {
-            const active = pick?.key === o.key && pick.alightSeq === o.alight.seq;
-            return (
-              <li key={o.key}>
-                <button
-                  onClick={() => setPick(active ? null : { key: o.key, boardSeq: o.board.seq, alightSeq: o.alight.seq })}
-                  className={`w-full rounded px-1.5 py-1 text-left ${active ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-50 dark:hover:bg-neutral-800"}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span>
-                      <b>{o.name}</b>
-                      {o.to_name && <span className="ml-1 text-xs text-neutral-500">往{o.to_name}</span>}
-                    </span>
-                    <span className="shrink-0 font-semibold tabular-nums">約 {o.total_min} 分</span>
-                  </div>
-                  <div className="text-xs text-neutral-600 dark:text-neutral-400">
-                    走 {o.board.walk_min} 分 → {o.board.name} 上車 · {o.stops} 站{o.ride_exact ? "" : "約"} {o.ride_min} 分 → {o.alight.name} 下車 · 走{" "}
-                    {o.alight.walk_min} 分
-                  </div>
-                  <div className="text-[11px] text-neutral-400">
-                    {headwayLine(o.wd)} · 等車抓 {o.wait_min} 分
-                  </div>
-                </button>
-                {active && <RouteTimes pick={pick!} onOverlay={onOverlay} />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {target && <p className="mt-1 text-[11px] text-neutral-400">只算直達(不轉乘);坐車時間有班表用班表,沒有用距離估。</p>}
+      <ul className="grid gap-1">
+        {places.map((pl) => {
+          const expanded = pl.id === targetId;
+          const b = summary?.[pl.id];
+          return (
+            <li key={pl.id}>
+              <button
+                onClick={() => setTarget(expanded ? null : pl.id)}
+                className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left ${expanded ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-50 dark:hover:bg-neutral-800"}`}
+              >
+                <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{pl.name}</span>
+                <span className="min-w-0 flex-1 truncate text-xs">
+                  {radius !== 400 || summary === undefined ? (
+                    <span className="text-neutral-400">點開看</span>
+                  ) : b ? (
+                    <>
+                      <b className="tabular-nums">約 {b.total_min} 分</b> · {b.name}
+                      {b.others.length > 0 && <span className="text-neutral-400">(另有 {b.others.join("、")})</span>}
+                    </>
+                  ) : (
+                    <span className="text-neutral-400">沒有直達公車</span>
+                  )}
+                </span>
+                {expanded ? <ChevronUp size={14} className="shrink-0 text-neutral-400" /> : <ChevronDown size={14} className="shrink-0 text-neutral-400" />}
+              </button>
+              {expanded && options && options.length === 0 && (
+                <p className="mt-1 px-1.5 text-xs text-neutral-500">
+                  {radius}m 內沒有直達「{pl.name}」的公車(目的地那頭找 500m 內的站)。{radius < 800 ? "試試 800m。" : ""}
+                </p>
+              )}
+              {expanded && options && options.length > 0 && (
+                <ul className="mt-1 grid gap-1 border-l-2 border-blue-200 pl-1.5 dark:border-blue-900">
+                  {options.map((o) => {
+                    const active = pick?.key === o.key && pick.alightSeq === o.alight.seq;
+                    return (
+                      <li key={o.key}>
+                        <button
+                          onClick={() => setPick(active ? null : { key: o.key, boardSeq: o.board.seq, alightSeq: o.alight.seq })}
+                          className={`w-full rounded px-1.5 py-1 text-left ${active ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-50 dark:hover:bg-neutral-800"}`}
+                        >
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span>
+                              <b>{o.name}</b>
+                              {o.to_name && <span className="ml-1 text-xs text-neutral-500">往{o.to_name}</span>}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums">約 {o.total_min} 分</span>
+                          </div>
+                          <div className="text-xs text-neutral-600 dark:text-neutral-400">
+                            走 {o.board.walk_min} 分 → {o.board.name} 上車 · {o.stops} 站{o.ride_exact ? "" : "約"} {o.ride_min} 分 → {o.alight.name} 下車 · 走{" "}
+                            {o.alight.walk_min} 分
+                          </div>
+                          <div className="text-[11px] text-neutral-400">
+                            {headwayLine(o.wd)} · 等車抓 {o.wait_min} 分
+                          </div>
+                        </button>
+                        {active && <RouteTimes pick={pick!} onOverlay={onOverlay} />}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1 text-[11px] text-neutral-400">只算直達(不轉乘);總時間 = 走路 + 等車(班距一半)+ 坐車 + 走路。</p>
     </div>
   );
 }

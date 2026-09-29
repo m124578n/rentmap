@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { Bus, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { activeCount, resetFilters, setFilters, useFilters, type Filters } from "@/lib/filters";
 import { DISTRICTS, STAGES, STAGE_LABEL } from "@shared/constants";
+import { openPlacesDialog, usePlaces } from "@/features/places/places";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
 const DISTRICT_OPTIONS = [...DISTRICTS.台北市.map((d) => ({ city: "台北市", d })), ...DISTRICTS.新北市.map((d) => ({ city: "新北市", d }))];
@@ -9,6 +10,8 @@ const DISTRICT_OPTIONS = [...DISTRICTS.台北市.map((d) => ({ city: "台北市"
 /** 篩選列:一排 chip,點開展開細項。地圖與列表共用同一份條件。 */
 export function FilterBar({ shown, total }: { shown: number; total: number }) {
   const f = useFilters();
+  const places = usePlaces();
+  const placeList = places.data?.items ?? [];
   const [open, setOpen] = useState(false);
   const n = activeCount(f);
   const toggleIn = (key: "kinds" | "districts" | "stages", v: string) => {
@@ -40,6 +43,7 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         <Chip on={f.cooking} onClick={() => setFilters({ cooking: !f.cooking })}>
           可開伙
         </Chip>
+        {places.isSuccess && <CommuteChip f={f} hasPlaces={placeList.length > 0} />}
         <span className="ml-auto text-xs text-neutral-500">
           {shown} / {total} 間
         </span>
@@ -85,9 +89,58 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
           <Field label="行政區">
             <DistrictPicker f={f} toggle={(d) => toggleIn("districts", d)} />
           </Field>
+          {placeList.length > 1 && (
+            <Field label="通勤要算哪些地點(都不選 = 全部,每個都要在上限內)">
+              <div className="flex flex-wrap gap-1">
+                {placeList.map((p) => (
+                  <Chip
+                    key={p.id}
+                    small
+                    on={f.commutePlaces.includes(p.id)}
+                    onClick={() => setFilters({ commutePlaces: f.commutePlaces.includes(p.id) ? f.commutePlaces.filter((x) => x !== p.id) : [...f.commutePlaces, p.id] })}
+                  >
+                    {p.name}
+                  </Chip>
+                ))}
+              </div>
+            </Field>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+const COMMUTE_STEPS = [20, 30, 40, 50, 60];
+
+/** 通勤上限:沒設地點時只給「先設公司地址」的入口 */
+function CommuteChip({ f, hasPlaces }: { f: Filters; hasPlaces: boolean }) {
+  if (!hasPlaces)
+    return (
+      <button onClick={openPlacesDialog} className="flex items-center gap-1 rounded-full border border-dashed border-blue-400 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950">
+        <Bus size={12} /> 通勤:先設公司地址
+      </button>
+    );
+  const on = f.commuteMax != null;
+  return (
+    <label
+      className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 dark:border-neutral-700"}`}
+      title="公車直達(走路 + 等車 + 坐車),沒有直達的房源會被濾掉"
+    >
+      <Bus size={12} /> 通勤
+      <select
+        value={f.commuteMax ?? ""}
+        onChange={(e) => setFilters({ commuteMax: e.target.value ? Number(e.target.value) : null })}
+        className="bg-transparent outline-none [&>option]:text-neutral-900"
+      >
+        <option value="">不限</option>
+        {COMMUTE_STEPS.map((m) => (
+          <option key={m} value={m}>
+            ≤ {m} 分
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

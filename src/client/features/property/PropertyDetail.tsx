@@ -95,7 +95,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         </p>
       )}
 
-      {p.lat != null && p.lng != null && <BusSection key={id} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
+      {p.lat != null && p.lng != null && <BusSection key={id} lat={p.lat} lng={p.lng} propertyId={id} onOverlay={onBusOverlay} />}
 
       {main && (
         <section className="text-sm">
