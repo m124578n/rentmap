@@ -1,4 +1,4 @@
-﻿# 每日採集:等網路 → git pull → (lock 有變才 npm install)→ (dev 沒開時套本地 migration)→ collector sync → 跑完閒置就自動睡眠(排程會把睡眠中的電腦喚醒)(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
+﻿# 每日採集:等網路 → git pull → (lock 有變才 npm install)→ (dev 沒開時套本地 migration)→ collector sync → (AUTO_SLEEP=1 時)跑完閒置就自動睡眠;排程會把睡眠中的電腦喚醒(掃 searches.json 的搜尋條件 + 重抓活躍物件偵測下架 / 漲跌價)。
 # 由 Windows 工作排程器分四個時段觸發(見 register_task.ps1),每次帶 -Group。log 在 data/logs/{date}-sync-{group}.log。
 #
 # 尚未部署前,RENTMAP_API 是本機 http://localhost:5173:這支腳本會自己把 dev server 拉起來、跑完再關掉。
@@ -105,8 +105,8 @@ $null = $power::SetThreadExecutionState([uint32]2147483648)
 #   1. 腳本開始跑之後沒有任何鍵盤 / 滑鼠輸入(使用者在用就不睡;喚醒會重設最後輸入時間,所以不能用固定 10 分鐘)
 #   2. menmap 的排程 RamenDailySnapshot 還在跑就不睡(20:00 起約 1.5 小時)
 #   3. 其他 RentmapSync-* 還在跑就不睡(自己這組除外)
-# 設 $env:NO_AUTO_SLEEP="1" 可停用。
-if ($env:NO_AUTO_SLEEP -ne "1") {
+# 2026-09-29 起預設關閉(使用者決定);要開設 $env:AUTO_SLEEP="1"。
+if ($env:AUTO_SLEEP -eq "1") {
     Add-Type -Namespace RentmapIdle -Name Input -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
 [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
