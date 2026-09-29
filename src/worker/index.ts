@@ -5,6 +5,7 @@ import { properties } from "./routes/properties";
 import { ingest } from "./routes/ingest";
 import { bus } from "./routes/bus";
 import { places } from "./routes/places";
+import { commute } from "./routes/commute";
 
 const app = new Hono<AppEnv>();
 
@@ -16,6 +17,8 @@ app.route("/", ingest);
 // 公車查詢 /api/bus/*;公車匯入 /api/ingest/bus/*(bearer INGEST_SECRET)
 app.route("/", bus);
 app.route("/", places);
+// 所有房源 × 我的地點 的公車通勤
+app.route("/", commute);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

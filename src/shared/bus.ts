@@ -88,27 +88,9 @@ export interface NearbyRoute {
   dirs: NearbyRouteDir[];
 }
 
-/** 直達目的地的一種搭法 */
-export interface CommuteOption {
-  key: string;
-  name: string;
-  to_name: string | null;
-  board: NearbyStop;
-  alight: NearbyStop;
-  stops: number;
-  ride_min: number;
-  /** ride_min 是時刻表算的(true)還是距離估的(false) */
-  ride_exact: boolean;
-  /** 平均等車(平日尖峰班距一半,沒資料用 10) */
-  wait_min: number;
-  total_min: number;
-  wd: DaySummary | null;
-}
-
 export interface NearbyBusResponse {
   radius: number;
   routes: NearbyRoute[];
-  commute: CommuteOption[] | null;
   /** 資料庫裡有沒有公車資料(沒有 → 前端提示先跑 collect bus) */
   has_data: boolean;
 }

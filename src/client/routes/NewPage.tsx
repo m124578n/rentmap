@@ -45,6 +45,9 @@ export function NewPage() {
   return (
     <form onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4 p-4">
       <h1 className="text-xl font-semibold">新增房源</h1>
+      <p className="-mt-2 text-sm text-neutral-500">
+        591、好房的物件用採集比較快:<code className="text-xs">npm run collect -- add &lt;網址&gt;</code>。這裡是手動記錄(朋友介紹、社團、仲介)。
+      </p>
 
       <section className="card grid gap-3">
         <Field label="標題" error={err("title")}>
@@ -81,32 +84,14 @@ export function NewPage() {
           <Field label="租金 / 月" error={err("rent")}>
             <input name="rent" type="number" min={1} className="input" required />
           </Field>
-          <Field label="管理費 / 月">
-            <input name="mgmt_fee" type="number" min={0} className="input" />
-          </Field>
-          <Field label="押金(月)">
-            <input name="deposit_months" type="number" min={0} step="0.5" className="input" />
-          </Field>
           <Field label="坪數">
             <input name="size_ping" type="number" min={0} step="0.1" className="input" />
           </Field>
           <Field label="房">
             <input name="rooms" type="number" min={0} className="input" />
           </Field>
-          <Field label="廳">
-            <input name="living_rooms" type="number" min={0} className="input" />
-          </Field>
-          <Field label="衛">
-            <input name="bathrooms" type="number" min={0} className="input" />
-          </Field>
           <Field label="樓層">
             <input name="floor" type="number" min={0} className="input" />
-          </Field>
-          <Field label="總樓層">
-            <input name="total_floors" type="number" min={0} className="input" />
-          </Field>
-          <Field label="屋齡(年)">
-            <input name="building_age" type="number" min={0} className="input" />
           </Field>
           <Field label="房型">
             <select name="kind" className="input" defaultValue="">
@@ -116,55 +101,84 @@ export function NewPage() {
               ))}
             </select>
           </Field>
-          <Field label="型態">
-            <select name="building_type" className="input" defaultValue="">
-              <option value="">—</option>
-              {BUILDING_TYPES.map((t) => (
-                <option key={t}>{t}</option>
+        </div>
+        {/* 次要欄位收起來;<details> 收起時欄位仍在表單裡,送出照樣會帶 */}
+        <details className="group">
+          <summary className="cursor-pointer text-sm text-neutral-500 select-none">更多規格(管理費、押金、格局、屋齡、設備…)</summary>
+          <div className="mt-3 grid gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Field label="管理費 / 月">
+                <input name="mgmt_fee" type="number" min={0} className="input" />
+              </Field>
+              <Field label="押金(月)">
+                <input name="deposit_months" type="number" min={0} step="0.5" className="input" />
+              </Field>
+              <Field label="廳">
+                <input name="living_rooms" type="number" min={0} className="input" />
+              </Field>
+              <Field label="衛">
+                <input name="bathrooms" type="number" min={0} className="input" />
+              </Field>
+              <Field label="總樓層">
+                <input name="total_floors" type="number" min={0} className="input" />
+              </Field>
+              <Field label="屋齡(年)">
+                <input name="building_age" type="number" min={0} className="input" />
+              </Field>
+              <Field label="型態">
+                <select name="building_type" className="input" defaultValue="">
+                  <option value="">—</option>
+                  {BUILDING_TYPES.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+              {BOOL_FIELDS.map((k) => (
+                <label key={k} className="flex items-center gap-1">
+                  <input type="checkbox" name={k} /> {BOOL_LABEL[k]}
+                </label>
               ))}
-            </select>
-          </Field>
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-          {BOOL_FIELDS.map((k) => (
-            <label key={k} className="flex items-center gap-1">
-              <input type="checkbox" name={k} /> {BOOL_LABEL[k]}
-            </label>
-          ))}
-        </div>
-        <Field label="水電 / 費用備註">
-          <input name="utilities_note" className="input" placeholder="電費一度 5 元、水費含" />
-        </Field>
+            </div>
+            <Field label="水電 / 費用備註">
+              <input name="utilities_note" className="input" placeholder="電費一度 5 元、水費含" />
+            </Field>
+          </div>
+        </details>
       </section>
 
-      <section className="card grid gap-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="來源">
-            <select name="source" className="input" defaultValue="manual">
-              {SOURCES.map((s) => (
-                <option key={s} value={s}>
-                  {SOURCE_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="原始連結" error={err("source_url")}>
-            <input name="source_url" type="url" className="input" placeholder="https://" />
-          </Field>
-          <Field label="聯絡人">
-            <input name="contact_name" className="input" />
-          </Field>
-          <Field label="電話">
-            <input name="contact_phone" className="input" />
-          </Field>
-          <Field label="LINE">
-            <input name="contact_line" className="input" />
+      <details className="card">
+        <summary className="cursor-pointer text-sm text-neutral-500 select-none">來源、聯絡人、備註(可選)</summary>
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="來源">
+              <select name="source" className="input" defaultValue="manual">
+                {SOURCES.map((s) => (
+                  <option key={s} value={s}>
+                    {SOURCE_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="原始連結" error={err("source_url")}>
+              <input name="source_url" type="url" className="input" placeholder="https://" />
+            </Field>
+            <Field label="聯絡人">
+              <input name="contact_name" className="input" />
+            </Field>
+            <Field label="電話">
+              <input name="contact_phone" className="input" />
+            </Field>
+            <Field label="LINE">
+              <input name="contact_line" className="input" />
+            </Field>
+          </div>
+          <Field label="備註">
+            <textarea name="note" className="input" rows={3} />
           </Field>
         </div>
-        <Field label="備註">
-          <textarea name="note" className="input" rows={3} />
-        </Field>
-      </section>
+      </details>
 
       {errors._ && <p className="text-red-600">{errors._}</p>}
       <div className="flex justify-end gap-2">

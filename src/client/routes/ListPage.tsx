@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
-import { applyFilters, useFilters } from "@/lib/filters";
+import { applyFilters, setFilters, sortItems, useFilters, type SortKey } from "@/lib/filters";
+import { useCommute } from "@/features/commute/useCommute";
+import { CommuteLines } from "@/features/commute/CommuteLines";
 import { FilterBar } from "@/components/FilterBar";
 import { SOURCE_LABEL, STAGE_LABEL, type Source, type Stage } from "@shared/constants";
 
@@ -10,12 +12,25 @@ export function ListPage() {
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const filters = useFilters();
   const all = q.data?.items ?? [];
-  const items = useMemo(() => applyFilters(all, filters), [all, filters]);
+  const commute = useCommute();
+  const items = useMemo(() => sortItems(applyFilters(all, filters, commute.ctx), filters, commute.ctx), [all, filters, commute.ctx]);
 
   return (
     <div className="flex h-full flex-col">
       <FilterBar shown={items.length} total={all.length} />
       <div className="min-h-0 flex-1 overflow-auto">
+        {all.length > 0 && (
+          <div className="mx-auto flex max-w-5xl items-center justify-end gap-1.5 px-4 pt-3 text-xs text-neutral-500">
+            排序
+            <select value={filters.sort} onChange={(e) => setFilters({ sort: e.target.value as SortKey })} className="rounded border border-neutral-300 bg-transparent px-1.5 py-1 dark:border-neutral-700">
+              <option value="updated">最近更新</option>
+              <option value="rent">租金低 → 高</option>
+              <option value="commute" disabled={commute.places.length === 0}>
+                通勤短 → 長{commute.places.length > 1 ? "(取最久的地點)" : ""}
+              </option>
+            </select>
+          </div>
+        )}
         {q.isLoading ? (
           <p className="p-4 text-neutral-500">載入中…</p>
         ) : q.error ? (
@@ -58,6 +73,7 @@ export function ListPage() {
                     {p.has_elevator != null && <span>{p.has_elevator ? "有電梯" : "無電梯"}</span>}
                     {p.mgmt_fee != null && <span>管理費 {p.mgmt_fee}</span>}
                   </p>
+                  {commute.places.length > 0 && <CommuteLines propertyId={p.id} places={commute.places} matrix={commute.matrix} hasCoords={p.lat != null && p.lng != null} />}
                   <p className="mt-2 flex gap-2 text-xs">
                     {p.stage && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{STAGE_LABEL[p.stage as Stage] ?? p.stage}</span>}
                     {p.source && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{SOURCE_LABEL[p.source as Source] ?? p.source}</span>}

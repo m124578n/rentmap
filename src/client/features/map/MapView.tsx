@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
-import { setBusOverlay, type BusOverlay } from "./busLayer";
+import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 
 interface Props {
   items: PropertySummary[];
@@ -14,13 +14,15 @@ interface Props {
   mrt: MrtData | null;
   /** 左側面板寬度(px),平移到選中標記時避開它;手機面板在下方,傳 0 */
   padLeft?: number;
+  /** 手機底部抽屜高度(px),平移 / 框選時避開 */
+  padBottom?: number;
   /** 面板選中的公車路線 */
   busOverlay?: BusOverlay | null;
   /** 我的地點(公司…) */
   places?: Place[];
-  /** 右鍵 / 長按地圖某點 */
-  onContextMenu?: (p: { lat: number; lng: number }) => void;
   onPlaceClick?: (p: Place) => void;
+  /** 有給就用它決定標記顏色(例如依通勤時間),回 undefined 用預設(找房狀態) */
+  colorOf?: (p: PropertySummary) => string | undefined;
 }
 
 /** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
@@ -45,7 +47,7 @@ function priceLabel(rent: number | null) {
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, busOverlay = null, places = [], onContextMenu, onPlaceClick }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
@@ -54,13 +56,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const mrtRef = useRef(mrt);
   const themeRef = useRef(theme);
   const padRef = useRef(padLeft);
+  const padBottomRef = useRef(padBottom);
+  padBottomRef.current = padBottom;
   const busRef = useRef(busOverlay);
-  const ctxRef = useRef(onContextMenu);
   const placeClickRef = useRef(onPlaceClick);
   const placeMarkersRef = useRef<maplibregl.Marker[]>([]);
   padRef.current = padLeft;
   busRef.current = busOverlay;
-  ctxRef.current = onContextMenu;
   placeClickRef.current = onPlaceClick;
   onSelectRef.current = onSelect;
   mrtRef.current = mrt;
@@ -85,19 +87,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
     });
     map.on("click", () => onSelectRef.current(null));
-    // 右鍵(桌機)/ 長按(手機;iOS 不會觸發 contextmenu,自己計時)
-    map.on("contextmenu", (e) => ctxRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }));
-    let pressTimer: ReturnType<typeof setTimeout> | undefined;
-    const cancelPress = () => clearTimeout(pressTimer);
-    map.on("touchstart", (e) => {
-      cancelPress();
-      if (e.originalEvent.touches.length !== 1) return;
-      const at = e.lngLat;
-      pressTimer = setTimeout(() => ctxRef.current?.({ lat: at.lat, lng: at.lng }), 650);
-    });
-    map.on("touchend", cancelPress);
-    map.on("touchmove", cancelPress);
-    map.on("movestart", cancelPress);
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -131,14 +121,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     setBusOverlay(map, busOverlay, themeRef.current);
-    const pts = busOverlay?.segment ?? busOverlay?.shape;
+    const pts = busOverlay ? overlayPoints(busOverlay) : null;
     if (!pts || pts.length < 2) return;
     const b = new maplibregl.LngLatBounds();
     for (const p of pts) b.extend(p);
     const narrow = window.innerWidth < 640;
-    const h = map.getContainer().clientHeight;
     map.fitBounds(b, {
-      padding: narrow ? { top: 40, bottom: Math.round(h * 0.6) + 20, left: 30, right: 30 } : { top: 60, bottom: 60, left: padRef.current + 60, right: 60 },
+      padding: narrow ? { top: 40, bottom: padBottomRef.current + 20, left: 30, right: 30 } : { top: 60, bottom: 60, left: padRef.current + 60, right: 60 },
       maxZoom: 16,
       duration: 500,
     });
@@ -154,7 +143,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       el.type = "button";
       el.className = "rh-place";
       el.textContent = p.name;
-      el.title = `${p.name}(點一下管理)`;
+      el.title = `${p.name}(點一下修改)`;
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         placeClickRef.current?.(p);
@@ -174,7 +163,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (p.lat == null || p.lng == null) continue;
       seen.add(p.id);
       bounds.extend([p.lng, p.lat]);
-      const color = p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL;
+      const color = colorOf?.(p) ?? (p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL);
       let entry = markers.get(p.id);
       if (!entry) {
         const el = document.createElement("button");
@@ -207,7 +196,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       fittedRef.current = true;
       map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
     }
-  }, [items]);
+  }, [items, colorOf]);
 
   // 選中:標記高亮 + 平移過去
   useEffect(() => {
@@ -222,7 +211,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
         zoom: Math.max(map.getZoom(), 15),
         duration: 500,
         // 桌機:面板在左邊;手機:面板在下面(約 60% 高)
-        padding: narrow ? { top: 0, bottom: Math.round(map.getContainer().clientHeight * 0.6), left: 0, right: 0 } : { top: 0, bottom: 0, left: padRef.current, right: 0 },
+        padding: narrow ? { top: 0, bottom: padBottomRef.current, left: 0, right: 0 } : { top: 0, bottom: 0, left: padRef.current, right: 0 },
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

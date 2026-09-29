@@ -189,6 +189,7 @@ export const myPlaces = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    address: text("address"), // 使用者輸入的地址(顯示用;座標以 lat/lng 為準,可能拖曳微調過)
     lat: real("lat").notNull(),
     lng: real("lng").notNull(),
     createdAt: text("created_at").notNull(),

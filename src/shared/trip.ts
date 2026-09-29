@@ -1,0 +1,77 @@
+/**
+ * 通勤行程(公車 + 捷運,最多轉乘一次)。/api/commute 與 /api/commute/trips 共用。
+ * 「轉乘」指換交通工具(公車→公車、公車↔捷運);捷運系統內換線不算轉乘,但會算進時間。
+ */
+export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus";
+export const TRIP_KIND_LABEL: Record<TripKind, string> = {
+  walk: "步行",
+  bus: "公車直達",
+  mrt: "捷運",
+  "bus+bus": "公車轉公車",
+  "bus+mrt": "公車轉捷運",
+  "mrt+bus": "捷運轉公車",
+};
+
+export type TripLeg =
+  | { mode: "walk"; min: number; m: number; to: string }
+  | {
+      mode: "bus";
+      min: number;
+      wait: number;
+      name: string;
+      key: string;
+      to_name: string | null;
+      from: string;
+      to: string;
+      board_seq: number;
+      alight_seq: number;
+      /** [lng, lat] */
+      from_pt: [number, number];
+      to_pt: [number, number];
+      stops: number;
+      /** 坐車分鐘是時刻表算的(true)還是距離估的 */
+      exact: boolean;
+    }
+  | {
+      mode: "mrt";
+      min: number;
+      wait: number;
+      /** 依序搭的線(中文線名);換線時超過一條 */
+      lines: string[];
+      colors: string[];
+      from: string;
+      to: string;
+      stops: number;
+      /** 經過的站 [lng, lat](畫地圖用)與每段的線色 */
+      path: { lng: number; lat: number; color: string }[];
+    };
+
+export interface Trip {
+  kind: TripKind;
+  total_min: number;
+  transfers: number;
+  /** 一句話:「262 → 捷運板南線」 */
+  summary: string;
+  legs: TripLeg[];
+}
+
+/** 列表 / 篩選用的精簡版(整張表幾千格,不帶 legs) */
+export interface TripBrief {
+  kind: TripKind;
+  total_min: number;
+  transfers: number;
+  summary: string;
+}
+
+export interface CommuteMatrix {
+  radius: number;
+  has_bus: boolean;
+  /** items[propertyId][placeId];null = 算不出(太遠、沒座標) */
+  items: Record<string, Record<string, TripBrief | null>>;
+}
+
+export interface TripsResponse {
+  has_bus: boolean;
+  /** 依總時間排序,每種搭法(kind)留最快的,公車直達多留幾條不同路線 */
+  trips: Trip[];
+}

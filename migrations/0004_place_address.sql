@@ -1,0 +1,1 @@
+ALTER TABLE `my_places` ADD `address` text;

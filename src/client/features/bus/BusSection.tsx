@@ -12,13 +12,11 @@ import {
   haversine,
   toMin,
   type BusRouteDetail,
-  type CommuteOption,
   type DaySummary,
   type DayType,
   type NearbyRoute,
 } from "@shared/bus";
 import type { BusOverlay } from "@/features/map/busLayer";
-import { useCommuteTarget, usePlaces } from "./places";
 
 interface Props {
   lat: number;
@@ -28,7 +26,7 @@ interface Props {
 }
 
 /** 選中的路線方向:從哪站上車、(通勤)在哪站下車 */
-interface Pick {
+export interface Pick {
   key: string;
   boardSeq: number;
   alightSeq?: number;
@@ -37,23 +35,20 @@ interface Pick {
 const BADGES_SHOWN = 16;
 
 /**
- * 房源面板的「公車」區塊:
- *   通勤 → 選了目的地(我的地點)就列出直達的路線,依「走路 + 等車 + 坐車 + 走路」排序
- *   附近路線 → 徽章,點了看方向、班距、預估經過時刻,地圖畫整條路線
+ * 房源面板的「公車」區塊:附近路線的徽章,點了看方向、班距、預估經過時刻,地圖畫整條路線。
+ * (怎麼通勤到我的地點在 features/commute/CommuteSection,含捷運與轉乘)
  */
 export function BusSection({ lat, lng, onOverlay }: Props) {
   const [radius, setRadius] = useState(400);
-  const places = usePlaces();
-  const [targetId, setTarget] = useCommuteTarget();
-  const target = places.data?.items.find((p) => p.id === targetId) ?? null;
   const q = useQuery({
-    queryKey: ["bus-nearby", lat, lng, radius, target?.id ?? null, target?.lat, target?.lng],
-    queryFn: () => api.busNearby({ lat, lng, radius, to: target }),
+    queryKey: ["bus-nearby", lat, lng, radius],
+    queryFn: () => api.busNearby({ lat, lng, radius }),
     staleTime: 10 * 60_000,
   });
   const [pick, setPick] = useState<Pick | null>(null);
   const [openRoute, setOpenRoute] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   // 關掉面板 / 換房源 → 清掉地圖上的路線
   useEffect(() => () => onOverlay?.(null), [onOverlay]);
@@ -65,13 +60,33 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
   const shown = showAll ? routes : routes.slice(0, BADGES_SHOWN);
   const open = routes.find((r) => r.name === openRoute) ?? null;
 
+  // 預設收起:有了「通勤」區塊之後,附近有哪些公車是次要資訊
+  if (!expanded)
+    return (
+      <section className="text-sm">
+        <button onClick={() => setExpanded(true)} className="flex w-full items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">
+          <Bus size={14} /> 附近公車
+          {q.data?.has_data && <span>· {radius}m 內 {routes.length} 條</span>}
+          <ChevronDown size={14} className="ml-auto" />
+        </button>
+      </section>
+    );
+
   return (
     <section className="text-sm">
       <div className="mb-1.5 flex items-center justify-between">
-        <h2 className="flex items-center gap-1 text-xs font-medium text-neutral-500">
-          <Bus size={14} /> 公車
+        <button
+          onClick={() => {
+            setExpanded(false);
+            setPick(null);
+            setOpenRoute(null);
+          }}
+          className="flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+        >
+          <Bus size={14} /> 附近公車
           {q.data && q.data.has_data && <span>· {radius}m 內 {routes.length} 條</span>}
-        </h2>
+          <ChevronUp size={14} />
+        </button>
         <div className="flex gap-1">
           {[400, 800].map((r) => (
             <button
@@ -95,20 +110,6 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
 
       {q.data?.has_data && (
         <div className="grid gap-3">
-          <Commute
-            options={q.data.commute}
-            places={places.data?.items ?? []}
-            targetId={target?.id ?? null}
-            setTarget={(id) => {
-              setTarget(id);
-              setPick(null);
-            }}
-            pick={pick}
-            setPick={setPick}
-            radius={radius}
-            onOverlay={onOverlay}
-          />
-
           {routes.length === 0 ? (
             <p className="text-neutral-500">{radius}m 內沒有公車站{radius < 800 ? ",試試 800m" : ""}</p>
           ) : (
@@ -150,90 +151,6 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
   );
 }
 
-// ---- 通勤 ----
-
-function Commute({
-  options,
-  places,
-  targetId,
-  setTarget,
-  pick,
-  setPick,
-  radius,
-  onOverlay,
-}: {
-  options: CommuteOption[] | null;
-  places: { id: number; name: string }[];
-  targetId: number | null;
-  setTarget: (id: number | null) => void;
-  pick: Pick | null;
-  setPick: (p: Pick | null) => void;
-  radius: number;
-  onOverlay?: (o: BusOverlay | null) => void;
-}) {
-  if (places.length === 0) {
-    return (
-      <p className="rounded bg-blue-50 px-2 py-1.5 text-xs text-blue-900 dark:bg-blue-950 dark:text-blue-200">
-        想看通勤:在地圖上<b>按右鍵(手機長按)</b>把公司存成「我的地點」,這裡就會列出直達的公車、要坐多久。
-      </p>
-    );
-  }
-  const target = places.find((p) => p.id === targetId);
-  return (
-    <div className="rounded border border-blue-200 p-2 dark:border-blue-900">
-      <div className="flex flex-wrap items-center gap-1 text-xs">
-        <span className="text-neutral-500">通勤到</span>
-        {places.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setTarget(targetId === p.id ? null : p.id)}
-            className={`rounded-full px-2 py-0.5 ${targetId === p.id ? "bg-blue-600 text-white" : "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"}`}
-          >
-            {p.name}
-          </button>
-        ))}
-      </div>
-      {target && options && options.length === 0 && (
-        <p className="mt-1.5 text-xs text-neutral-500">
-          {radius}m 內沒有直達「{target.name}」的公車(目的地那頭找 500m 內的站)。{radius < 800 ? "試試 800m。" : ""}
-        </p>
-      )}
-      {target && options && options.length > 0 && (
-        <ul className="mt-1.5 grid gap-1">
-          {options.map((o) => {
-            const active = pick?.key === o.key && pick.alightSeq === o.alight.seq;
-            return (
-              <li key={o.key}>
-                <button
-                  onClick={() => setPick(active ? null : { key: o.key, boardSeq: o.board.seq, alightSeq: o.alight.seq })}
-                  className={`w-full rounded px-1.5 py-1 text-left ${active ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-50 dark:hover:bg-neutral-800"}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span>
-                      <b>{o.name}</b>
-                      {o.to_name && <span className="ml-1 text-xs text-neutral-500">往{o.to_name}</span>}
-                    </span>
-                    <span className="shrink-0 font-semibold tabular-nums">約 {o.total_min} 分</span>
-                  </div>
-                  <div className="text-xs text-neutral-600 dark:text-neutral-400">
-                    走 {o.board.walk_min} 分 → {o.board.name} 上車 · {o.stops} 站{o.ride_exact ? "" : "約"} {o.ride_min} 分 → {o.alight.name} 下車 · 走{" "}
-                    {o.alight.walk_min} 分
-                  </div>
-                  <div className="text-[11px] text-neutral-400">
-                    {headwayLine(o.wd)} · 等車抓 {o.wait_min} 分
-                  </div>
-                </button>
-                {active && <RouteTimes pick={pick!} onOverlay={onOverlay} />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {target && <p className="mt-1 text-[11px] text-neutral-400">只算直達(不轉乘);坐車時間有班表用班表,沒有用距離估。</p>}
-    </div>
-  );
-}
-
 // ---- 附近路線 ----
 
 function RouteCard({ route, pick, setPick, onOverlay }: { route: NearbyRoute; pick: Pick | null; setPick: (p: Pick | null) => void; onOverlay?: (o: BusOverlay | null) => void }) {
@@ -260,7 +177,7 @@ function RouteCard({ route, pick, setPick, onOverlay }: { route: NearbyRoute; pi
   );
 }
 
-function headwayLine(s: DaySummary | null) {
+export function headwayLine(s: DaySummary | null) {
   if (!s) return "沒有班表資料";
   const parts = [s.first && s.last ? `平日 ${s.first}–${s.last}` : null];
   if (s.peak) parts.push(`尖峰每 ${fmtHeadway(s.peak)}`);
@@ -270,7 +187,7 @@ function headwayLine(s: DaySummary | null) {
 }
 
 /** 選中的路線方向:畫地圖、列這站的預估經過時刻 / 班距、全部站 */
-function RouteTimes({ pick, onOverlay }: { pick: Pick; onOverlay?: (o: BusOverlay | null) => void }) {
+export function RouteTimes({ pick, onOverlay }: { pick: Pick; onOverlay?: (o: BusOverlay | null) => void }) {
   const q = useQuery({ queryKey: ["bus-route", pick.key], queryFn: () => api.busRoute(pick.key), staleTime: 60 * 60_000 });
   const [day, setDay] = useState<DayType>(() => dayTypeOf(new Date()));
   const [allTimes, setAllTimes] = useState(false);
@@ -425,5 +342,9 @@ function overlayOf(d: BusRouteDetail, pick: Pick): BusOverlay {
         ? [[board.lng, board.lat], ...d.route.shape.slice(a, b + 1), [alight.lng, alight.lat]]
         : d.stops.filter((s) => s.seq >= board.seq && s.seq <= alight.seq).map((s) => [s.lng, s.lat]);
   }
-  return { shape: d.route.shape, stops, segment };
+  return {
+    lines: [{ coords: d.route.shape, kind: "full", faint: !!segment }, ...(segment ? [{ coords: segment, kind: "segment" as const }] : [])],
+    stops,
+    focus: segment ?? d.route.shape,
+  };
 }

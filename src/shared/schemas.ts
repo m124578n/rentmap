@@ -120,10 +120,17 @@ export interface SessionUser {
 /** 我的地點(公司、爸媽家…) */
 export const PlaceInput = z.object({
   name: z.string().trim().min(1).max(30),
+  address: z.string().trim().max(120).nullish(),
   lat: z.number().min(21).max(26.5),
   lng: z.number().min(119).max(122.5),
 });
 export type PlaceInput = z.infer<typeof PlaceInput>;
-export interface Place extends PlaceInput {
+export const PlaceUpdate = PlaceInput.partial();
+export type PlaceUpdate = z.infer<typeof PlaceUpdate>;
+export interface Place {
   id: number;
+  name: string;
+  address: string | null;
+  lat: number;
+  lng: number;
 }

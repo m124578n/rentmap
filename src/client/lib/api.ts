@@ -1,5 +1,6 @@
-import type { FavoriteInput, Place, PlaceInput, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
+import type { CommuteMatrix, TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
   constructor(
@@ -35,15 +36,16 @@ export const api = {
   removeFavorite: (id: number) => req<{ ok: true }>(`/api/properties/${id}/favorite`, { method: "DELETE" }),
   deleteProperty: (id: number) => req<{ ok: true }>(`/api/properties/${id}`, { method: "DELETE" }),
 
-  busNearby: (q: { lat: number; lng: number; radius: number; to?: { lat: number; lng: number } | null }) => {
-    const p = new URLSearchParams({ lat: String(q.lat), lng: String(q.lng), radius: String(q.radius) });
-    if (q.to) p.set("to_lat", String(q.to.lat)), p.set("to_lng", String(q.to.lng));
-    return req<NearbyBusResponse>(`/api/bus/nearby?${p}`);
-  },
+  busNearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyBusResponse>(`/api/bus/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
+
+  commute: (radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}`),
+  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number }) =>
+    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),
+  updatePlace: (id: number, input: PlaceUpdate) => req<{ place: Place }>(`/api/places/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   deletePlace: (id: number) => req<{ ok: true }>(`/api/places/${id}`, { method: "DELETE" }),
 };
 
