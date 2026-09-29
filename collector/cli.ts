@@ -5,6 +5,7 @@
  *   npm run collect -- list <listUrl> [--pages=1-5] [--dry] 抓列表(可多頁)→ 逐筆抓物件頁 → 每頁推一次
  *   npm run collect -- sync [--group=taipei]             每日同步(collector/searches.json);不給 group 就全部
  *   npm run collect -- bus [--dry] [--refresh]           下載雙北公車(TDX)→ 覆蓋式推入(一個月一次就好)
+ *   npm run collect -- metro [--dry]                     下載捷運官方站間時間(TDX)→ public/mrt-times.json(進 git)
  *
  * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET;公車另讀 TDX_CLIENT_ID / TDX_CLIENT_SECRET。
  */
@@ -96,7 +97,12 @@ async function main() {
     await runBus({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry]");
+  if (cmd === "metro") {
+    const { runMetro } = await import("./metro");
+    await runMetro([arg, ...rest].filter((x): x is string => !!x));
+    return;
+  }
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry]");
   process.exit(1);
 }
 

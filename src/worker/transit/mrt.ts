@@ -1,11 +1,14 @@
 /**
- * 捷運網路(public/mrt.json → 圖)。沒有官方站間時間,用距離估:
- *   站間分鐘 = 直線距離 × 1.1 ÷ 速度 + 停站;不同系統速度不同(輕軌慢、機捷快)
+ * 捷運網路(public/mrt.json → 圖)。站間分鐘:
+ *   有官方站間時間(public/mrt-times.json,`npm run collect -- metro` 從 TDX 產生)就用;
+ *   沒有(淡海、安坑輕軌)用距離估 = 直線距離 × 1.1 ÷ 速度 + 停站,不同系統速度不同(輕軌慢、機捷快)
  *   換線 +4 分(走路 + 等車),上車先等半個班距
  * 站序從 refs 編號來(BL12、R22A…),相鄰編號相連;支線手動接。
  */
 import mrtJson from "../../../public/mrt.json";
+import mrtTimes from "../../../public/mrt-times.json";
 import { haversine } from "@shared/bus";
+import { mrtPairKey } from "@shared/trip";
 
 interface RawStation {
   id: string;
@@ -87,33 +90,35 @@ export function mrtGraph(): MrtGraph {
     }
   });
   const adj: MrtEdge[][] = nodes.map(() => []);
-  const link = (a: number, b: number, line: string) => {
+  const official = (mrtTimes as { edges: Record<string, number> }).edges;
+  const link = (a: number, b: number, line: string, refA: string, refB: string) => {
     const na = nodeIdx.get(`${a}|${line}`);
     const nb = nodeIdx.get(`${b}|${line}`);
     if (na == null || nb == null) return;
     const sa = stations[a]!;
     const sb = stations[b]!;
+    const sec = official[mrtPairKey(refA, refB)];
     const d = haversine(sa.lat, sa.lng, sb.lat, sb.lng) * 1.1;
-    const min = d / (SPEED_M_PER_MIN[line] ?? 600) + (DWELL[line] ?? 0.5);
+    const min = sec ? sec / 60 : d / (SPEED_M_PER_MIN[line] ?? 600) + (DWELL[line] ?? 0.5);
     adj[na]!.push({ to: nb, min });
     adj[nb]!.push({ to: na, min });
   };
   // 同線、同後綴、編號相差 ≤2(機捷 A13→A15 中間沒站)的相連
-  const groups = new Map<string, { n: number; station: number }[]>();
+  const groups = new Map<string, { n: number; station: number; ref: string }[]>();
   for (const [ref, v] of byRef) {
     const p = parseRef(ref)!;
     const g = `${p.line}|${p.suffix}`;
-    groups.set(g, [...(groups.get(g) ?? []), { n: p.n, station: v.station }]);
+    groups.set(g, [...(groups.get(g) ?? []), { n: p.n, station: v.station, ref }]);
   }
   for (const [g, list] of groups) {
     const line = g.split("|")[0]!;
     list.sort((a, b) => a.n - b.n);
-    for (let i = 1; i < list.length; i++) if (list[i]!.n - list[i - 1]!.n <= 2) link(list[i - 1]!.station, list[i]!.station, line);
+    for (let i = 1; i < list.length; i++) if (list[i]!.n - list[i - 1]!.n <= 2) link(list[i - 1]!.station, list[i]!.station, line, list[i - 1]!.ref, list[i]!.ref);
   }
   for (const [a, b] of JOINS) {
     const x = byRef.get(a);
     const y = byRef.get(b);
-    if (x && y) link(x.station, y.station, x.line);
+    if (x && y) link(x.station, y.station, x.line, a, b);
   }
   // 同站換線
   for (const ns of nodesOfStation)

@@ -75,3 +75,11 @@ export interface TripsResponse {
   /** 依總時間排序,每種搭法(kind)留最快的,公車直達多留幾條不同路線 */
   trips: Trip[];
 }
+
+/** 捷運站編號正規化(TDX「A1」「A14a」、mrt.json「A01」「R22A」→「A1」「A14A」),站間時間表的 key 用 */
+export function mrtRefKey(ref: string) {
+  const m = /^([A-Z]+?)(\d+)([A-Za-z]?)$/.exec(ref);
+  return m ? `${m[1]}${Number(m[2])}${m[3]!.toUpperCase()}` : ref;
+}
+/** 兩站不分方向的 key */
+export const mrtPairKey = (a: string, b: string) => [mrtRefKey(a), mrtRefKey(b)].sort().join("-");

@@ -20,7 +20,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
-              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖、plan.ts 從目的地往回算
+              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算
 src/shared/   Zod schema 與常數,前後端共用
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
@@ -41,6 +41,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
 | `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
+| `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(12:30 好房、20:00 台北、21:30 新北、23:00 重抓);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)
