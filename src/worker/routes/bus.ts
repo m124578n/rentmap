@@ -2,9 +2,8 @@
  * 公車 API
  *
  * 查詢(需登入):
- *   GET /api/bus/nearby?lat=&lng=&radius=400[&to_lat=&to_lng=&to_radius=500]
- *       → 半徑內可搭的路線(同路線同方向只留最近的站),依距離排序;
- *         帶 to_* 就另算「直達目的地」的搭法(同一條路線方向,上車站序 < 下車站序),依總時間排序
+ *   GET /api/bus/nearby?lat=&lng=&radius=400 → 半徑內可搭的路線(同路線同方向只留最近的站),依距離排序
+ *       (通勤怎麼搭改由 /api/commute/trips 算,含轉乘)
  *   GET /api/bus/routes/:key  → 一條路線方向的線形、全部站、時刻表
  *
  * 採集機推入(bearer INGEST_SECRET),覆蓋式:
@@ -14,10 +13,10 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { BusRouteIn, BusStopIn, summarizeDay, type BusRouteDetail, type CommuteOption, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
+import { BusRouteIn, BusStopIn, summarizeDay, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
-import { directOptions, parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
+import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
 bus.use("/api/bus/*", requireUser());
@@ -32,9 +31,6 @@ bus.get("/api/bus/nearby", async (c) => {
   const lng = num(c.req.query("lng"));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = Math.min(1500, Math.max(100, num(c.req.query("radius")) || 400));
-  const toLat = num(c.req.query("to_lat"));
-  const toLng = num(c.req.query("to_lng"));
-  const toRadius = Math.min(1500, Math.max(100, num(c.req.query("to_radius")) || 500));
   const DB = c.env.DB;
 
   const hits = await stopsNear(DB, lat, lng, radius);
@@ -65,14 +61,9 @@ bus.get("/api/bus/nearby", async (c) => {
     .map((g) => ({ ...g, dirs: g.dirs.sort((a, b) => a.direction - b.direction) }))
     .sort((a, b) => a.distance_m - b.distance_m || a.name.localeCompare(b.name, "zh-Hant"));
 
-  let commute: CommuteOption[] | null = null;
-  if (Number.isFinite(toLat) && Number.isFinite(toLng)) {
-    const destHits = await stopsNear(DB, toLat, toLng, toRadius);
-    commute = directOptions(hits, destHits, metas, summaries).slice(0, 10);
-  }
 
   const hasData = hits.length > 0 || (await DB.prepare("SELECT 1 FROM bus_routes LIMIT 1").first()) != null;
-  const body: NearbyBusResponse = { radius, routes, commute, has_data: hasData };
+  const body: NearbyBusResponse = { radius, routes, has_data: hasData };
   return c.json(body);
 });
 

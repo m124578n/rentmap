@@ -1,7 +1,8 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { BusRouteDetail, BusRouteIn, BusStopIn, CommuteMatrix, NearbyBusResponse } from "../src/shared/bus";
+import type { BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
+import type { CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
 
 const ORIGIN = "http://localhost:5173";
@@ -108,22 +109,6 @@ describe("bus nearby", () => {
     expect(r307.dirs[0]!.stop.name).toBe("站1");
     expect(r307.dirs[0]!.stop.walk_min).toBeGreaterThanOrEqual(1);
     expect(r307.dirs[0]!.wd).toMatchObject({ first: "06:00", last: "22:30", peak: [5, 8], offpeak: [10, 15] });
-    expect(body.commute).toBeNull();
-  });
-
-  it("finds direct commute only in the right direction", async () => {
-    const res = await SELF.fetch(`${ORIGIN}/api/bus/nearby?lat=${LAT}&lng=${lngAt(1)}&radius=300&to_lat=${LAT}&to_lng=${lngAt(8)}&to_radius=300`, authed());
-    const body = (await res.json()) as NearbyBusResponse;
-    // R1:0 往東,站1 → 站8;R1:1 往西不能到;紅30 只有 3 站到不了
-    expect(body.commute?.map((c) => c.key)).toEqual(["R1:0"]);
-    const c = body.commute![0]!;
-    expect(c.board.name).toBe("站1");
-    expect(c.alight.name).toBe("站8");
-    expect(c.stops).toBe(7);
-    expect(c.ride_exact).toBe(true);
-    expect(c.ride_min).toBe(14); // t_min 每站 2 分
-    expect(c.wait_min).toBe(3); // 尖峰 5–8 分 → 平均 6.5 → 一半約 3
-    expect(c.total_min).toBe(c.board.walk_min + c.wait_min + c.ride_min + c.alight.walk_min);
   });
 
   it("returns route detail with ordered stops", async () => {
@@ -170,18 +155,69 @@ describe("places", () => {
   });
 });
 
-describe("commute matrix", () => {
-  it("every property × every place, best direct route or null", async () => {
-    const listing = (id: string, lat: number | undefined, lng: number | undefined) => ({
-      source: "591",
-      source_listing_id: id,
-      source_url: `https://rent.591.com.tw/${id}`,
-      title: `房 ${id}`,
-      city: "台北市",
-      district: "大安區",
-      rent: 20000,
-      ...(lat != null ? { lat, lng } : {}),
-    });
+describe("commute (bus + MRT, up to one transfer)", () => {
+  const listing = (id: string, lat: number | undefined, lng: number | undefined) => ({
+    source: "591",
+    source_listing_id: id,
+    source_url: `https://rent.591.com.tw/${id}`,
+    title: `房 ${id}`,
+    city: "台北市",
+    district: "大安區",
+    rent: 20000,
+    ...(lat != null ? { lat, lng } : {}),
+  });
+  const mkPlace = async (name: string, lat: number, lng: number) =>
+    ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed({ method: "POST", body: JSON.stringify({ name, lat, lng }) }))).json()) as { place: Place }).place.id;
+  const trips = async (lat: number, lng: number, placeId: number, radius = 300) =>
+    (await (await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=${lat}&lng=${lng}&place_id=${placeId}&radius=${radius}`, authed())).json()) as TripsResponse;
+  const legSum = (t: Trip) => t.legs.reduce((s, l) => s + l.min + (l.mode === "walk" ? 0 : l.wait), 0);
+
+  it("direct bus in the right direction; legs add up", async () => {
+    const office = await mkPlace("公司", LAT, lngAt(8));
+    const r = await trips(LAT + 0.0003, lngAt(1), office);
+    const best = r.trips[0]!;
+    expect(best.kind).toBe("bus");
+    expect(best.summary).toBe("307");
+    const bus = best.legs.find((l) => l.mode === "bus")!;
+    // R1:0 往東,站1 → 站8(提早一站下車再走是同分,少走路的贏);t_min 每站 2 分;尖峰 5–8 分 → 等 3 分
+    expect(bus).toMatchObject({ key: "R1:0", from: "站1", to: "站8", stops: 7, min: 14, wait: 3, exact: true });
+    for (const t of r.trips) expect(t.total_min).toBe(legSum(t));
+    expect(r.trips.map((t) => t.total_min)).toEqual([...r.trips.map((t) => t.total_min)].sort((a, b) => a - b));
+    // 捷運也會列出來(龍山寺 / 西門走得到,公司旁邊是台大醫院)
+    expect(r.trips.some((t) => t.kind === "mrt" || t.kind === "bus+mrt")).toBe(true);
+  });
+
+  it("MRT across the city, with line change counted inside the MRT leg", async () => {
+    const cityHall = await mkPlace("市府", 25.0405, 121.5655); // 市政府站旁
+    const r = await trips(25.0353, 121.4999, cityHall); // 龍山寺站旁
+    const best = r.trips[0]!;
+    expect(best.kind).toBe("mrt");
+    const m = best.legs.find((l) => l.mode === "mrt");
+    expect(m).toMatchObject({ from: "龍山寺", to: "市政府", lines: ["板南線"], stops: 8 });
+    expect(best.total_min).toBeGreaterThan(15);
+    expect(best.total_min).toBeLessThan(35);
+    expect(best.legs.at(-1)).toMatchObject({ mode: "walk", to: "市府" });
+  });
+
+  it("bus → bus transfer where there is no MRT", async () => {
+    // 內湖山區(離捷運 4km):A 線東西向 lat 25.12,B 線南北向 lng 121.62
+    const E = (i: number) => 121.6 + i * 0.002;
+    const N = (i: number) => 25.12 + i * 0.002;
+    const a: BusStopIn[] = Array.from({ length: 11 }, (_, i) => ({ route_key: "TA:0", seq: i + 1, stop_uid: `ta${i}`, station_id: null, name: `甲${i}`, lat: 25.12, lng: E(i), dist_m: i * 200, t_min: null }));
+    const b: BusStopIn[] = Array.from({ length: 11 }, (_, i) => ({ route_key: "TB:0", seq: i + 1, stop_uid: `tb${i}`, station_id: null, name: `乙${i}`, lat: N(i), lng: 121.6201, dist_m: i * 200, t_min: null }));
+    await ingest("routes", { version: "v1", items: [route("TA:0", "小1", 0), route("TB:0", "小2", 0)] });
+    await ingest("stops", { version: "v1", items: [...a, ...b] });
+    const top = await mkPlace("山上", N(10), 121.6201);
+    const r = await trips(25.12, E(0), top);
+    const best = r.trips[0]!;
+    expect(best.kind).toBe("bus+bus");
+    expect(best.summary).toBe("小1 → 小2");
+    expect(best.transfers).toBe(1);
+    expect(best.legs.map((l) => l.mode)).toEqual(["walk", "bus", "walk", "bus", "walk"]);
+    expect(best.total_min).toBe(legSum(best));
+  });
+
+  it("matrix: every property × every place, best trip or null", async () => {
     const ing = await SELF.fetch(`${ORIGIN}/api/ingest/listings`, {
       method: "POST",
       headers: ingestHeaders,
@@ -189,11 +225,9 @@ describe("commute matrix", () => {
     });
     const { ids } = (await ing.json()) as { ids: number[] };
     const [near, nocoord] = ids as [number, number];
-
-    const mk = async (name: string, lat: number, lng: number) =>
-      ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed({ method: "POST", body: JSON.stringify({ name, lat, lng }) }))).json()) as { place: Place }).place.id;
-    const office = await mk("公司", LAT, lngAt(8));
-    const far = await mk("遠方", 25.2, 121.7);
+    const places = ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] }).items;
+    const office = places.find((p) => p.name === "公司")!.id;
+    const far = await mkPlace("遠方", 25.2, 121.7);
 
     const res = await SELF.fetch(`${ORIGIN}/api/commute?radius=300`, authed());
     expect(res.status).toBe(200);
@@ -201,16 +235,14 @@ describe("commute matrix", () => {
     expect(body.has_bus).toBe(true);
     expect(body.items[nocoord]).toBeUndefined();
     const best = body.items[near]![office]!;
-    expect(best).toMatchObject({ name: "307", board: "站1", alight: "站8", stops: 7, ride_min: 14 });
-    // 和單點 API 算出來的一樣
-    const single = (await (
-      await SELF.fetch(`${ORIGIN}/api/bus/nearby?lat=${LAT + 0.0003}&lng=${lngAt(1)}&radius=300&to_lat=${LAT}&to_lng=${lngAt(8)}`, authed())
-    ).json()) as NearbyBusResponse;
-    expect(best.total_min).toBe(single.commute![0]!.total_min);
+    expect(best).toMatchObject({ kind: "bus", summary: "307", transfers: 0 });
+    // 和面板的行程一樣
+    expect(best.total_min).toBe((await trips(LAT + 0.0003, lngAt(1), office)).trips[0]!.total_min);
     expect(body.items[near]![far]).toBeNull();
   });
 
-  it("requires login", async () => {
+  it("requires login and a valid place", async () => {
     expect((await SELF.fetch(`${ORIGIN}/api/commute`)).status).toBe(401);
+    expect((await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=25&lng=121.5&place_id=99999`, authed())).status).toBe(404);
   });
 });

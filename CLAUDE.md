@@ -18,8 +18,9 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 ```
 src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是地圖(CARTO 底圖、捷運圖層、價格標記)
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
-              features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是所有房源 × 地點的通勤(/api/commute),列表排序與篩選列「通勤 ≤ N 分」
+              features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
+              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖、plan.ts 從目的地往回算
 src/shared/   Zod schema 與常數,前後端共用
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
@@ -72,4 +73,5 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。
 - 591 的 `window.__NUXT__` 是 JS 函式呼叫不是 JSON,要 `node:vm` 執行;Playwright 裡 stringify 會循環參照。
+- `/api/commute` 一次算所有房源 × 地點:本機實測 8 萬站、3000 間、2 個地點約 0.5 秒(首次載入公車網路約 1 秒)。**部署時要 Workers Paid**,免費方案每次請求 CPU 10ms 不夠。
 - 型別:bindings 從 `worker-configuration.d.ts`(`npm run types` 產生)的 `Cloudflare.Env` 來,機密欄位在 `src/worker/env.ts` 用 `declare global` 補。

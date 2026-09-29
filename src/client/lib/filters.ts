@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
-import type { CommuteMatrix } from "@shared/bus";
+import type { CommuteMatrix } from "@shared/trip";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
 export interface Filters {
@@ -16,7 +16,7 @@ export interface Filters {
   hideRejected: boolean;
   stages: string[]; // 空 = 全部
   favOnly: boolean; // 只看收藏(有 stage 的)
-  /** 公車直達通勤上限(分);算的地點見 commutePlaces。沒直達的房源會被濾掉 */
+  /** 通勤上限(分,公車 + 捷運轉乘一次內);算的地點見 commutePlaces。搭不到的房源會被濾掉 */
   commuteMax: number | null;
   commutePlaces: number[]; // 空 = 我的全部地點(每個都要在上限內)
   /** 列表排序 */
@@ -105,7 +105,7 @@ export interface CommuteCtx {
   placeIds: number[];
 }
 
-/** 這間房到「要算的地點」裡最久的那個(分);任何一個沒直達 → null;沒資料 → undefined */
+/** 這間房到「要算的地點」裡最久的那個(分);任何一個搭不到 → null;沒資料 → undefined */
 export function worstCommute(p: PropertySummary, f: Filters, ctx: CommuteCtx | undefined): number | null | undefined {
   if (!ctx?.matrix || ctx.placeIds.length === 0) return undefined;
   const ids = f.commutePlaces.filter((id) => ctx.placeIds.includes(id));
@@ -153,7 +153,7 @@ export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx
   return items; // API 已經依更新時間排好
 }
 
-/** 排序用:先比「幾個地點沒有直達」(少的在前),再比有直達的地點裡最久的分鐘。全部沒直達 / 沒座標排最後 */
+/** 排序用:先比「幾個地點搭不到」(少的在前),再比搭得到的地點裡最久的分鐘。全部搭不到 / 沒座標排最後 */
 function commuteSortKey(p: PropertySummary, f: Filters, ctx?: CommuteCtx): number {
   if (!ctx?.matrix || ctx.placeIds.length === 0) return 0;
   const ids = f.commutePlaces.filter((id) => ctx.placeIds.includes(id));

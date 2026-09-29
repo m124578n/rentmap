@@ -5,6 +5,7 @@ import { ExternalLink, Maximize2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { SOURCE_LABEL, type Source } from "@shared/constants";
 import { BusSection } from "@/features/bus/BusSection";
+import { CommuteSection } from "@/features/commute/CommuteSection";
 import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
 
@@ -95,7 +96,12 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         </p>
       )}
 
-      {p.lat != null && p.lng != null && <BusSection key={id} lat={p.lat} lng={p.lng} propertyId={id} onOverlay={onBusOverlay} />}
+      {p.lat != null && p.lng != null && (
+        <>
+          <CommuteSection key={`c${id}`} lat={p.lat} lng={p.lng} propertyId={id} onOverlay={onBusOverlay} />
+          <BusSection key={`b${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />
+        </>
+      )}
 
       {main && (
         <section className="text-sm">

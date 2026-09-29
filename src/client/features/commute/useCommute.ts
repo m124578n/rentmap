@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import type { CommuteCtx } from "@/lib/filters";
 import { usePlaces } from "@/features/places/places";
 
-/** 所有房源 × 我的地點 的公車直達通勤;沒有地點就不查 */
+/** 所有房源 × 我的地點 的通勤(公車 + 捷運,轉乘一次內);沒有地點就不查 */
 export function useCommute() {
   const places = usePlaces();
   const list = places.data?.items ?? [];

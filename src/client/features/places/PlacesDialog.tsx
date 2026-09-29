@@ -42,7 +42,7 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
             <X size={18} />
           </button>
         </div>
-        <p className="mb-3 text-sm text-neutral-500">存公司(或常去的地方)的地址,房源就能算通勤:哪些公車直達、要多久。</p>
+        <p className="mb-3 text-sm text-neutral-500">存公司(或常去的地方)的地址,房源就能算通勤:搭公車、捷運(轉乘一次內)要多久。</p>
 
         {editing ? (
           <PlaceForm

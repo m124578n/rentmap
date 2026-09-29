@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
-import { setBusOverlay, type BusOverlay } from "./busLayer";
+import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 
 interface Props {
   items: PropertySummary[];
@@ -115,7 +115,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     setBusOverlay(map, busOverlay, themeRef.current);
-    const pts = busOverlay?.segment ?? busOverlay?.shape;
+    const pts = busOverlay ? overlayPoints(busOverlay) : null;
     if (!pts || pts.length < 2) return;
     const b = new maplibregl.LngLatBounds();
     for (const p of pts) b.extend(p);

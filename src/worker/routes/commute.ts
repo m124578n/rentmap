@@ -1,99 +1,67 @@
 /**
- * 所有房源 × 我的每個地點的公車直達通勤(需登入):
- *   GET /api/commute?radius=400  → CommuteMatrix
+ * 通勤(需登入;公車 + 捷運,最多轉乘一次,見 transit/plan.ts):
+ *   GET /api/commute?radius=400                  所有房源 × 我的每個地點,最快的一種(精簡版,列表 / 篩選用)
+ *   GET /api/commute/trips?lat=&lng=&place_id=&radius=400
+ *                                                一個點到一個地點:每種搭法最快的 + 公車直達前三條(面板用)
  *
- * 不對每間房各查一次(房源上千間),而是對每個地點:
- *   1. 找地點 500m 內的站 → 哪些路線方向到得了
- *   2. 一次撈出這些路線方向「在下車站之前」的所有站
- *   3. 站丟進網格,每間房只看附近格子裡半徑內的站 → directOptions
- * 查詢數 ≈ 地點數 × (1 + 路線數/90 × 2),和房源數無關。
+ * 每個地點算一次「從目的地往回」的標記,之後每間房只看走得到的站,所以跟房源數幾乎無關。
+ * 公車資料整份在記憶體(transit/network.ts);沒匯入公車時仍有捷運與步行。
  */
 import { Hono } from "hono";
-import { asc, eq } from "drizzle-orm";
-import { haversine, summarizeDay, type CommuteBest, type CommuteMatrix, type DaySummary } from "@shared/bus";
+import { and, asc, eq } from "drizzle-orm";
+import type { CommuteMatrix, TripsResponse } from "@shared/trip";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
 import { db, schema } from "../db";
-import { directOptions, parseSchedule, routeMetas, stopsNear, type Hit, type StopRow } from "../busdata";
+import { loadBusNet } from "../transit/network";
+import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 
 export const commute = new Hono<AppEnv>();
 commute.use("/api/commute", requireUser());
+commute.use("/api/commute/*", requireUser());
 
-const DEST_RADIUS = 500;
+const radiusOf = (v: string | undefined) => Math.min(1000, Math.max(100, Number(v) || 400));
 
 commute.get("/api/commute", async (c) => {
-  const radius = Math.min(1000, Math.max(100, Number(c.req.query("radius")) || 400));
-  const DB = c.env.DB;
-  const d = db(DB);
+  const radius = radiusOf(c.req.query("radius"));
+  const d = db(c.env.DB);
   const places = await d
-    .select({ id: schema.myPlaces.id, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
     .orderBy(asc(schema.myPlaces.id));
   const props = (await d.select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng }).from(schema.properties)).filter(
     (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
   );
-  const hasBus = (await DB.prepare("SELECT 1 FROM bus_routes LIMIT 1").first()) != null;
+  const net = await loadBusNet(c.env.DB);
   const items: CommuteMatrix["items"] = {};
   for (const p of props) items[p.id] = {};
-
-  if (hasBus) {
-    for (const place of places) {
-      const destHits = await stopsNear(DB, place.lat, place.lng, DEST_RADIUS);
-      const maxSeq = new Map<string, number>();
-      for (const h of destHits) maxSeq.set(h.route_key, Math.max(maxSeq.get(h.route_key) ?? 0, h.seq));
-      const keys = [...maxSeq.keys()];
-      const metas = await routeMetas(DB, keys);
-      const summaries = new Map<string, DaySummary | null>();
-      for (const [k, m] of metas) summaries.set(k, summarizeDay(parseSchedule(m.schedule_json)?.wd));
-
-      // 這些路線方向在下車站之前的站,放進網格(一格邊長 ≥ 半徑,查 3×3 格就涵蓋)
-      const cell = radius / 100000;
-      const grid = new Map<string, StopRow[]>();
-      for (let i = 0; i < keys.length; i += 90) {
-        const chunk = keys.slice(i, i + 90);
-        const { results } = await DB.prepare(
-          `SELECT route_key, seq, name, lat, lng, dist_m, t_min FROM bus_route_stops WHERE route_key IN (${chunk.map(() => "?").join(",")})`,
-        )
-          .bind(...chunk)
-          .all<StopRow>();
-        for (const s of results) {
-          if (s.seq >= maxSeq.get(s.route_key)!) continue;
-          const g = `${Math.floor(s.lat / cell)}:${Math.floor(s.lng / cell)}`;
-          grid.set(g, [...(grid.get(g) ?? []), s]);
-        }
-      }
-
-      for (const p of props) {
-        const gy = Math.floor(p.lat / cell);
-        const gx = Math.floor(p.lng / cell);
-        const home: Hit[] = [];
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++)
-            for (const s of grid.get(`${gy + dy}:${gx + dx}`) ?? []) {
-              const dist = haversine(p.lat, p.lng, s.lat, s.lng);
-              if (dist <= radius) home.push({ ...s, distance_m: Math.round(dist) });
-            }
-        const opts = home.length ? directOptions(home, destHits, metas, summaries) : [];
-        const b = opts[0];
-        items[p.id]![place.id] = b
-          ? {
-              total_min: b.total_min,
-              name: b.name,
-              to_name: b.to_name,
-              board: b.board.name,
-              board_walk: b.board.walk_min,
-              alight: b.alight.name,
-              alight_walk: b.alight.walk_min,
-              ride_min: b.ride_min,
-              wait_min: b.wait_min,
-              stops: b.stops,
-              others: [...new Set(opts.slice(1).map((o) => o.name))].filter((n) => n !== b.name).slice(0, 3),
-            }
-          : null;
-      }
+  for (const place of places) {
+    const plan = buildPlan(net, place);
+    for (const p of props) {
+      const t = bestTrip(plan, p.lat, p.lng, radius);
+      items[p.id]![place.id] = t ? { kind: t.kind, total_min: t.total_min, transfers: t.transfers, summary: t.summary } : null;
     }
   }
-  const body: CommuteMatrix = { radius, has_bus: hasBus, items };
+  const body: CommuteMatrix = { radius, has_bus: net.version != null, items };
+  return c.json(body);
+});
+
+commute.get("/api/commute/trips", async (c) => {
+  const lat = Number(c.req.query("lat"));
+  const lng = Number(c.req.query("lng"));
+  const placeId = Number(c.req.query("place_id"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isInteger(placeId)) return c.json({ error: "lat, lng, place_id required" }, 400);
+  const [place] = await db(c.env.DB)
+    .select({ name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+    .from(schema.myPlaces)
+    .where(and(eq(schema.myPlaces.id, placeId), eq(schema.myPlaces.userId, c.get("user").id)));
+  if (!place) return c.json({ error: "place not found" }, 404);
+  const net = await loadBusNet(c.env.DB);
+  const plan = buildPlan(net, place);
+  const trips = candidates(plan, lat, lng, radiusOf(c.req.query("radius")), 3)
+    .map((x) => buildTrip(plan, x))
+    .sort((a, b) => a.total_min - b.total_min);
+  const body: TripsResponse = { has_bus: net.version != null, trips };
   return c.json(body);
 });

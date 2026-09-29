@@ -125,7 +125,7 @@ function CommuteChip({ f, hasPlaces }: { f: Filters; hasPlaces: boolean }) {
   return (
     <label
       className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 dark:border-neutral-700"}`}
-      title="公車直達(走路 + 等車 + 坐車),沒有直達的房源會被濾掉"
+      title="公車 + 捷運、轉乘一次內的最快搭法(含走路與等車);搭不到的房源會被濾掉"
     >
       <Bus size={12} /> 通勤
       <select
