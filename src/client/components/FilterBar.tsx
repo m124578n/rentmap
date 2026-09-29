@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bus, ChevronDown, Route, SlidersHorizontal, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAlong } from "@/features/bus/useAlong";
+import { openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { activeCount, resetFilters, setFilters, useFilters, type Filters } from "@/lib/filters";
 import { DISTRICTS, STAGES, STAGE_LABEL } from "@shared/constants";
 import type { Place } from "@shared/schemas";
@@ -37,6 +38,7 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         {/* 手機:chip 一行左右滑;桌機:換行 */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&>*]:shrink-0">
         {places.isSuccess && <CommuteChip f={f} hasPlaces={placeList.length > 0} places={placeList} open={commuteOpen} onToggle={() => setCommuteOpen(!commuteOpen)} />}
+        <FitChip f={f} />
         <button
           onClick={() => setAlongOpen(!alongOpen)}
           className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${f.alongRoutes.length ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`}
@@ -218,6 +220,31 @@ function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** 符合需求:設了需求 → 切換「隱藏不符(紅)」+ 齒輪改需求;沒設 → 設定入口 */
+function FitChip({ f }: { f: Filters }) {
+  const { configured, loaded } = useFit();
+  if (!loaded) return null;
+  if (!configured)
+    return (
+      <button
+        onClick={openRequirementsDialog}
+        className="flex items-center gap-1 rounded-full border border-dashed border-emerald-500 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950"
+      >
+        <SlidersHorizontal size={12} /> 設定需求
+      </button>
+    );
+  return (
+    <span className={`flex items-center rounded-full border text-xs ${f.fitOnly ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 dark:border-neutral-700"}`}>
+      <button onClick={() => setFilters({ fitOnly: !f.fitOnly })} className="py-1 pl-2.5" title="隱藏不符需求(紅)的房源">
+        符合需求
+      </button>
+      <button onClick={openRequirementsDialog} className="px-1.5 py-1 opacity-80 hover:opacity-100" aria-label="調整需求">
+        <SlidersHorizontal size={12} />
+      </button>
+    </span>
   );
 }
 

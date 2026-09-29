@@ -18,6 +18,7 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 ```
 src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是地圖(CARTO 底圖、捷運圖層、價格標記)
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
+              features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算

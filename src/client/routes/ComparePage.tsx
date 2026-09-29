@@ -13,6 +13,8 @@ import { useMarket } from "@/features/market/useMarket";
 import { MarketBadge } from "@/features/market/MarketSection";
 import { ageOf, fmtMoney, priceOf } from "@/features/listing/age";
 import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/compare/compare";
+import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
+import { FIT_DIM_LABEL } from "@shared/fit";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
 interface Cell {
@@ -61,6 +63,7 @@ export function ComparePage() {
   const go = useCommute("go");
   const back = useCommute("back");
   const f = useFilters();
+  const fit = useFit();
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
   const props = ids.map((id) => byId.get(id)).filter((p): p is PropertySummary => !!p);
 
@@ -82,6 +85,54 @@ export function ComparePage() {
 
   const mk = (id: number) => market.data?.items[id];
   const groups: { title: string; rows: Row[] }[] = [
+    {
+      title: "需求",
+      rows: fit.configured
+        ? [
+            {
+              label: "符合度",
+              better: "high",
+              cells: props.map((p) => {
+                const r = fit.fitOf(p);
+                if (!r) return { node: dash, v: null };
+                return {
+                  node: (
+                    <>
+                      <FitBadge f={r} />
+                      {r.fails.map((x) => (
+                        <div key={x} className="text-[11px] text-red-600 dark:text-red-400">
+                          {x}
+                        </div>
+                      ))}
+                      {!r.fails.length && r.dims.length > 0 && (
+                        <div className="text-[11px] text-neutral-500">
+                          {r.dims.map((d) => `${FIT_DIM_LABEL[d.key]} ${Math.round(d.score * 100)}`).join(" · ")}
+                        </div>
+                      )}
+                    </>
+                  ),
+                  // 不符的一律最低,其他比分數
+                  v: r.fails.length ? -1 : (r.score ?? 1),
+                };
+              }),
+            },
+          ]
+        : [
+            {
+              label: "符合度",
+              cells: props.map((_, i) => ({
+                node:
+                  i === 0 ? (
+                    <button onClick={openRequirementsDialog} className="text-xs text-emerald-700 underline dark:text-emerald-400">
+                      設定需求就能比符合度
+                    </button>
+                  ) : (
+                    ""
+                  ),
+              })),
+            },
+          ],
+    },
     {
       title: "價格",
       rows: [

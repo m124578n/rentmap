@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/useTheme";
 import { applyFilters, useFilters, worstCommute } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
+import { FIT_COLOR, useFit } from "@/features/fit/fit";
 import { FilterBar } from "@/components/FilterBar";
 import { MapView } from "@/features/map/MapView";
 import { useMrt } from "@/features/map/mrt";
@@ -42,13 +43,18 @@ export function MapPage() {
   const all = q.data?.items ?? [];
   const commute = useCommute();
   const along = useAlong();
-  const items = useMemo(() => applyFilters(all, filters, commute.ctx, along.ids), [all, filters, commute.ctx, along.ids]);
+  const fit = useFit();
+  const fitOf = fit.configured ? fit.fitOf : undefined;
+  const items = useMemo(() => applyFilters(all, filters, commute.ctx, along.ids, fitOf), [all, filters, commute.ctx, along.ids, fitOf]);
   const [colorMode, setColorMode] = useColorMode();
+  const modes: ColorMode[] = ["stage", ...(commute.places.length ? (["commute"] as const) : []), ...(fit.configured ? (["fit"] as const) : [])];
   const byCommute = colorMode === "commute" && commute.places.length > 0;
-  const colorOf = useMemo(
-    () => (byCommute ? (p: PropertySummary) => commuteColor(worstCommute(p, filters, commute.ctx)) : undefined),
-    [byCommute, filters, commute.ctx],
-  );
+  const byFit = colorMode === "fit" && fit.configured;
+  const colorOf = useMemo(() => {
+    if (byCommute) return (p: PropertySummary) => commuteColor(worstCommute(p, filters, commute.ctx));
+    if (byFit && fitOf) return (p: PropertySummary) => { const r = fitOf(p); return r ? FIT_COLOR[r.level] : undefined; };
+    return undefined;
+  }, [byCommute, byFit, fitOf, filters, commute.ctx]);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
   const panelOpen = selectedId != null;
 
@@ -90,20 +96,36 @@ export function MapPage() {
               ,或在終端機 <code>npm run collect -- add &lt;591網址&gt;</code>
             </div>
           )}
-          {commute.places.length > 0 && (
+          {modes.length > 1 && (
             <div className={`absolute left-3 z-[5] rounded-lg border border-neutral-200 bg-white/95 px-2 py-1.5 text-xs shadow-sm dark:border-neutral-800 dark:bg-neutral-900/95 ${noCoords > 0 ? "top-10" : "top-3"}`}>
               <div className="flex gap-1">
                 <span className="self-center text-neutral-500">標記顏色</span>
-                {(["stage", "commute"] as const).map((m) => (
+                {modes.map((m) => (
                   <button
                     key={m}
                     onClick={() => setColorMode(m)}
                     className={`rounded px-1.5 py-0.5 ${colorMode === m ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
                   >
-                    {m === "stage" ? "找房狀態" : "通勤時間"}
+                    {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
                   </button>
                 ))}
               </div>
+              {byFit && (
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                  {(
+                    [
+                      ["符合", FIT_COLOR.green],
+                      ["普通", FIT_COLOR.yellow],
+                      ["不符", FIT_COLOR.red],
+                    ] as const
+                  ).map(([label, c]) => (
+                    <span key={label} className="flex items-center gap-1">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
               {byCommute && (
                 <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
                   {COMMUTE_LEGEND.map(([label, c]) => (
@@ -148,14 +170,15 @@ function commuteColor(min: number | null | undefined): string | undefined {
   return min <= 20 ? "#059669" : min <= 30 ? "#65a30d" : min <= 45 ? "#d97706" : "#dc2626";
 }
 
-type ColorMode = "stage" | "commute";
+type ColorMode = "stage" | "commute" | "fit";
 const COLOR_KEY = "rentmap.markerColor";
 
 /** 標記上色方式:這台瀏覽器的偏好 */
 function useColorMode(): [ColorMode, (m: ColorMode) => void] {
   const [mode, setMode] = useState<ColorMode>(() => {
     try {
-      return localStorage.getItem(COLOR_KEY) === "commute" ? "commute" : "stage";
+      const v = localStorage.getItem(COLOR_KEY);
+      return v === "commute" || v === "fit" ? v : "stage";
     } catch {
       return "stage";
     }

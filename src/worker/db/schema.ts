@@ -199,6 +199,15 @@ export const myPlaces = sqliteTable(
   (t) => [index("my_places_user_idx").on(t.userId)],
 );
 
+/** 找房需求(M6 符合度;一人一份,整份 JSON 見 src/shared/fit.ts 的 Requirements) */
+export const userRequirements = sqliteTable("user_requirements", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  json: text("json").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 /**
  * 內政部租賃實價登錄(雙北,參考資料)。採集機 `collect -- rent-stats` 匯入,serial = 實價登錄編號(重匯同一筆覆蓋)。
  * 行情計算見 src/shared/market.ts;social(社宅包租代管)與 has_parking(含車位)預設不列入。
