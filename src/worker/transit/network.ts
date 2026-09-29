@@ -2,15 +2,15 @@
  * 公車網路整份放進 Worker 記憶體(雙北約數萬個「路線 × 站」),以 bus_routes 的 version 為快取鍵:
  * 同一個 isolate 只在公車資料重新匯入後重讀一次。轉乘要看「任何路線在任何站附近」,逐次查 D1 太多次。
  */
-import { BUS_M_PER_MIN, summarizeDay, type DaySummary } from "@shared/bus";
-import { parseSchedule, waitMin } from "../busdata";
+import { BUS_M_PER_MIN, type Schedule } from "@shared/bus";
+import { parseSchedule } from "../busdata";
 
 export interface BusRoute {
   key: string;
   name: string;
   toName: string | null;
-  wait: number;
-  wd: DaySummary | null;
+  /** 班表(等車依時段在 plan.ts 算) */
+  schedule: Schedule | null;
   /** 這條路線方向的站在 stop 陣列中的範圍 [start, end),依站序 */
   start: number;
   end: number;
@@ -86,9 +86,8 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
   const routes: BusRoute[] = [];
   const routeIdx = new Map<string, number>();
   for (const r of rrows) {
-    const wd = summarizeDay(parseSchedule(r.schedule_json)?.wd);
     routeIdx.set(r.key, routes.length);
-    routes.push({ key: r.key, name: r.name, toName: r.to_name, wait: waitMin(wd), wd, start: 0, end: 0 });
+    routes.push({ key: r.key, name: r.name, toName: r.to_name, schedule: parseSchedule(r.schedule_json), start: 0, end: 0 });
   }
   const n = srows.length;
   const net: BusNet = {
@@ -120,10 +119,6 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
       net.sT[k] = exact ? s.t_min! : s.dist_m / BUS_M_PER_MIN;
       net.sExact[k] = exact ? 1 : 0;
       net.sName[k] = s.name;
-      const g = cellKey(Math.floor(s.lat / CELL), Math.floor(s.lng / CELL));
-      const cell = net.grid.get(g);
-      if (cell) cell.push(k);
-      else net.grid.set(g, [k]);
     }
     if (ri != null) {
       routes[ri]!.start = i;
@@ -131,6 +126,55 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
     }
     i = j;
   }
+  buildGrid(net);
   cache = net;
   return net;
+}
+
+function buildGrid(net: BusNet) {
+  net.grid = new Map();
+  for (let k = 0; k < net.sLat.length; k++) {
+    const g = cellKey(Math.floor(net.sLat[k]! / CELL), Math.floor(net.sLng[k]! / CELL));
+    const cell = net.grid.get(g);
+    if (cell) cell.push(k);
+    else net.grid.set(g, [k]);
+  }
+}
+
+let revCache: { src: BusNet; net: BusNet } | null = null;
+
+/**
+ * 反方向網路(下班「地點 → 住處」用):每條路線方向的站序倒過來、sT 改成「從終點往回」,
+ * 這樣「從目的地往回算」的 plan.ts 拿住處當目的地就等於正向從地點出發;算完的行程在 plan.ts 翻回來。
+ * 路線本身(key、名稱、班表)不變,sSeq 保留原本的站序。
+ */
+export function reverseNet(net: BusNet): BusNet {
+  if (revCache?.src === net) return revCache.net;
+  const n = net.sLat.length;
+  const rev: BusNet = {
+    ...net,
+    sRoute: net.sRoute.slice(),
+    sSeq: net.sSeq.slice(),
+    sLat: net.sLat.slice(),
+    sLng: net.sLng.slice(),
+    sT: net.sT.slice(),
+    sExact: net.sExact.slice(),
+    sName: net.sName.slice(),
+    grid: new Map(),
+  };
+  for (const r of net.routes) {
+    if (r.end <= r.start) continue;
+    const last = net.sT[r.end - 1]!;
+    for (let k = r.start; k < r.end; k++) {
+      const j = r.start + r.end - 1 - k;
+      rev.sSeq[j] = net.sSeq[k]!;
+      rev.sLat[j] = net.sLat[k]!;
+      rev.sLng[j] = net.sLng[k]!;
+      rev.sT[j] = last - net.sT[k]!;
+      rev.sName[j] = net.sName[k]!;
+    }
+  }
+  if (n) buildGrid(rev);
+  revCache = { src: net, net: rev };
+  return rev;
 }

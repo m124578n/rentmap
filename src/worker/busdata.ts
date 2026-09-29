@@ -67,10 +67,3 @@ export function parseSchedule(raw: string | null): Schedule | null {
 }
 
 export const toStop = (h: Hit): NearbyStop => ({ name: h.name, seq: h.seq, lat: h.lat, lng: h.lng, distance_m: h.distance_m, walk_min: walkMin(h.distance_m) });
-
-/** 平均等車 = 平日班距中間值的一半(先看尖峰,再看離峰),沒資料當 10 分 */
-export function waitMin(s: DaySummary | null) {
-  const h = s?.peak ?? s?.offpeak;
-  if (!h) return 10;
-  return Math.min(30, Math.max(1, Math.round((h[0] + h[1]) / 4)));
-}

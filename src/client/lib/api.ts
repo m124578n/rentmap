@@ -1,6 +1,6 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 import type { BusRouteDetail, NearbyBusResponse } from "@shared/bus";
-import type { CommuteMatrix, TripsResponse } from "@shared/trip";
+import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
   constructor(
@@ -39,9 +39,9 @@ export const api = {
   busNearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyBusResponse>(`/api/bus/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
 
-  commute: (radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}`),
-  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number }) =>
-    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}`),
+  commute: (when: CommuteWhen, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}`),
+  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen }) =>
+    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),

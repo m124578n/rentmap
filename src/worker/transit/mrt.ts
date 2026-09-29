@@ -7,7 +7,7 @@
  */
 import mrtJson from "../../../public/mrt.json";
 import mrtTimes from "../../../public/mrt-times.json";
-import { haversine } from "@shared/bus";
+import { haversine, type DayType } from "@shared/bus";
 import { mrtPairKey } from "@shared/trip";
 
 interface RawStation {
@@ -49,9 +49,23 @@ export interface MrtGraph {
 const SPEED_M_PER_MIN: Record<string, number> = { V: 330, K: 330, LB: 450, A: 800 };
 const DWELL: Record<string, number> = { A: 0.8 };
 export const MRT_TRANSFER_MIN = 4;
-/** 上車平均等車(半個班距) */
-export function mrtWait(line: string) {
-  return line === "V" || line === "K" ? 7 : line === "LB" ? 5 : line === "A" ? 6 : 3;
+/** 班距(分):[平日尖峰, 離峰 / 假日, 23 點後];大約值,依北捷公告的班距區間取中間 */
+const MRT_HEADWAY: Record<string, [number, number, number]> = {
+  V: [15, 15, 20],
+  K: [15, 15, 20],
+  LB: [10, 12, 15],
+  A: [12, 15, 15],
+  Y: [6, 10, 12],
+};
+const MRT_HEADWAY_DEFAULT: [number, number, number] = [5, 7, 12];
+
+/** 上車平均等車(半個班距);t = 出發時刻(分)。00:00–06:00 沒營運 → Infinity */
+export function mrtWait(line: string, day: DayType = "wd", t = 8 * 60) {
+  const m = ((t % 1440) + 1440) % 1440;
+  if (m < 6 * 60) return Infinity;
+  const [peak, off, late] = MRT_HEADWAY[line] ?? MRT_HEADWAY_DEFAULT;
+  const isPeak = day === "wd" && ((m >= 7 * 60 && m < 9 * 60) || (m >= 17 * 60 && m < 19 * 60 + 30));
+  return Math.round((m >= 23 * 60 ? late : isPeak ? peak : off) / 2);
 }
 /** 支線 / 編號不連續的接點 */
 const JOINS: [string, string][] = [

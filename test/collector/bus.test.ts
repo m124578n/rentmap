@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BusRouteIn, BusStopIn, summarizeDay } from "../../src/shared/bus";
+import { BusRouteIn, BusStopIn, serviceWait, summarizeDay, walkMin } from "../../src/shared/bus";
 import { buildSchedule, cleanRouteName, parseWkt, pickShape, simplify, transformCity, type TdxCity } from "../../collector/bus/transform";
 
 const data = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "fixtures", "tdx-mini.json"), "utf8")) as TdxCity;
@@ -79,6 +79,23 @@ describe("helpers", () => {
     expect(pickShape(undefined, [main, short], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.6, 25]]);
     expect(pickShape(undefined, [main], at(121.5), at(121.56))).toEqual([]);
     expect(pickShape(short, [main], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.53, 25]]);
+  });
+  it("serviceWait: 依時段的班距,沒車回 null", () => {
+    const bands = { wd: { bands: [{ s: "06:00", e: "09:00", min: 4, max: 8 }, { s: "09:00", e: "22:00", min: 10, max: 20 }] } };
+    expect(serviceWait(bands, "wd", 8 * 60)).toBe(3);
+    expect(serviceWait(bands, "wd", 14 * 60)).toBe(8);
+    expect(serviceWait(bands, "wd", 22 * 60 + 20)).toBe(8); // 起點 22:00 最後一班,開到這站還來得及
+    expect(serviceWait(bands, "wd", 23 * 60 + 30)).toBeNull();
+    expect(serviceWait(bands, "sat", 8 * 60)).toBeNull();
+    expect(serviceWait(null, "wd", 8 * 60)).toBeUndefined();
+    const deps = { sun: { deps: ["07:00", "07:30", "08:00", "08:30", "20:00"] } };
+    expect(serviceWait(deps, "sun", 8 * 60)).toBe(15);
+    expect(serviceWait(deps, "sun", 20 * 60)).toBe(30); // 前後只有一班
+    expect(serviceWait(deps, "sun", 12 * 60)).toBeNull();
+  });
+  it("walkMin 含紅綠燈", () => {
+    expect(walkMin(0)).toBe(1);
+    expect(walkMin(400)).toBe(8); // 520m 沿街 6.5 分 + 約 1 分等燈
   });
   it("parseWkt + simplify drops collinear points", () => {
     const pts = parseWkt("LINESTRING(121.5 25.0, 121.5005 25.0, 121.501 25.0, 121.501 25.001)");

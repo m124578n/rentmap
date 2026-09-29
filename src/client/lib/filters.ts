@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
-import type { CommuteMatrix } from "@shared/trip";
+import type { DayType } from "@shared/bus";
+import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
 import { ageOf, priceOf } from "@/features/listing/age";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
@@ -22,6 +23,10 @@ export interface Filters {
   /** 通勤上限(分,公車 + 捷運轉乘一次內);算的地點見 commutePlaces。搭不到的房源會被濾掉 */
   commuteMax: number | null;
   commutePlaces: number[]; // 空 = 我的全部地點(每個都要在上限內)
+  /** 列表 / 地圖 / 篩選看上班還是下班(兩個分開看,上下班路線常不一樣) */
+  commuteSide: CommuteSide;
+  /** 上班、下班各自的日子與出發時間(方向固定:上班 住處 → 地點,下班 地點 → 住處) */
+  commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
   /** 列表排序 */
   sort: SortKey;
 }
@@ -45,6 +50,11 @@ export const EMPTY: Filters = {
   newOnly: false,
   commuteMax: null,
   commutePlaces: [],
+  commuteSide: "go",
+  commuteTimes: {
+    go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
+    back: { day: COMMUTE_DEFAULT.back.day, time: COMMUTE_DEFAULT.back.time },
+  },
   sort: "updated",
 };
 
@@ -72,8 +82,14 @@ export function setFilters(patch: Partial<Filters>) {
   listeners.forEach((l) => l());
 }
 
+/** 清除篩選;排序與上下班時間是設定,不跟著清 */
 export function resetFilters() {
-  setFilters({ ...EMPTY, sort: current.sort });
+  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes });
+}
+
+/** 某一邊(上班 / 下班)的完整時段 */
+export function whenOf(f: Filters, side: CommuteSide = f.commuteSide): CommuteWhen {
+  return { ...f.commuteTimes[side], dir: COMMUTE_DEFAULT[side].dir };
 }
 
 export function useFilters(): Filters {

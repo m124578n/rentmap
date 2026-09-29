@@ -3,6 +3,8 @@ import { Bus, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { activeCount, resetFilters, setFilters, useFilters, type Filters } from "@/lib/filters";
 import { DISTRICTS, STAGES, STAGE_LABEL } from "@shared/constants";
 import type { Place } from "@shared/schemas";
+import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
+import { COMMUTE_SIDE_LABEL, type CommuteSide } from "@shared/trip";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
@@ -121,22 +123,51 @@ function CommuteChip({ f, hasPlaces, places, open, onToggle }: { f: Filters; has
   const on = f.commuteMax != null;
   const picked = places.filter((p) => f.commutePlaces.includes(p.id));
   const who = places.length > 1 && picked.length > 0 && picked.length < places.length ? `(${picked.map((p) => p.name).join("、")})` : "";
+  const side = COMMUTE_SIDE_LABEL[f.commuteSide];
   return (
     <button
       onClick={onToggle}
       className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`}
-      title="公車 + 捷運、轉乘一次內的最快搭法(含走路與等車);搭不到的房源會被濾掉"
+      title="公車 + 捷運、轉乘一次內的最快搭法(含走路、紅綠燈與那個時段的等車);搭不到的房源會被濾掉"
     >
-      <Bus size={12} /> 通勤{on ? ` ≤ ${f.commuteMax} 分${who}` : ""}
+      <Bus size={12} /> {side}
+      {on ? ` ≤ ${f.commuteMax} 分${who}` : ` ${f.commuteTimes[f.commuteSide].time}`}
       <ChevronDown size={12} className={open ? "rotate-180" : ""} />
     </button>
   );
 }
 
-/** 通勤條件:上限分鐘 + 要算哪些地點(多個地點時每個都要在上限內) */
+/** 通勤條件:看上班或下班(各自的日子、出發時間)+ 上限分鐘 + 要算哪些地點(多個地點時每個都要在上限內) */
 function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
+  const cur = f.commuteTimes[f.commuteSide];
+  const setTime = (patch: Partial<{ day: DayType; time: string }>) =>
+    setFilters({ commuteTimes: { ...f.commuteTimes, [f.commuteSide]: { ...cur, ...patch } } });
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800">
+      <div className="flex flex-wrap items-center gap-1">
+        {(["go", "back"] as CommuteSide[]).map((s) => (
+          <Chip key={s} small on={f.commuteSide === s} onClick={() => setFilters({ commuteSide: s })}>
+            {COMMUTE_SIDE_LABEL[s]} {DAY_LABEL[f.commuteTimes[s].day]} {f.commuteTimes[s].time}
+          </Chip>
+        ))}
+        <span className="text-neutral-400">{f.commuteSide === "go" ? "住處 → 地點" : "地點 → 住處"}</span>
+        <select className="input !w-auto !py-0.5 text-xs" value={cur.day} onChange={(e) => setTime({ day: e.target.value as DayType })} aria-label="日子">
+          {DAY_TYPES.map((d) => (
+            <option key={d} value={d}>
+              {DAY_LABEL[d]}
+            </option>
+          ))}
+        </select>
+        <input
+          type="time"
+          className="input !w-auto !py-0.5 text-xs"
+          value={cur.time}
+          step={600}
+          onChange={(e) => e.target.value && setTime({ time: e.target.value })}
+          aria-label="出發時間"
+        />
+        <span className="text-neutral-400">出發</span>
+      </div>
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-neutral-500">通勤上限</span>
         <Chip small on={f.commuteMax == null} onClick={() => setFilters({ commuteMax: null })}>

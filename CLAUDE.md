@@ -20,7 +20,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
-              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算
+              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算
 src/shared/   Zod schema 與常數,前後端共用
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
