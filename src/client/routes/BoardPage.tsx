@@ -7,6 +7,7 @@ import type { PropertySummary } from "@shared/schemas";
 import { STAGES, STAGE_LABEL, type Stage } from "@shared/constants";
 import { useCommute } from "@/features/commute/useCommute";
 import { CommuteLines } from "@/features/commute/CommuteLines";
+import { ListingBadges } from "@/features/listing/ListingBadges";
 
 /** 找房看板:收藏的房源依狀態分欄,拖曳換狀態(原生 HTML5 DnD,手機用卡片上的「移到」選單)。 */
 export function BoardPage() {
@@ -138,6 +139,9 @@ function Card({ p, onDragStart, onMove, commute }: { p: PropertySummary; onDragS
           ))}
         </p>
       )}
+      <div className="mt-1">
+        <ListingBadges p={p} />
+      </div>
       {commute}
       {p.fav_note && <p className="mt-1 line-clamp-2 text-xs text-neutral-600 dark:text-neutral-400">{p.fav_note}</p>}
       {p.listing_status === "removed" && <p className="mt-1 text-xs text-red-600">已下架</p>}

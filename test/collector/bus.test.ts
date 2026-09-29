@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BusRouteIn, BusStopIn, summarizeDay } from "../../src/shared/bus";
-import { cleanRouteName, parseWkt, simplify, transformCity, type TdxCity } from "../../collector/bus/transform";
+import { BusRouteIn, BusStopIn, serviceWait, summarizeDay, walkMin } from "../../src/shared/bus";
+import { buildSchedule, cleanRouteName, parseWkt, pickShape, routeVariant, simplify, transformCity, type TdxCity } from "../../collector/bus/transform";
 
 const data = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "fixtures", "tdx-mini.json"), "utf8")) as TdxCity;
 const { routes, stops } = transformCity("Taipei", data);
@@ -63,6 +63,50 @@ describe("helpers", () => {
     expect(cleanRouteName("307去程")).toBe("307");
     expect(cleanRouteName("藍7(返)")).toBe("藍7");
     expect(cleanRouteName("307莒光")).toBe("307莒光");
+  });
+  it("buildSchedule: 台北一天一筆的 ServiceDay 不會讓平日班距重複", () => {
+    const day = (d: string) => ({ Sunday: 0, Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, Saturday: 0, [d]: 1 });
+    const f = (d: string) => ({ StartTime: "06:00", EndTime: "09:00", MinHeadwayMins: 5, MaxHeadwayMins: 8, ServiceDay: day(d) });
+    const { schedule } = buildSchedule([{ RouteUID: "X", Frequencys: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(f) }]);
+    expect(schedule!.wd!.bands).toEqual([{ s: "06:00", e: "09:00", min: 5, max: 8 }]);
+    expect(schedule!.sat!.bands).toHaveLength(1);
+  });
+  it("pickShape: 子路線沒自己的線形 → 挑端點對得上的候選,都對不上就不用", () => {
+    const main = { RouteUID: "R", Direction: 0, Geometry: "LINESTRING(121.50 25.00, 121.60 25.00)" };
+    const short = { RouteUID: "R", Direction: 0, Geometry: "LINESTRING(121.50 25.00, 121.53 25.00)" };
+    const at = (lng: number) => ({ PositionLat: 25, PositionLon: lng });
+    expect(pickShape(undefined, [main, short], at(121.5), at(121.53))).toEqual([[121.5, 25], [121.53, 25]]);
+    expect(pickShape(undefined, [main, short], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.6, 25]]);
+    expect(pickShape(undefined, [main], at(121.5), at(121.56))).toEqual([]);
+    expect(pickShape(short, [main], at(121.5), at(121.6))).toEqual([[121.5, 25], [121.53, 25]]);
+  });
+  it("routeVariant: 子路線名拆成說明", () => {
+    expect(routeVariant("307", "307莒光往撫遠街", "撫遠街")).toBe("莒光");
+    expect(routeVariant("307", "307莒光往板橋前站", "臺北客運板橋前站(藝文)")).toBe("莒光");
+    expect(routeVariant("紅5", "紅5往劍潭經文大", "劍潭")).toBe("往劍潭經文大");
+    expect(routeVariant("669", "669狗狗公車", null)).toBe("狗狗公車");
+    expect(routeVariant("12", "12返程半", null)).toBe("返程半");
+    expect(routeVariant("306", "306(三重)", null)).toBe("三重");
+    expect(routeVariant("279", "279路", null)).toBeNull();
+    expect(routeVariant("307", "307去程", null)).toBeNull();
+    expect(routeVariant("紅30", "紅30", null)).toBeNull();
+  });
+  it("serviceWait: 依時段的班距,沒車回 null", () => {
+    const bands = { wd: { bands: [{ s: "06:00", e: "09:00", min: 4, max: 8 }, { s: "09:00", e: "22:00", min: 10, max: 20 }] } };
+    expect(serviceWait(bands, "wd", 8 * 60)).toBe(3);
+    expect(serviceWait(bands, "wd", 14 * 60)).toBe(8);
+    expect(serviceWait(bands, "wd", 22 * 60 + 20)).toBe(8); // 起點 22:00 最後一班,開到這站還來得及
+    expect(serviceWait(bands, "wd", 23 * 60 + 30)).toBeNull();
+    expect(serviceWait(bands, "sat", 8 * 60)).toBeNull();
+    expect(serviceWait(null, "wd", 8 * 60)).toBeUndefined();
+    const deps = { sun: { deps: ["07:00", "07:30", "08:00", "08:30", "20:00"] } };
+    expect(serviceWait(deps, "sun", 8 * 60)).toBe(15);
+    expect(serviceWait(deps, "sun", 20 * 60)).toBe(30); // 前後只有一班
+    expect(serviceWait(deps, "sun", 12 * 60)).toBeNull();
+  });
+  it("walkMin 含紅綠燈", () => {
+    expect(walkMin(0)).toBe(1);
+    expect(walkMin(400)).toBe(8); // 520m 沿街 6.5 分 + 約 1 分等燈
   });
   it("parseWkt + simplify drops collinear points", () => {
     const pts = parseWkt("LINESTRING(121.5 25.0, 121.5005 25.0, 121.501 25.0, 121.501 25.001)");

@@ -40,3 +40,22 @@ export function shortLabel(displayName: string) {
     .filter((p) => p && p !== "臺灣" && p !== "Taiwan" && !/^\d{3,6}$/.test(p));
   return parts.slice(0, 5).reverse().join(" ");
 }
+
+/** 查詢字串裡最細的路名:「…390巷2弄」→「390巷2弄」前面的路 + 巷弄;「…復興南路一段」→「復興南路一段」 */
+export function roadOf(q: string): string | null {
+  const s = normalizeAddress(q).replace(/^(臺北市|新北市)?[^市]*?區/, "");
+  const m = /([^\d號樓]+?(?:路|街|大道)(?:[一二三四五六七八九十]段)?)((?:\d+巷)?(?:\d+弄)?)/.exec(s);
+  return m ? m[1]! + m[2]! : null;
+}
+
+/**
+ * Nominatim 常把附近的大路排第一(查「市府路」回「基隆路一段」)。
+ * 候選的第一段(路名)含查詢路名的排前面、不含的丟掉;全都不含就原樣回傳,免得什麼都沒有。
+ */
+export function rankHits<T extends { display_name: string }>(q: string, hits: T[]): T[] {
+  const road = roadOf(q);
+  if (!road) return hits;
+  const norm = (x: string) => x.replace(/台/g, "臺");
+  const ok = hits.filter((h) => norm(h.display_name.split(",")[0]!.trim()).includes(norm(road)));
+  return ok.length ? ok : hits;
+}

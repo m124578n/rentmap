@@ -1,4 +1,4 @@
-import { addressQueries, shortLabel, type AddressQuery } from "@shared/address";
+import { addressQueries, rankHits, shortLabel, type AddressQuery } from "@shared/address";
 
 export interface GeoHit {
   lat: number;
@@ -23,7 +23,8 @@ export async function searchAddress(input: string): Promise<GeoHit[]> {
     const p = new URLSearchParams({ format: "jsonv2", limit: "5", countrycodes: "tw", viewbox: VIEWBOX, bounded: "1", "accept-language": "zh-TW", q: aq.q });
     const res = await fetch(`https://nominatim.openstreetmap.org/search?${p}`);
     if (!res.ok) throw new Error(`地址搜尋失敗(${res.status})`);
-    const rows = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+    // Nominatim 常把附近的大路排第一,只留路名對得上的
+    const rows = rankHits(aq.q, (await res.json()) as { lat: string; lon: string; display_name: string }[]);
     if (rows.length) return rows.map((r) => ({ lat: Number(r.lat), lng: Number(r.lon), label: shortLabel(r.display_name), level: aq.level }));
   }
   return [];

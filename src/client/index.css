@@ -116,3 +116,8 @@ body {
 :root[data-theme="dark"] .rh-place {
   border-color: #111;
 }
+
+/* 降過價的房源:標記框線用綠色提醒 */
+.rh-marker.is-drop {
+  border-color: #34d399;
+}

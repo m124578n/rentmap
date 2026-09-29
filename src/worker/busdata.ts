@@ -19,6 +19,7 @@ export interface RouteMeta {
   key: string;
   route_uid: string;
   name: string;
+  variant: string | null;
   city: string;
   direction: number;
   from_name: string | null;
@@ -48,7 +49,7 @@ export async function routeMetas(DB: D1Database, keys: string[]): Promise<Map<st
   for (let i = 0; i < keys.length; i += 90) {
     const chunk = keys.slice(i, i + 90);
     const { results } = await DB.prepare(
-      `SELECT key, route_uid, name, city, direction, from_name, to_name, schedule_json FROM bus_routes WHERE key IN (${chunk.map(() => "?").join(",")})`,
+      `SELECT key, route_uid, name, variant, city, direction, from_name, to_name, schedule_json FROM bus_routes WHERE key IN (${chunk.map(() => "?").join(",")})`,
     )
       .bind(...chunk)
       .all<RouteMeta>();
@@ -67,10 +68,3 @@ export function parseSchedule(raw: string | null): Schedule | null {
 }
 
 export const toStop = (h: Hit): NearbyStop => ({ name: h.name, seq: h.seq, lat: h.lat, lng: h.lng, distance_m: h.distance_m, walk_min: walkMin(h.distance_m) });
-
-/** 平均等車 = 平日班距中間值的一半(先看尖峰,再看離峰),沒資料當 10 分 */
-export function waitMin(s: DaySummary | null) {
-  const h = s?.peak ?? s?.offpeak;
-  if (!h) return 10;
-  return Math.min(30, Math.max(1, Math.round((h[0] + h[1]) / 4)));
-}

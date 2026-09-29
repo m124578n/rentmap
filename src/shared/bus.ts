@@ -24,7 +24,8 @@ export type Schedule = z.infer<typeof Schedule>;
 export const BusRouteIn = z.object({
   key: z.string().min(1).max(80),
   route_uid: z.string().min(1).max(40),
-  name: z.string().min(1).max(60), // 顯示名(307、紅30、307莒光…)
+  name: z.string().min(1).max(60), // 主路線名(307、紅30);同名視為同一路
+  variant: z.string().max(80).nullable().optional(), // 子路線說明(莒光、經天母國中、返程半…),主線 null
   city: z.string().max(20),
   direction: z.number().int().min(0).max(2),
   from_name: z.string().max(60).nullable(),
@@ -74,6 +75,8 @@ export interface NearbyStop {
 export interface NearbyRouteDir {
   key: string;
   direction: number;
+  /** 子路線說明(莒光、區間…);主線 null */
+  variant: string | null;
   from_name: string | null;
   to_name: string | null;
   stop: NearbyStop;
@@ -100,6 +103,7 @@ export interface BusRouteDetail {
     key: string;
     route_uid: string;
     name: string;
+    variant: string | null;
     city: string;
     direction: number;
     from_name: string | null;
@@ -110,6 +114,16 @@ export interface BusRouteDetail {
   };
   stops: { seq: number; name: string; lat: number; lng: number; dist_m: number; t_min: number | null }[];
 }
+
+/** GET /api/bus/along:哪些房源走得到這些路線(任一條) */
+export interface AlongResponse {
+  radius: number;
+  /** 每個查詢字對到什麼:公車主路線名(幾個路線方向)、捷運線名,或都沒對到 */
+  queries: { q: string; kind: "bus" | "mrt" | null; label: string | null; dirs: number }[];
+  ids: number[];
+}
+/** 捷運線用的步行範圍(比公車寬,捷運站本來就比較疏) */
+export const ALONG_MRT_R = 800;
 
 // ---- 小工具 ----
 
@@ -123,7 +137,14 @@ export function haversine(lat1: number, lng1: number, lat2: number, lng2: number
 }
 
 /** 直線距離 → 步行分鐘(繞路係數 1.3、每分鐘 80m) */
-export const walkMin = (m: number) => Math.max(1, Math.round((m * 1.3) / 80));
+/**
+ * 走路分鐘:直線距離 × 1.3(沿街繞路)、每分鐘 80m,
+ * 另外算紅綠燈:平均每 300m(沿街)過一個有號誌的路口、平均等 0.6 分。
+ */
+export function walkMin(m: number) {
+  const path = m * 1.3;
+  return Math.max(1, Math.round(path / 80 + (path / 300) * 0.6));
+}
 
 /** 市區公車含停站平均約 14 km/h */
 export const BUS_M_PER_MIN = 233;
@@ -180,4 +201,38 @@ export function dayTypeOf(d: Date): DayType {
 export function fmtHeadway(h: [number, number] | null) {
   if (!h) return null;
   return h[0] === h[1] ? `${h[0]} 分` : `${h[0]}–${h[1]} 分`;
+}
+
+// ---- 依時段的等車 ----
+
+/** 看起點發車時刻的範圍:出發前 60 分 ~ 後 30 分(公車從起點開到你這站要一段時間,所以往前多看) */
+export const SERVICE_BEFORE = 60;
+export const SERVICE_AFTER = 30;
+const clampWait = (w: number) => Math.min(30, Math.max(1, Math.round(w)));
+
+/**
+ * 某種日子、某個時刻(分)搭這條路線的平均等車分鐘(班距一半,最多 30):
+ *   null      = 那段時間沒車(當天不開、還沒發車、已收班)
+ *   undefined = 這條路線沒有班表資料(呼叫端自己給預設)
+ */
+export function serviceWait(s: Schedule | null | undefined, day: DayType, t: number): number | null | undefined {
+  if (!s) return undefined;
+  const d = s[day];
+  if (!d || (!d.deps?.length && !d.bands?.length)) return null;
+  const lo = t - SERVICE_BEFORE;
+  const hi = t + SERVICE_AFTER;
+  if (d.deps?.length) {
+    const ts = d.deps
+      .map(toMin)
+      .filter((x) => x >= lo && x <= hi)
+      .sort((a, b) => a - b);
+    if (ts.length >= 2) return clampWait((ts[ts.length - 1]! - ts[0]!) / (ts.length - 1) / 2);
+    if (ts.length === 1) return clampWait((hi - lo) / 2);
+    if (!d.bands?.length) return null;
+  }
+  const hit = (d.bands ?? []).filter((b) => toMin(b.s) < hi && toMin(b.e) > lo && b.max > 0);
+  if (!hit.length) return null;
+  const dist = (b: Band) => (t < toMin(b.s) ? toMin(b.s) - t : t >= toMin(b.e) ? t - toMin(b.e) + 1 : 0);
+  const b = hit.reduce((x, y) => (dist(y) < dist(x) ? y : x));
+  return clampWait(((b.min || b.max) + b.max) / 4);
 }

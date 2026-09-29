@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Bus, ChevronDown, ChevronUp, Footprints, Route, TrainFront } from "lucide-react";
-import { TRIP_KIND_LABEL, type Trip, type TripBrief, type TripLeg } from "@shared/trip";
+import { COMMUTE_SIDE_LABEL, TRIP_KIND_LABEL, type CommuteSide, type CommuteWhen, type Trip, type TripBrief, type TripLeg } from "@shared/trip";
+import { DAY_LABEL } from "@shared/bus";
+import { useFilters, whenOf } from "@/lib/filters";
 import type { Place } from "@shared/schemas";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
@@ -19,22 +21,28 @@ interface Props {
 }
 
 /**
- * 房源面板的「通勤」:我的每個地點一行(最快的搭法),點開看每種搭法(公車直達 / 捷運 / 轉乘一次 / 走路),
+ * 房源面板的「通勤」:我的每個地點一行,上班(住處 → 地點)、下班(地點 → 住處)各列最快的搭法;
+ * 點開看每種搭法(上下班分開切換)(公車直達 / 捷運 / 轉乘一次 / 走路),
  * 再點一種看每段怎麼走,地圖畫出整趟。沒設地點前只顯示「輸入公司地址」。
  */
 export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
   const places = usePlaces();
-  const commute = useCommute();
+  const go = useCommute("go");
+  const back = useCommute("back");
+  const f = useFilters();
   const [openId, setOpenId] = useCommuteTarget();
   const [radius, setRadius] = useState(400);
+  const [side, setSide] = useState<CommuteSide>(f.commuteSide);
+  useEffect(() => setSide(f.commuteSide), [f.commuteSide]);
   const list = places.data?.items ?? [];
-  const row = commute.matrix?.items[propertyId];
+  const rows = { go: go.matrix?.items[propertyId], back: back.matrix?.items[propertyId] };
+  const matrices = { go: go.matrix, back: back.matrix };
 
   useEffect(() => () => onOverlay?.(null), [onOverlay]);
 
   if (!places.isSuccess) return null;
   return (
-    <section className="text-sm">
+    <section className="min-w-0 text-sm">
       <div className="mb-1.5 flex items-center justify-between">
         <h2 className="flex items-center gap-1 text-xs font-medium text-neutral-500">
           <Route size={14} /> 通勤
@@ -54,7 +62,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
           </button>
         </div>
       ) : (
-        <ul className="grid gap-1 rounded border border-blue-200 p-1.5 dark:border-blue-900">
+        <ul className="grid gap-1 rounded border border-blue-200 p-1.5 dark:border-blue-900 [&>*]:min-w-0">
           {list.map((pl) => {
             const open = pl.id === openId;
             return (
@@ -66,13 +74,33 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
                   }}
                   className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left ${open ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-50 dark:hover:bg-neutral-800"}`}
                 >
-                  <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{pl.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-xs">
-                    <BriefText b={commute.matrix ? (row?.[pl.id] ?? null) : undefined} />
+                  <span className="shrink-0 self-start rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{pl.name}</span>
+                  <span className="grid min-w-0 flex-1 text-xs">
+                    {(["go", "back"] as CommuteSide[]).map((s) => (
+                      <span key={s} className="truncate">
+                        <span className="mr-1 text-neutral-500">{COMMUTE_SIDE_LABEL[s]}</span>
+                        <BriefText b={matrices[s] ? (rows[s]?.[pl.id] ?? null) : undefined} />
+                      </span>
+                    ))}
                   </span>
                   {open ? <ChevronUp size={14} className="shrink-0 text-neutral-400" /> : <ChevronDown size={14} className="shrink-0 text-neutral-400" />}
                 </button>
-                {open && <Trips lat={lat} lng={lng} place={pl} radius={radius} setRadius={setRadius} onOverlay={onOverlay} />}
+                {open && (
+                  <Trips
+                    lat={lat}
+                    lng={lng}
+                    place={pl}
+                    radius={radius}
+                    setRadius={setRadius}
+                    side={side}
+                    setSide={(s) => {
+                      setSide(s);
+                      onOverlay?.(null);
+                    }}
+                    when={whenOf(f, side)}
+                    onOverlay={onOverlay}
+                  />
+                )}
               </li>
             );
           })}
@@ -98,6 +126,9 @@ function Trips({
   place,
   radius,
   setRadius,
+  side,
+  setSide,
+  when,
   onOverlay,
 }: {
   lat: number;
@@ -105,14 +136,18 @@ function Trips({
   place: Place;
   radius: number;
   setRadius: (r: number) => void;
+  side: CommuteSide;
+  setSide: (s: CommuteSide) => void;
+  when: CommuteWhen;
   onOverlay?: (o: BusOverlay | null) => void;
 }) {
   const q = useQuery({
-    queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius],
-    queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius }),
+    queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir],
+    queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when }),
     staleTime: 10 * 60_000,
   });
   const [sel, setSel] = useState<number | null>(null);
+  useEffect(() => setSel(null), [side, when.day, when.time]);
   const trips = q.data?.trips ?? [];
   const trip = sel != null ? trips[sel] : undefined;
 
@@ -124,12 +159,28 @@ function Trips({
     if (!onOverlay) return;
     if (!trip) return onOverlay(null);
     const m = new Map(shapes.flatMap((s) => (s.data ? [[s.data.route.key, s.data] as const] : [])));
-    onOverlay(tripOverlay(trip, [lng, lat], [place.lng, place.lat], m));
+    const home: [number, number] = [lng, lat];
+    const dest: [number, number] = [place.lng, place.lat];
+    onOverlay(when.dir === "from" ? tripOverlay(trip, dest, home, m) : tripOverlay(trip, home, dest, m));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip, shapesReady, onOverlay]);
 
   return (
-    <div className="mt-1 grid gap-1 border-l-2 border-blue-200 pl-1.5 dark:border-blue-900">
+    <div className="mt-1 grid gap-1 border-l-2 border-blue-200 pl-1.5 dark:border-blue-900 [&>*]:min-w-0">
+      <div className="flex flex-wrap items-center gap-1 text-[11px] text-neutral-500">
+        {(["go", "back"] as CommuteSide[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSide(s)}
+            className={`rounded px-1.5 py-0.5 ${side === s ? "bg-blue-600 text-white" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+          >
+            {COMMUTE_SIDE_LABEL[s]}
+          </button>
+        ))}
+        <span className="min-w-0 truncate">
+          {DAY_LABEL[when.day]} {when.time} 從{when.dir === "to" ? "住處" : place.name}出發
+        </span>
+      </div>
       <div className="flex items-center justify-end gap-1 text-[11px] text-neutral-500">
         公車站找
         {[400, 800].map((r) => (
@@ -147,7 +198,11 @@ function Trips({
         內
       </div>
       {q.isLoading && <p className="px-1.5 text-xs text-neutral-500">計算中…</p>}
-      {q.data && trips.length === 0 && <p className="px-1.5 text-xs text-neutral-500">搭不到「{place.name}」(轉乘一次內)。試試 800m,或這間離捷運 / 公車太遠。</p>}
+      {q.data && trips.length === 0 && (
+        <p className="px-1.5 text-xs text-neutral-500">
+          這個時段搭不到(轉乘一次內):可能那時沒車,或離捷運 / 公車太遠。試試 800m,或在篩選列改出發時間。
+        </p>
+      )}
       {trips.map((t, i) => (
         <div key={i}>
           <button
@@ -167,7 +222,7 @@ function Trips({
         </div>
       ))}
       {q.data && !q.data.has_bus && <p className="px-1.5 text-[11px] text-amber-700 dark:text-amber-400">還沒匯入公車資料,只算捷運與走路(家裡跑 npm run collect -- bus)。</p>}
-      {trips.length > 0 && <p className="px-1.5 text-[11px] text-neutral-400">估計值:等車抓班距一半、轉乘另加 2 分;捷運站間時間用距離估。</p>}
+      {trips.length > 0 && <p className="px-1.5 text-[11px] text-neutral-400">估計值:等車抓這個時段的班距一半(那時沒開的路線不算)、走路含等紅綠燈、轉乘另加 2 分;時間在篩選列「通勤」調整。</p>}
     </div>
   );
 }
@@ -216,6 +271,7 @@ function TripDetail({ trip }: { trip: Trip }) {
             <div>
               <Bus size={12} className="mr-1 inline" />
               等約 {l.wait} 分,搭 <b>{l.name}</b>
+              {l.variant && <span className="text-neutral-500">({l.variant})</span>}
               {l.to_name && <span className="text-neutral-500">(往{l.to_name})</span>}:{l.from} → {l.to},{l.stops} 站 {l.exact ? "" : "約 "}
               {l.min} 分
               <button onClick={() => setTimes(times === i ? null : i)} className="ml-1.5 text-emerald-700 underline dark:text-emerald-400">

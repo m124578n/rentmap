@@ -12,6 +12,7 @@ import { Hono } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { FavoriteInput, PropertyInput, StageInput, type PropertySummary } from "@shared/schemas";
 import type { AppEnv } from "../env";
+import type { PricePoint } from "@shared/listing";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
 
@@ -49,6 +50,11 @@ properties.get("/api/properties", async (c) => {
       source: sql<string | null>`(SELECT source FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       source_url: sql<string | null>`(SELECT source_url FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       listing_status: sql<string | null>`(SELECT status FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
+      posted_at: sql<string | null>`(SELECT posted_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
+      first_seen_at: sql<string | null>`(SELECT first_seen_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
+      last_seen_at: sql<string | null>`(SELECT last_seen_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
+      // 價格紀錄 [[rent, seen_at], …](通常一兩筆)
+      price_json: sql<string | null>`(SELECT json_group_array(json_array(h.rent, h.seen_at)) FROM listing_price_history h WHERE h.listing_id = (SELECT id FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1))`,
       stage: f.stage,
       priority: f.priority,
       fav_note: f.note,
@@ -60,7 +66,7 @@ properties.get("/api/properties", async (c) => {
     .from(p)
     .leftJoin(f, and(eq(f.propertyId, p.id), eq(f.userId, user.id)))
     .orderBy(desc(p.updatedAt));
-  const items: PropertySummary[] = rows.map(({ tags_json, ...r }) => ({ ...r, tags: safeTags(tags_json) }));
+  const items: PropertySummary[] = rows.map(({ tags_json, price_json, ...r }) => ({ ...r, tags: safeTags(tags_json), price_history: parsePrice(price_json) }));
   return c.json({ items });
 });
 
@@ -146,10 +152,19 @@ properties.get("/api/properties/:id", async (c) => {
   const prop = await d.query.properties.findFirst({ where: eq(schema.properties.id, id) });
   if (!prop) return c.json({ error: "not found" }, 404);
   const listings = await d.select().from(schema.listings).where(eq(schema.listings.propertyId, id)).orderBy(desc(schema.listings.id));
+  const main = listings[0];
+  const priceHistory = main
+    ? (
+        await d
+          .select({ rent: schema.listingPriceHistory.rent, at: schema.listingPriceHistory.seenAt })
+          .from(schema.listingPriceHistory)
+          .where(eq(schema.listingPriceHistory.listingId, main.id))
+      ).sort((a, b) => a.at.localeCompare(b.at))
+    : [];
   const fav = await d.query.favorites.findFirst({
     where: and(eq(schema.favorites.propertyId, id), eq(schema.favorites.userId, user.id)),
   });
-  return c.json({ property: prop, listings, favorite: fav ?? null });
+  return c.json({ property: prop, listings, favorite: fav ?? null, price_history: priceHistory });
 });
 
 properties.put("/api/properties/:id/stage", async (c) => {
@@ -204,6 +219,15 @@ properties.delete("/api/properties/:id", async (c) => {
   await db(c.env.DB).delete(schema.properties).where(eq(schema.properties.id, id));
   return c.json({ ok: true });
 });
+
+function parsePrice(raw: string | null): PricePoint[] {
+  if (!raw) return [];
+  try {
+    return (JSON.parse(raw) as [number, string][]).map(([rent, at]) => ({ rent, at })).sort((a, b) => a.at.localeCompare(b.at));
+  } catch {
+    return [];
+  }
+}
 
 function safeTags(raw: string | null): string[] {
   if (!raw) return [];

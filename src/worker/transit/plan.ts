@@ -9,12 +9,15 @@
  *     mrtFirst        捷運坐到某站,出站走到公車站接最後一段公車
  *
  * 房源只要看「走得到的站」:公車站(半徑內)、捷運站(1km 內),加上走路的分鐘,取最小。
- * 時間都是估計:等車抓班距一半、轉乘另加 2 分緩衝。
+ * 時間都是估計:等車抓「那個時段」的班距一半(沒車的路線不算)、轉乘另加 2 分緩衝。
+ *
+ * 時段(when):上班 dir=to(住處 → 地點)直接算;下班 dir=from(地點 → 住處)用 reverseNet 的反向公車網路
+ * 把住處當目的地算(捷運圖本來就雙向對稱),buildTrip 最後把行程翻回正向。
  */
-import { haversine, walkMin } from "@shared/bus";
-import type { Trip, TripKind, TripLeg } from "@shared/trip";
+import { haversine, serviceWait, toMin, walkMin } from "@shared/bus";
+import { COMMUTE_DEFAULT, type CommuteWhen, type Trip, type TripKind, type TripLeg } from "@shared/trip";
 import { mrtGraph, mrtLabels, mrtPath, mrtWait, type MrtGraph, type MrtLabels } from "./mrt";
-import { nearStops, type BusNet } from "./network";
+import { nearStops, reverseNet, type BusNet } from "./network";
 
 export const DEST_BUS_R = 500;
 export const MRT_WALK_R = 1000;
@@ -22,10 +25,16 @@ const BUS_TRANSFER_R = 200;
 const BUS_MRT_TRANSFER_R = 350;
 const TRANSFER_PENALTY = 2;
 const WALK_ONLY_M = 1500;
+/** 沒有班表資料的公車路線,等車當 10 分 */
+const UNKNOWN_BUS_WAIT = 10;
 
 export interface Plan {
   net: BusNet;
   g: MrtGraph;
+  when: CommuteWhen;
+  /** 每條路線方向在這個時段的等車分鐘;Infinity = 這時段沒車 */
+  waits: Float64Array;
+  mrtW: (line: string) => number;
   dest: { lat: number; lng: number; name: string };
   finalBus: Float64Array;
   finalBusAlight: Int32Array;
@@ -45,10 +54,11 @@ const neg = (n: number) => new Int32Array(n).fill(-1);
 const distM = (net: BusNet, i: number, lat: number, lng: number) => haversine(lat, lng, net.sLat[i]!, net.sLng[i]!);
 
 /** 捷運站上車(含等車)的最佳節點 */
-function mrtBoard(g: MrtGraph, L: MrtLabels, station: number): { cost: number; node: number } {
+function mrtBoard(p: Pick<Plan, "g" | "mrtW">, L: MrtLabels, station: number): { cost: number; node: number } {
+  const { g } = p;
   let best = { cost: Infinity, node: -1 };
   for (const node of g.nodesOfStation[station] ?? []) {
-    const c = L.dist[node]! + mrtWait(g.nodes[node]!.line);
+    const c = L.dist[node]! + p.mrtW(g.nodes[node]!.line);
     if (c < best.cost) best = { cost: c, node };
   }
   return best;
@@ -58,13 +68,16 @@ function mrtBoard(g: MrtGraph, L: MrtLabels, station: number): { cost: number; n
  * 每條路線方向由後往前掃:label[q] 是在 q 下車之後還要幾分,
  * out[y] = 等車 + min_{q 在 y 之後}(T[q] − T[y] + label[q])
  */
-function sweepRoutes(net: BusNet, label: Float64Array, out: Float64Array, outAlight: Int32Array) {
-  for (const r of net.routes) {
+function sweepRoutes(net: BusNet, waits: Float64Array, label: Float64Array, out: Float64Array, outAlight: Int32Array) {
+  for (let ri = 0; ri < net.routes.length; ri++) {
+    const r = net.routes[ri]!;
+    const wait = waits[ri]!;
+    if (wait === Infinity) continue;
     let best = Infinity;
     let bestQ = -1;
     for (let i = r.end - 1; i >= r.start; i--) {
       if (best < Infinity) {
-        const c = r.wait + best - net.sT[i]!;
+        const c = wait + best - net.sT[i]!;
         if (c < out[i]!) {
           out[i] = c;
           outAlight[i] = bestQ;
@@ -79,9 +92,26 @@ function sweepRoutes(net: BusNet, label: Float64Array, out: Float64Array, outAli
   }
 }
 
-export function buildPlan(net: BusNet, dest: { lat: number; lng: number; name: string }): Plan {
+/** 每條路線方向在這個時段的等車分鐘 */
+export function busWaits(net: BusNet, when: CommuteWhen): Float64Array {
+  const t = toMin(when.time);
+  return Float64Array.from(net.routes, (r) => {
+    const w = serviceWait(r.schedule, when.day, t);
+    return w === undefined ? UNKNOWN_BUS_WAIT : w === null ? Infinity : w;
+  });
+}
+
+/**
+ * dest = 我的地點;上班(dir=to)算「住處 → 地點」,下班(dir=from)算「地點 → 住處」。
+ * 兩個方向都是「以地點為錨、一次算完所有房源」,查詢量不因房源數增加。
+ */
+export function buildPlan(fwd: BusNet, dest: { lat: number; lng: number; name: string }, when: CommuteWhen = COMMUTE_DEFAULT.go): Plan {
   const g = mrtGraph();
+  const net = when.dir === "from" ? reverseNet(fwd) : fwd;
   const n = net.sLat.length;
+  const waits = busWaits(net, when);
+  const t = toMin(when.time);
+  const mrtW = (line: string) => mrtWait(line, when.day, t);
 
   // 最後一段:公車
   const alightCost = inf(n);
@@ -91,7 +121,7 @@ export function buildPlan(net: BusNet, dest: { lat: number; lng: number; name: s
   });
   const finalBus = inf(n);
   const finalBusAlight = neg(n);
-  sweepRoutes(net, alightCost, finalBus, finalBusAlight);
+  sweepRoutes(net, waits, alightCost, finalBus, finalBusAlight);
 
   // 最後一段:捷運
   const destStations = g.stations
@@ -120,7 +150,7 @@ export function buildPlan(net: BusNet, dest: { lat: number; lng: number; name: s
   const toMrt = inf(n);
   const viaMrt = neg(n);
   for (const st of g.stations) {
-    const b = mrtBoard(g, mrtFinal, st.idx);
+    const b = mrtBoard({ g, mrtW }, mrtFinal, st.idx);
     if (b.cost === Infinity) continue;
     nearStops(net, st.lat, st.lng, BUS_MRT_TRANSFER_R, (q) => {
       const d = haversine(st.lat, st.lng, net.sLat[q]!, net.sLng[q]!);
@@ -134,10 +164,10 @@ export function buildPlan(net: BusNet, dest: { lat: number; lng: number; name: s
   }
   const firstBusB = inf(n);
   const firstBusBAlight = neg(n);
-  sweepRoutes(net, toBus, firstBusB, firstBusBAlight);
+  sweepRoutes(net, waits, toBus, firstBusB, firstBusBAlight);
   const firstBusM = inf(n);
   const firstBusMAlight = neg(n);
-  sweepRoutes(net, toMrt, firstBusM, firstBusMAlight);
+  sweepRoutes(net, waits, toMrt, firstBusM, firstBusMAlight);
 
   // 捷運第一段:出站走到最後一段的公車站
   const mrtToBus: { station: number; cost: number; tag: number }[] = [];
@@ -154,7 +184,7 @@ export function buildPlan(net: BusNet, dest: { lat: number; lng: number; name: s
   }
   const mrtFirst = mrtLabels(g, mrtToBus);
 
-  return { net, g, dest, finalBus, finalBusAlight, mrtFinal, firstBusB, firstBusBAlight, viaBus, firstBusM, firstBusMAlight, viaMrt, mrtFirst };
+  return { net, g, when, waits, mrtW, dest, finalBus, finalBusAlight, mrtFinal, firstBusB, firstBusBAlight, viaBus, firstBusM, firstBusMAlight, viaMrt, mrtFirst };
 }
 
 // ---- 從房源出發 ----
@@ -188,9 +218,9 @@ export function candidates(p: Plan, lat: number, lng: number, busR: number, dire
     const m = haversine(lat, lng, st.lat, st.lng);
     if (m > MRT_WALK_R) continue;
     const w = walkMin(m);
-    const a = mrtBoard(g, p.mrtFinal, st.idx);
+    const a = mrtBoard(p, p.mrtFinal, st.idx);
     if (a.cost < Infinity) put("mrt", { kind: "mrt", cost: w + a.cost, station: st.idx, node: a.node, m });
-    const b = mrtBoard(g, p.mrtFirst, st.idx);
+    const b = mrtBoard(p, p.mrtFirst, st.idx);
     if (b.cost < Infinity) put("mrt+bus", { kind: "mrt+bus", cost: w + b.cost, station: st.idx, node: b.node, m });
   }
   // 公車直達:同一路線只留最快的上車站,取前 directKeep 條
@@ -210,13 +240,15 @@ export function candidates(p: Plan, lat: number, lng: number, busR: number, dire
 
 // ---- 組成行程 ----
 
-function busLeg(net: BusNet, y: number, a: number, extraWait = 0): TripLeg {
+function busLeg(p: Plan, y: number, a: number, extraWait = 0): TripLeg {
+  const { net } = p;
   const r = net.routes[net.sRoute[y]!]!;
   return {
     mode: "bus",
     min: Math.max(1, Math.round(net.sT[a]! - net.sT[y]!)),
-    wait: r.wait + extraWait,
+    wait: p.waits[net.sRoute[y]!]! + extraWait,
     name: r.name,
+    variant: r.variant,
     key: r.key,
     to_name: r.toName,
     from: net.sName[y]!,
@@ -225,17 +257,18 @@ function busLeg(net: BusNet, y: number, a: number, extraWait = 0): TripLeg {
     alight_seq: net.sSeq[a]!,
     from_pt: [net.sLng[y]!, net.sLat[y]!],
     to_pt: [net.sLng[a]!, net.sLat[a]!],
-    stops: net.sSeq[a]! - net.sSeq[y]!,
+    stops: Math.abs(net.sSeq[a]! - net.sSeq[y]!),
     exact: net.sExact[y] === 1,
   };
 }
-function mrtLeg(g: MrtGraph, L: MrtLabels, node: number, extraWait = 0): { leg: TripLeg; alightNode: number } {
+function mrtLeg(p: Plan, L: MrtLabels, node: number, extraWait = 0): { leg: TripLeg; alightNode: number } {
+  const { g } = p;
   const path = mrtPath(g, L, node);
   return {
     leg: {
       mode: "mrt",
       min: Math.max(1, Math.round(L.dist[node]! - L.dist[path.alightNode]!)),
-      wait: mrtWait(g.nodes[node]!.line) + extraWait,
+      wait: p.mrtW(g.nodes[node]!.line) + extraWait,
       lines: path.lines,
       colors: path.colors,
       from: path.from,
@@ -248,6 +281,8 @@ function mrtLeg(g: MrtGraph, L: MrtLabels, node: number, extraWait = 0): { leg: 
 }
 const walkLeg = (m: number, to: string): TripLeg => ({ mode: "walk", min: walkMin(m), m: Math.round(m), to });
 const stationLabel = (g: MrtGraph, node: number) => `捷運${g.stations[g.nodes[node]!.station]!.name}站`;
+/** 公車站牌名常已經帶「站」(捷運公館站、臺北車站),不要變成「捷運公館站站」 */
+const stopLabel = (name: string) => (name.endsWith("站") ? name : `${name}站`);
 
 export function buildTrip(p: Plan, c: Cand): Trip {
   const { net, g, dest } = p;
@@ -257,53 +292,77 @@ export function buildTrip(p: Plan, c: Cand): Trip {
     legs.push(walkLeg(c.m, dest.name));
   } else if (c.kind === "bus" || c.kind === "bus+bus" || c.kind === "bus+mrt") {
     const y = c.stop;
-    legs.push(walkLeg(c.m, `${net.sName[y]}站`));
+    legs.push(walkLeg(c.m, stopLabel(net.sName[y]!)));
     if (c.kind === "bus") {
       const a = p.finalBusAlight[y]!;
-      legs.push(busLeg(net, y, a), toDest(net.sLat[a]!, net.sLng[a]!));
+      legs.push(busLeg(p, y, a), toDest(net.sLat[a]!, net.sLng[a]!));
     } else if (c.kind === "bus+bus") {
       const q = p.firstBusBAlight[y]!;
       const x = p.viaBus[q]!;
       const a = p.finalBusAlight[x]!;
       legs.push(
-        busLeg(net, y, q),
-        walkLeg(haversine(net.sLat[q]!, net.sLng[q]!, net.sLat[x]!, net.sLng[x]!), `${net.sName[x]}站(轉乘)`),
-        busLeg(net, x, a, TRANSFER_PENALTY),
+        busLeg(p, y, q),
+        walkLeg(haversine(net.sLat[q]!, net.sLng[q]!, net.sLat[x]!, net.sLng[x]!), `${stopLabel(net.sName[x]!)}(轉乘)`),
+        busLeg(p, x, a, TRANSFER_PENALTY),
         toDest(net.sLat[a]!, net.sLng[a]!),
       );
     } else {
       const q = p.firstBusMAlight[y]!;
       const node = p.viaMrt[q]!;
       const st = g.stations[g.nodes[node]!.station]!;
-      const m = mrtLeg(g, p.mrtFinal, node, TRANSFER_PENALTY);
+      const m = mrtLeg(p, p.mrtFinal, node, TRANSFER_PENALTY);
       const out = g.stations[g.nodes[m.alightNode]!.station]!;
-      legs.push(busLeg(net, y, q), walkLeg(haversine(net.sLat[q]!, net.sLng[q]!, st.lat, st.lng), `${stationLabel(g, node)}(轉乘)`), m.leg, toDest(out.lat, out.lng));
+      legs.push(busLeg(p, y, q), walkLeg(haversine(net.sLat[q]!, net.sLng[q]!, st.lat, st.lng), `${stationLabel(g, node)}(轉乘)`), m.leg, toDest(out.lat, out.lng));
     }
   } else if (c.kind === "mrt" || c.kind === "mrt+bus") {
     legs.push(walkLeg(c.m, stationLabel(g, c.node)));
     if (c.kind === "mrt") {
-      const m = mrtLeg(g, p.mrtFinal, c.node);
+      const m = mrtLeg(p, p.mrtFinal, c.node);
       const out = g.stations[g.nodes[m.alightNode]!.station]!;
       legs.push(m.leg, toDest(out.lat, out.lng));
     } else {
-      const m = mrtLeg(g, p.mrtFirst, c.node);
+      const m = mrtLeg(p, p.mrtFirst, c.node);
       const out = g.stations[g.nodes[m.alightNode]!.station]!;
       const x = p.mrtFirst.sourceOf[m.alightNode]!;
       const a = p.finalBusAlight[x]!;
       legs.push(
         m.leg,
-        walkLeg(haversine(out.lat, out.lng, net.sLat[x]!, net.sLng[x]!), `${net.sName[x]}站(轉乘)`),
-        busLeg(net, x, a, TRANSFER_PENALTY),
+        walkLeg(haversine(out.lat, out.lng, net.sLat[x]!, net.sLng[x]!), `${stopLabel(net.sName[x]!)}(轉乘)`),
+        busLeg(p, x, a, TRANSFER_PENALTY),
         toDest(net.sLat[a]!, net.sLng[a]!),
       );
     }
   }
+  const trip = finishTrip(c.kind as TripKind, legs, c.kind === "walk" ? c.m : 0);
+  return p.when.dir === "from" ? flipTrip(trip, c.kind === "walk" ? c.m : 0) : trip;
+}
+
+function finishTrip(kind: TripKind, legs: TripLeg[], walkM: number): Trip {
   const total = legs.reduce((s, l) => s + l.min + (l.mode === "walk" ? 0 : l.wait), 0);
   const rides = legs.filter((l) => l.mode !== "walk");
   const summary = rides.length
     ? rides.map((l) => (l.mode === "bus" ? l.name : `捷運${l.lines.join("→")}`)).join(" → ")
-    : `步行 ${Math.round((c.kind === "walk" ? c.m : 0) / 100) / 10} km`;
-  return { kind: c.kind as TripKind, total_min: total, transfers: Math.max(0, rides.length - 1), summary, legs };
+    : `步行 ${Math.round(walkM / 100) / 10} km`;
+  return { kind, total_min: total, transfers: Math.max(0, rides.length - 1), summary, legs };
+}
+
+const FLIP_KIND: Partial<Record<TripKind, TripKind>> = { "bus+mrt": "mrt+bus", "mrt+bus": "bus+mrt" };
+export const HOME_LABEL = "住處";
+
+/** 反向網路算出來的行程(住處 → 地點的鏡像)翻回「地點 → 住處」:段落倒序、每段起訖對調、走路段重新標目的地 */
+export function flipTrip(t: Trip, walkM: number): Trip {
+  const legs: TripLeg[] = [...t.legs].reverse().map((l) => {
+    if (l.mode === "bus")
+      return { ...l, from: l.to, to: l.from, board_seq: l.alight_seq, alight_seq: l.board_seq, from_pt: l.to_pt, to_pt: l.from_pt };
+    if (l.mode === "mrt") return { ...l, from: l.to, to: l.from, lines: [...l.lines].reverse(), colors: [...l.colors].reverse(), path: [...l.path].reverse() };
+    return { ...l };
+  });
+  legs.forEach((l, i) => {
+    if (l.mode !== "walk") return;
+    const next = legs[i + 1];
+    l.to = !next || next.mode === "walk" ? HOME_LABEL : `${next.mode === "bus" ? stopLabel(next.from) : `捷運${next.from}站`}${i > 0 ? "(轉乘)" : ""}`;
+  });
+  return finishTrip(FLIP_KIND[t.kind] ?? t.kind, legs, walkM);
 }
 
 /** 一間房到這個目的地最快的行程 */

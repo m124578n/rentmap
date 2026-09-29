@@ -10,6 +10,7 @@ import { z } from "zod";
 import { ImportedListing } from "@shared/schemas";
 import type { AppEnv } from "../env";
 import { db, nowIso, schema, type Db } from "../db";
+import { parsePostedAt } from "@shared/listing";
 import { requireIngest } from "../auth";
 
 export const ingest = new Hono<AppEnv>();
@@ -118,6 +119,7 @@ function propertyValues(v: ImportedListing) {
 
 export async function upsertListing(d: Db, v: ImportedListing): Promise<{ propertyId: number; listingId: number; created: boolean }> {
   const now = nowIso();
+  const posted = parsePostedAt(v.source_posted_at, new Date(now));
   const existing = await d.query.listings.findFirst({
     where: and(eq(schema.listings.source, v.source), eq(schema.listings.sourceListingId, v.source_listing_id)),
   });
@@ -134,6 +136,8 @@ export async function upsertListing(d: Db, v: ImportedListing): Promise<{ proper
         contactPhone: v.contact_phone ?? existing.contactPhone,
         contactLine: v.contact_line ?? existing.contactLine,
         status: v.status,
+        // 取較早的:重新刊登時 591 的日期會變新,但我們要的是「在市場上多久」
+        postedAt: posted && (!existing.postedAt || posted < existing.postedAt) ? posted : existing.postedAt,
         lastSeenAt: now,
         lastCheckedAt: now,
       })
@@ -171,6 +175,7 @@ export async function upsertListing(d: Db, v: ImportedListing): Promise<{ proper
       contactPhone: v.contact_phone ?? null,
       contactLine: v.contact_line ?? null,
       status: v.status,
+      postedAt: posted,
       firstSeenAt: now,
       lastSeenAt: now,
       lastCheckedAt: now,

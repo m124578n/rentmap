@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
-import type { CommuteMatrix } from "@shared/trip";
+import type { DayType } from "@shared/bus";
+import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
+import type { MarketMatrix } from "@shared/market";
+import { ageOf, priceOf } from "@/features/listing/age";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
 export interface Filters {
@@ -16,14 +19,22 @@ export interface Filters {
   hideRejected: boolean;
   stages: string[]; // 空 = 全部
   favOnly: boolean; // 只看收藏(有 stage 的)
+  priceDrop: boolean; // 只看降過價的
+  newOnly: boolean; // 只看新上架(來源刊登 7 天內)
   /** 通勤上限(分,公車 + 捷運轉乘一次內);算的地點見 commutePlaces。搭不到的房源會被濾掉 */
   commuteMax: number | null;
   commutePlaces: number[]; // 空 = 我的全部地點(每個都要在上限內)
+  /** 列表 / 地圖 / 篩選看上班還是下班(兩個分開看,上下班路線常不一樣) */
+  commuteSide: CommuteSide;
+  /** 上班、下班各自的日子與出發時間(方向固定:上班 住處 → 地點,下班 地點 → 住處) */
+  commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
+  /** 經過這些路線(任一條):公車主路線名(307)或捷運線名(板南線);走得到才留 */
+  alongRoutes: string[];
   /** 列表排序 */
   sort: SortKey;
 }
 
-export type SortKey = "updated" | "rent" | "commute";
+export type SortKey = "updated" | "rent" | "commute" | "newest" | "drop" | "market";
 
 export const EMPTY: Filters = {
   kinds: [],
@@ -38,8 +49,16 @@ export const EMPTY: Filters = {
   hideRejected: true,
   stages: [],
   favOnly: false,
+  priceDrop: false,
+  newOnly: false,
   commuteMax: null,
   commutePlaces: [],
+  alongRoutes: [],
+  commuteSide: "go",
+  commuteTimes: {
+    go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
+    back: { day: COMMUTE_DEFAULT.back.day, time: COMMUTE_DEFAULT.back.time },
+  },
   sort: "updated",
 };
 
@@ -67,8 +86,14 @@ export function setFilters(patch: Partial<Filters>) {
   listeners.forEach((l) => l());
 }
 
+/** 清除篩選;排序與上下班時間是設定,不跟著清 */
 export function resetFilters() {
-  setFilters({ ...EMPTY, sort: current.sort });
+  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes });
+}
+
+/** 某一邊(上班 / 下班)的完整時段 */
+export function whenOf(f: Filters, side: CommuteSide = f.commuteSide): CommuteWhen {
+  return { ...f.commuteTimes[side], dir: COMMUTE_DEFAULT[side].dir };
 }
 
 export function useFilters(): Filters {
@@ -95,7 +120,10 @@ export function activeCount(f: Filters): number {
   if (f.stages.length) n++;
   if (!f.hideRejected) n++;
   if (f.favOnly) n++;
+  if (f.priceDrop) n++;
+  if (f.newOnly) n++;
   if (f.commuteMax != null) n++;
+  if (f.alongRoutes.length) n++;
   return n;
 }
 
@@ -121,8 +149,10 @@ export function worstCommute(p: PropertySummary, f: Filters, ctx: CommuteCtx | u
   return worst;
 }
 
-export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
+/** along = 走得到 alongRoutes 的房源 id(useAlong);undefined = 還沒查到,先不濾 */
+export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, along?: Set<number>): PropertySummary[] {
   return items.filter((p) => {
+    if (f.alongRoutes.length && along && !along.has(p.id)) return false;
     if (f.commuteMax != null) {
       const w = worstCommute(p, f, ctx);
       // 資料還沒到(undefined)先不濾,免得畫面閃空
@@ -138,14 +168,32 @@ export function applyFilters(items: PropertySummary[], f: Filters, ctx?: Commute
     if (f.pet && p.pet_allowed !== true) return false;
     if (f.cooking && p.cooking_allowed !== true) return false;
     if (f.favOnly && !p.stage) return false;
+    if (f.priceDrop && !((priceOf(p)?.totalDelta ?? 0) < 0)) return false;
+    if (f.newOnly && !ageOf(p)?.isNew) return false;
     if (f.hideRejected && p.stage === "rejected") return false;
     if (f.stages.length && !(p.stage && f.stages.includes(p.stage))) return false;
     return true;
   });
 }
 
-export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
+export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, market?: MarketMatrix): PropertySummary[] {
+  if (f.sort === "market") {
+    // 比行情便宜最多的在前;樣本不足的排在有把握的後面,算不出的最後
+    const key = (p: PropertySummary) => {
+      const b = market?.items[p.id];
+      return b?.diff_pct == null ? Infinity : b.diff_pct + (b.enough ? 0 : 1000);
+    };
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
   if (f.sort === "rent") return [...items].sort((a, b) => (a.rent ?? Infinity) - (b.rent ?? Infinity));
+  if (f.sort === "newest") {
+    const key = (p: PropertySummary) => ageOf(p)?.days ?? Infinity;
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
+  if (f.sort === "drop") {
+    const key = (p: PropertySummary) => priceOf(p)?.totalDelta ?? 0;
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
   if (f.sort === "commute") {
     const key = (p: PropertySummary) => commuteSortKey(p, f, ctx);
     return [...items].sort((a, b) => key(a) - key(b));

@@ -1,6 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
+import type { PropertySummary } from "../src/shared/schemas";
 
 const ORIGIN = "http://localhost:5173";
 let cookie = "";
@@ -109,5 +110,24 @@ describe("properties", () => {
     // cascade:listing 也要不見
     const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM listings WHERE property_id = ?").bind(id).first<{ n: number }>();
     expect(left?.n).toBe(0);
+  });
+});
+
+describe("price history and listing age in API", () => {
+  it("list and detail return posted date and price history", async () => {
+    const ing = (body: unknown) =>
+      SELF.fetch(`${ORIGIN}/api/ingest/listings`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer test-ingest" }, body: JSON.stringify(body) });
+    const base = { title: "降價測試", city: "台北市", district: "中山區", source: "591", source_listing_id: "777001", rent: 20000, source_posted_at: "2026/08/01" };
+    const { ids } = (await (await ing({ items: [base] })).json()) as { ids: number[] };
+    await ing({ items: [{ ...base, rent: 19000 }] });
+    await ing({ items: [{ ...base, rent: 19000 }] }); // 沒變價不多記
+    const list = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed())).json()) as { items: PropertySummary[] };
+    const p = list.items.find((x) => x.id === ids[0])!;
+    expect(p.posted_at).toBe("2026-08-01");
+    expect(p.first_seen_at).toBeTruthy();
+    expect(p.price_history.map((h) => h.rent)).toEqual([20000, 19000]);
+    const detail = (await (await SELF.fetch(`${ORIGIN}/api/properties/${ids[0]}`, authed())).json()) as { price_history: { rent: number }[]; listings: { postedAt: string }[] };
+    expect(detail.price_history.map((h) => h.rent)).toEqual([20000, 19000]);
+    expect(detail.listings[0]!.postedAt).toBe("2026-08-01");
   });
 });

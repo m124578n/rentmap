@@ -6,6 +6,7 @@ import { ingest } from "./routes/ingest";
 import { bus } from "./routes/bus";
 import { places } from "./routes/places";
 import { commute } from "./routes/commute";
+import { market } from "./routes/market";
 
 const app = new Hono<AppEnv>();
 
@@ -19,6 +20,8 @@ app.route("/", bus);
 app.route("/", places);
 // 所有房源 × 我的地點 的公車通勤
 app.route("/", commute);
+// 租金行情(實價登錄)/api/market、/api/properties/:id/market;匯入 /api/ingest/rent-stats
+app.route("/", market);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

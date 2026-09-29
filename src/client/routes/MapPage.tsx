@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { applyFilters, useFilters, worstCommute } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
+import { useAlong } from "@/features/bus/useAlong";
 import { FilterBar } from "@/components/FilterBar";
 import { MapView } from "@/features/map/MapView";
 import { useMrt } from "@/features/map/mrt";
@@ -40,7 +41,8 @@ export function MapPage() {
   const places = usePlaces();
   const all = q.data?.items ?? [];
   const commute = useCommute();
-  const items = useMemo(() => applyFilters(all, filters, commute.ctx), [all, filters, commute.ctx]);
+  const along = useAlong();
+  const items = useMemo(() => applyFilters(all, filters, commute.ctx, along.ids), [all, filters, commute.ctx, along.ids]);
   const [colorMode, setColorMode] = useColorMode();
   const byCommute = colorMode === "commute" && commute.places.length > 0;
   const colorOf = useMemo(

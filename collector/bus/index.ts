@@ -4,8 +4,9 @@
  * 從交通部 TDX 下載雙北市區公車(Route / StopOfRoute / Shape / Schedule)→ transform → 覆蓋式推到 /api/ingest/bus/*。
  * 原始 JSON 快取在 data/tdx/{city}-{dataset}.json(7 天內重跑不重抓;--refresh 強制重抓),一個月跑一次就夠。
  *
- * 金鑰:.env 的 TDX_CLIENT_ID / TDX_CLIENT_SECRET(https://tdx.transportdata.tw 會員中心 → API 金鑰)。
- * 沒填也能跑(匿名額度很小,一天幾十次;這支一次約 8 次請求)。
+ * 金鑰:.env 的 TDX_CLIENT_ID / TDX_CLIENT_SECRET(https://tdx.transportdata.tw 註冊 → 會員中心 → API 金鑰)。**必填**:
+ * 不帶 token 的 API 呼叫一律 401「Valid API Key Required」(網站上的訪客額度是給網頁試用介面的)。
+ * 一次跑約 8 次請求(4 個資料集 × 台北、新北),7 天內重跑用快取;註冊後的免費月額度綽綽有餘。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -91,7 +92,8 @@ export async function runBus(opts: { base: string; secret: string; args: string[
   const refresh = args.includes("--refresh");
   const force = args.includes("--force");
   const cities = (args.find((a) => a.startsWith("--cities="))?.slice(9) ?? "Taipei,NewTaipei").split(",").filter(Boolean);
-  if (!process.env.TDX_CLIENT_ID) console.log("(.env 沒有 TDX_CLIENT_ID,用匿名額度;被 429 擋就去 TDX 申請金鑰)");
+  if (!process.env.TDX_CLIENT_ID || !process.env.TDX_CLIENT_SECRET)
+    console.log("(.env 沒有 TDX_CLIENT_ID / TDX_CLIENT_SECRET:只能用 data/tdx/ 的快取,要下載新資料得先到 TDX 申請金鑰)");
 
   // 雙北聯營路線兩邊資料都有,同 key 只留先看到的
   const routes = new Map<string, BusRouteIn>();

@@ -8,6 +8,8 @@ import { BusSection } from "@/features/bus/BusSection";
 import { CommuteSection } from "@/features/commute/CommuteSection";
 import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
+import { PriceAgeSection } from "@/features/listing/PriceAgeSection";
+import { MarketSection } from "@/features/market/MarketSection";
 
 interface Props {
   id: number;
@@ -33,7 +35,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
 
   if (q.isLoading) return <p className="p-4 text-neutral-500">載入中…</p>;
   if (q.error || !q.data) return <p className="p-4 text-red-600">找不到這間房源</p>;
-  const { property: p, listings, favorite } = q.data;
+  const { property: p, listings, favorite, price_history } = q.data;
   const main = listings[0];
   const photos = safePhotos(main?.photosJson);
   const extra = safeExtra(main?.rawJson);
@@ -69,7 +71,11 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
 
       {extra?.market_hint && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">591:{extra.market_hint}</p>}
 
+      <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
+
       <FavoritePanel id={id} favorite={favorite} />
+
+      {main && <PriceAgeSection history={price_history} postedAt={main.postedAt} firstSeenAt={main.firstSeenAt} lastSeenAt={main.lastSeenAt} status={main.status} />}
 
       <section className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
         <Row k="坪數" v={p.sizePing != null ? `${p.sizePing} 坪` : null} />

@@ -6,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { rankHits } from "../../src/shared/address";
 
 const CACHE = path.resolve(import.meta.dirname, "../../data/geocode-cache.json");
 type Hit = { lat: number; lng: number; level: "road" | "district" };
@@ -47,7 +48,7 @@ export async function geocode(city: string, district: string, road?: string): Pr
   try {
     let hit: Hit | null = null;
     if (road) {
-      const rs = await query(key);
+      const rs = rankHits(key, await query(key));
       const ok = rs.find((r) => mentions(r.display_name));
       if (ok) hit = { lat: ok.lat, lng: ok.lon, level: "road" };
     }

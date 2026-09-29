@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
+import type { AlongResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
 import type { CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
 
@@ -239,6 +239,68 @@ describe("commute (bus + MRT, up to one transfer)", () => {
     // 和面板的行程一樣
     expect(best.total_min).toBe((await trips(LAT + 0.0003, lngAt(1), office)).trips[0]!.total_min);
     expect(body.items[near]![far]).toBeNull();
+  });
+
+  it("time of day: routes not running then are skipped", async () => {
+    const places = ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] }).items;
+    const office = places.find((p) => p.name === "公司")!.id;
+    const at = async (q: string) =>
+      (await (await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=${LAT + 0.0003}&lng=${lngAt(1)}&place_id=${office}&radius=300&${q}`, authed())).json()) as TripsResponse;
+    // 307 平日 06:00–22:30 有班、離峰 10–15 分 → 等 6 分
+    const noon = await at("day=wd&time=12:00&dir=to");
+    expect(noon.when).toEqual({ day: "wd", time: "12:00", dir: "to" });
+    expect(noon.trips.find((t) => t.kind === "bus")!.legs.find((l) => l.mode === "bus")).toMatchObject({ key: "R1:0", wait: 6 });
+    // 深夜收班、週六沒開 → 沒有公車直達
+    expect((await at("day=wd&time=23:40&dir=to")).trips.some((t) => t.kind === "bus")).toBe(false);
+    expect((await at("day=sat&time=08:00&dir=to")).trips.some((t) => t.kind === "bus")).toBe(false);
+    // 捷運 00:00–06:00 不營運
+    expect((await at("day=wd&time=03:00&dir=to")).trips.every((t) => t.kind === "walk")).toBe(true);
+    expect((await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=25&lng=121.5&place_id=${office}&time=25:00`, authed())).status).toBe(400);
+  });
+
+  it("dir=from: 下班從地點回住處,搭反方向那條、行程是正向的", async () => {
+    const places = ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] }).items;
+    const office = places.find((p) => p.name === "公司")!.id;
+    const r = (await (
+      await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=${LAT + 0.0003}&lng=${lngAt(1)}&place_id=${office}&radius=300&day=wd&time=18:00&dir=from`, authed())
+    ).json()) as TripsResponse;
+    const best = r.trips.find((t) => t.kind === "bus")!;
+    expect(best.legs.map((l) => l.mode)).toEqual(["walk", "bus", "walk"]);
+    const bus = best.legs[1]!;
+    // R1:1 往西:站8(公司旁)上車 → 站1(住處旁)下車;反方向站序 seq 小的在東邊
+    expect(bus).toMatchObject({ key: "R1:1", from: "站8", to: "站1", stops: 7 });
+    if (bus.mode === "bus") expect(bus.board_seq).toBeLessThan(bus.alight_seq);
+    expect(best.legs[0]).toMatchObject({ mode: "walk", to: "站8站" });
+    expect(best.legs[2]).toMatchObject({ mode: "walk", to: "住處" });
+    expect(best.total_min).toBe(legSum(best));
+    // 捷運轉公車 / 公車轉捷運 方向也要翻
+    for (const t of r.trips) if (t.kind === "bus+mrt") expect(t.legs.find((l) => l.mode !== "walk")!.mode).toBe("bus");
+    for (const t of r.trips) if (t.kind === "mrt+bus") expect(t.legs.find((l) => l.mode !== "walk")!.mode).toBe("mrt");
+  });
+
+  it("along: 經過某路線的房源(公車主路線名、捷運線名)", async () => {
+    const all = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed())).json()) as { items: { id: number; title: string }[] };
+    const near = all.items.find((p) => p.title === "房 near")!.id;
+    const along = async (q: string) => (await (await SELF.fetch(`${ORIGIN}/api/bus/along?${q}`, authed())).json()) as AlongResponse;
+
+    const r = await along(`names=${encodeURIComponent("307,紅30,不存在")}&radius=300`);
+    expect(r.queries).toEqual([
+      { q: "307", kind: "bus", label: "307", dirs: 2 },
+      { q: "紅30", kind: "bus", label: "紅30", dirs: 1 },
+      { q: "不存在", kind: null, label: null, dirs: 0 },
+    ]);
+    expect(r.ids).toEqual([near]);
+    // 板南線:龍山寺站約 560m,在捷運 800m 內;文湖線很遠
+    expect((await along(`names=${encodeURIComponent("板南")}`)).ids).toEqual([near]);
+    expect((await along(`names=${encodeURIComponent("文湖線")}`)).ids).toEqual([]);
+    expect((await along(`names=${encodeURIComponent("不存在")}`)).ids).toEqual([]);
+    // 前綴只接非數字 / 字母:「紅3」不是紅30、「30」不是 307
+    expect((await along(`names=${encodeURIComponent("紅3,30")}`)).queries.map((q) => q.kind)).toEqual([null, null]);
+    expect((await SELF.fetch(`${ORIGIN}/api/bus/along`, authed())).status).toBe(400);
+
+    const names = (await (await SELF.fetch(`${ORIGIN}/api/bus/names`, authed())).json()) as { bus: string[]; mrt: string[] };
+    expect(names.bus).toEqual(expect.arrayContaining(["307", "紅30"]));
+    expect(names.mrt).toContain("板南線");
   });
 
   it("requires login and a valid place", async () => {

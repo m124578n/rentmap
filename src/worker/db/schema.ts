@@ -79,6 +79,7 @@ export const listings = sqliteTable(
     contactPhone: text("contact_phone"),
     contactLine: text("contact_line"),
     status: text("status").notNull().default("active"), // active | removed | unknown
+    postedAt: text("posted_at"), // 來源寫的刊登日 YYYY-MM-DD(591 有,好房沒有);沒有就看 first_seen_at
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
     lastCheckedAt: text("last_checked_at"),
@@ -149,7 +150,8 @@ export const pendingUrls = sqliteTable(
 export const busRoutes = sqliteTable("bus_routes", {
   key: text("key").primaryKey(),
   routeUid: text("route_uid").notNull(),
-  name: text("name").notNull(),
+  name: text("name").notNull(), // 主路線名(307、紅5),同名視為同一路
+  variant: text("variant"), // 子路線說明(莒光、經天母國中、區間…);主線為 null
   city: text("city").notNull(),
   direction: integer("direction").notNull(),
   fromName: text("from_name"),
@@ -195,4 +197,36 @@ export const myPlaces = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("my_places_user_idx").on(t.userId)],
+);
+
+/**
+ * 內政部租賃實價登錄(雙北,參考資料)。採集機 `collect -- rent-stats` 匯入,serial = 實價登錄編號(重匯同一筆覆蓋)。
+ * 行情計算見 src/shared/market.ts;social(社宅包租代管)與 has_parking(含車位)預設不列入。
+ */
+export const rentStats = sqliteTable(
+  "rent_stats",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    serial: text("serial").notNull(),
+    city: text("city").notNull(), // 台北市 | 新北市
+    district: text("district").notNull(),
+    road: text("road"),
+    kind: text("kind"), // 整層住家 | 獨立套房 | 分租套房 | 雅房 | null
+    buildingType: text("building_type"),
+    floor: integer("floor"),
+    totalFloors: integer("total_floors"),
+    buildingAge: integer("building_age"),
+    sizePing: real("size_ping"),
+    rooms: integer("rooms"),
+    livings: integer("livings"),
+    baths: integer("baths"),
+    rent: integer("rent").notNull(),
+    date: text("date").notNull(), // 租賃日 YYYY-MM-DD
+    hasElevator: integer("has_elevator", { mode: "boolean" }),
+    furnished: integer("furnished", { mode: "boolean" }),
+    hasMgmt: integer("has_mgmt", { mode: "boolean" }),
+    hasParking: integer("has_parking", { mode: "boolean" }).notNull(),
+    social: integer("social", { mode: "boolean" }).notNull(),
+  },
+  (t) => [uniqueIndex("rent_stats_serial_idx").on(t.serial), index("rent_stats_area_idx").on(t.city, t.district, t.kind), index("rent_stats_date_idx").on(t.date)],
 );

@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { Bus, ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Bus, ChevronDown, Route, SlidersHorizontal, X } from "lucide-react";
+import { api } from "@/lib/api";
+import { useAlong } from "@/features/bus/useAlong";
 import { activeCount, resetFilters, setFilters, useFilters, type Filters } from "@/lib/filters";
 import { DISTRICTS, STAGES, STAGE_LABEL } from "@shared/constants";
 import type { Place } from "@shared/schemas";
+import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
+import { COMMUTE_SIDE_LABEL, type CommuteSide } from "@shared/trip";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
@@ -15,6 +20,7 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
   const placeList = places.data?.items ?? [];
   const [open, setOpen] = useState(false);
   const [commuteOpen, setCommuteOpen] = useState(false);
+  const [alongOpen, setAlongOpen] = useState(false);
   const n = activeCount(f);
   const toggleIn = (key: "kinds" | "districts" | "stages", v: string) => {
     const cur = f[key];
@@ -31,8 +37,22 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         {/* 手機:chip 一行左右滑;桌機:換行 */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&>*]:shrink-0">
         {places.isSuccess && <CommuteChip f={f} hasPlaces={placeList.length > 0} places={placeList} open={commuteOpen} onToggle={() => setCommuteOpen(!commuteOpen)} />}
+        <button
+          onClick={() => setAlongOpen(!alongOpen)}
+          className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${f.alongRoutes.length ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`}
+          title="只看走得到這些公車 / 捷運路線的房源(任一條)"
+        >
+          <Route size={12} /> {f.alongRoutes.length ? `經過 ${f.alongRoutes.join("、")}` : "經過路線"}
+          <ChevronDown size={12} className={alongOpen ? "rotate-180" : ""} />
+        </button>
         <Chip on={f.favOnly} onClick={() => setFilters({ favOnly: !f.favOnly })}>
           ♥ 只看收藏
+        </Chip>
+        <Chip on={f.newOnly} onClick={() => setFilters({ newOnly: !f.newOnly })}>
+          新上架
+        </Chip>
+        <Chip on={f.priceDrop} onClick={() => setFilters({ priceDrop: !f.priceDrop })}>
+          ↓ 降過價
         </Chip>
         {KINDS.map((k) => (
           <Chip key={k} on={f.kinds.includes(k)} onClick={() => toggleIn("kinds", k)}>
@@ -60,6 +80,7 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
       </div>
 
       {commuteOpen && placeList.length > 0 && <CommuteRow f={f} places={placeList} />}
+      {alongOpen && <AlongRow f={f} />}
 
       {open && (
         <div className="grid gap-3 border-t border-neutral-200 px-3 py-3 sm:grid-cols-2 lg:grid-cols-4 dark:border-neutral-800">
@@ -115,22 +136,51 @@ function CommuteChip({ f, hasPlaces, places, open, onToggle }: { f: Filters; has
   const on = f.commuteMax != null;
   const picked = places.filter((p) => f.commutePlaces.includes(p.id));
   const who = places.length > 1 && picked.length > 0 && picked.length < places.length ? `(${picked.map((p) => p.name).join("、")})` : "";
+  const side = COMMUTE_SIDE_LABEL[f.commuteSide];
   return (
     <button
       onClick={onToggle}
       className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`}
-      title="公車 + 捷運、轉乘一次內的最快搭法(含走路與等車);搭不到的房源會被濾掉"
+      title="公車 + 捷運、轉乘一次內的最快搭法(含走路、紅綠燈與那個時段的等車);搭不到的房源會被濾掉"
     >
-      <Bus size={12} /> 通勤{on ? ` ≤ ${f.commuteMax} 分${who}` : ""}
+      <Bus size={12} /> {side}
+      {on ? ` ≤ ${f.commuteMax} 分${who}` : ` ${f.commuteTimes[f.commuteSide].time}`}
       <ChevronDown size={12} className={open ? "rotate-180" : ""} />
     </button>
   );
 }
 
-/** 通勤條件:上限分鐘 + 要算哪些地點(多個地點時每個都要在上限內) */
+/** 通勤條件:看上班或下班(各自的日子、出發時間)+ 上限分鐘 + 要算哪些地點(多個地點時每個都要在上限內) */
 function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
+  const cur = f.commuteTimes[f.commuteSide];
+  const setTime = (patch: Partial<{ day: DayType; time: string }>) =>
+    setFilters({ commuteTimes: { ...f.commuteTimes, [f.commuteSide]: { ...cur, ...patch } } });
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800">
+      <div className="flex flex-wrap items-center gap-1">
+        {(["go", "back"] as CommuteSide[]).map((s) => (
+          <Chip key={s} small on={f.commuteSide === s} onClick={() => setFilters({ commuteSide: s })}>
+            {COMMUTE_SIDE_LABEL[s]} {DAY_LABEL[f.commuteTimes[s].day]} {f.commuteTimes[s].time}
+          </Chip>
+        ))}
+        <span className="text-neutral-400">{f.commuteSide === "go" ? "住處 → 地點" : "地點 → 住處"}</span>
+        <select className="input !w-auto !py-0.5 text-xs" value={cur.day} onChange={(e) => setTime({ day: e.target.value as DayType })} aria-label="日子">
+          {DAY_TYPES.map((d) => (
+            <option key={d} value={d}>
+              {DAY_LABEL[d]}
+            </option>
+          ))}
+        </select>
+        <input
+          type="time"
+          className="input !w-auto !py-0.5 text-xs"
+          value={cur.time}
+          step={600}
+          onChange={(e) => e.target.value && setTime({ time: e.target.value })}
+          aria-label="出發時間"
+        />
+        <span className="text-neutral-400">出發</span>
+      </div>
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-neutral-500">通勤上限</span>
         <Chip small on={f.commuteMax == null} onClick={() => setFilters({ commuteMax: null })}>
@@ -167,6 +217,58 @@ function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
           <span className="text-neutral-400">(勾到的每個都要在上限內)</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 經過路線:輸入公車主路線名(307、紅30)或捷運線名(板南線),任一條走得到就留下 */
+function AlongRow({ f }: { f: Filters }) {
+  const names = useQuery({ queryKey: ["bus-names"], queryFn: api.busNames, staleTime: 60 * 60_000 });
+  const along = useAlong();
+  const [text, setText] = useState("");
+  const info = new Map((along.data?.queries ?? []).map((q) => [q.q, q]));
+  const add = () => {
+    const v = text.trim();
+    if (v && !f.alongRoutes.includes(v)) setFilters({ alongRoutes: [...f.alongRoutes, v] });
+    setText("");
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800">
+      <span className="text-neutral-500">經過路線(任一條;公車站 400m、捷運站 800m 內)</span>
+      {f.alongRoutes.map((n) => {
+        const q = info.get(n);
+        const missing = q != null && q.kind == null;
+        return (
+          <span
+            key={n}
+            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 ${missing ? "border-red-400 text-red-600 dark:text-red-400" : "border-emerald-600 bg-emerald-600 text-white"}`}
+          >
+            {q?.label ?? n}
+            {missing && " · 找不到"}
+            <button onClick={() => setFilters({ alongRoutes: f.alongRoutes.filter((x) => x !== n) })} aria-label={`移除 ${n}`}>
+              <X size={12} />
+            </button>
+          </span>
+        );
+      })}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+        className="flex items-center gap-1"
+      >
+        <input className="input !w-36 !py-0.5 text-xs" list="rh-route-names" value={text} onChange={(e) => setText(e.target.value)} placeholder="307、紅30、板南線…" />
+        <button type="submit" className="rounded border border-neutral-300 px-2 py-0.5 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+          加入
+        </button>
+      </form>
+      <datalist id="rh-route-names">
+        {[...(names.data?.mrt ?? []), ...(names.data?.bus ?? [])].map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      {f.alongRoutes.length > 0 && along.data && <span className="text-neutral-400">共 {along.data.ids.length} 間走得到</span>}
     </div>
   );
 }

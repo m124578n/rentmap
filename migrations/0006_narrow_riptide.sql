@@ -1,0 +1,1 @@
+ALTER TABLE `bus_routes` ADD `variant` text;
