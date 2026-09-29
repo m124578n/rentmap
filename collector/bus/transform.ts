@@ -6,6 +6,9 @@
  *   StopOfRoute  每個子路線 × 方向的站序(主角:決定有哪些 key 和站)
  *   Shape        線形 WKT(LINESTRING / MULTILINESTRING)
  *   Schedule     Timetables(每班發車)或 Frequencys(班距區間),兩種都可能有
+ *                (實測 2026-09:StopTimes 只有起點站一筆,所以 t_min 幾乎都是 null,通勤改用 dist_m 估;
+ *                 ServiceDay 一天一筆,週一到週五各重複一份)
+ *   線形多半沒帶 SubRouteUID,子路線要靠端點挑(見 pickShape)
  */
 import { DAY_TYPES, haversine, toMin, type BusRouteIn, type BusStopIn, type DayType, type Schedule } from "../../src/shared/bus";
 
@@ -143,7 +146,10 @@ export function buildSchedule(items: TdxSchedule[]): { schedule: Schedule | null
       if (!validTime(f.StartTime) || !validTime(f.EndTime)) continue;
       const min = Math.max(0, Math.round(f.MinHeadwayMins ?? f.MaxHeadwayMins ?? 0));
       const max = Math.max(min, Math.round(f.MaxHeadwayMins ?? min));
-      for (const d of dayTypes(f.ServiceDay)) bands[d].push({ s: f.StartTime, e: f.EndTime, min, max });
+      // 台北的 ServiceDay 是一天一筆(週一到週五各一份一樣的班距),同一個 wd 只留一份
+      for (const d of dayTypes(f.ServiceDay))
+        if (!bands[d].some((b) => b.s === f.StartTime && b.e === f.EndTime && b.min === min && b.max === max))
+          bands[d].push({ s: f.StartTime, e: f.EndTime, min, max });
     }
   }
   const schedule: Schedule = {};
@@ -164,18 +170,45 @@ export function buildSchedule(items: TdxSchedule[]): { schedule: Schedule | null
   return { schedule: Object.keys(schedule).length ? schedule : null, tMin };
 }
 
+type Pos = { PositionLat?: number; PositionLon?: number };
+/** 端點離起訖站超過這個距離就不是這條子路線的線形(終點繞一圈回站常有幾百公尺差) */
+const SHAPE_END_TOL_M = 1500;
+
+/** 子路線自己的線形優先;否則挑端點離起訖站最近的候選,都太遠就回空陣列(改用站連線) */
+export function pickShape(own: TdxShape | undefined, candidates: TdxShape[], first: Pos, last: Pos): [number, number][] {
+  const ownPts = parseWkt(own?.Geometry);
+  if (ownPts.length >= 2) return ownPts;
+  let best: [number, number][] = [];
+  let bestD = Infinity;
+  for (const c of candidates) {
+    const p = parseWkt(c.Geometry);
+    if (p.length < 2) continue;
+    const a = p[0]!;
+    const b = p[p.length - 1]!;
+    const d = Math.max(haversine(first.PositionLat!, first.PositionLon!, a[1], a[0]), haversine(last.PositionLat!, last.PositionLon!, b[1], b[0]));
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return bestD <= SHAPE_END_TOL_M ? best : [];
+}
+
 /** 站與站直線距離的繞路係數(路線沿街走) */
 const DETOUR = 1.15;
 
 export function transformCity(city: string, data: TdxCity): { routes: BusRouteIn[]; stops: BusStopIn[] } {
   const routeByUid = new Map(data.routes.map((r) => [r.RouteUID, r]));
-  const shapeBy = new Map<string, TdxShape>();
+  // 線形:子路線自己有就用;沒有的話在同 RouteUID × 方向的候選裡挑端點最接近起訖站的
+  // (TDX 大多數線形沒帶 SubRouteUID,同一路線常同時有主線與區間車 / 繞駛的線形,只看 RouteUID 會配錯)
+  const shapeBySub = new Map<string, TdxShape>();
+  const shapesByRoute = new Map<string, TdxShape[]>();
   for (const s of data.shapes) {
     const dir = s.Direction ?? 0;
-    if (s.SubRouteUID) shapeBy.set(`${s.SubRouteUID}:${dir}`, s);
-    if (!shapeBy.has(`${s.RouteUID}:${dir}`)) shapeBy.set(`${s.RouteUID}:${dir}`, s);
-    // 沒標方向的線形才當整條路線共用;有方向的不能拿去給反方向用(走的街常不同)
-    if (s.Direction == null && !shapeBy.has(s.RouteUID)) shapeBy.set(s.RouteUID, s);
+    if (s.SubRouteUID) shapeBySub.set(`${s.SubRouteUID}:${dir}`, s);
+    // 沒標方向的線形才當兩個方向共用;有方向的不能拿去給反方向用(走的街常不同)
+    for (const k of s.Direction == null ? [`${s.RouteUID}:0`, `${s.RouteUID}:1`] : [`${s.RouteUID}:${dir}`])
+      shapesByRoute.set(k, [...(shapesByRoute.get(k) ?? []), s]);
   }
   const schedBy = new Map<string, TdxSchedule[]>();
   for (const s of data.schedules) {
@@ -221,7 +254,7 @@ export function transformCity(city: string, data: TdxCity): { routes: BusRouteIn
       });
     });
 
-    const shapeRaw = parseWkt((shapeBy.get(key) ?? shapeBy.get(`${sor.RouteUID}:${dir}`) ?? shapeBy.get(sor.RouteUID))?.Geometry);
+    const shapeRaw = pickShape(shapeBySub.get(key), shapesByRoute.get(`${sor.RouteUID}:${dir}`) ?? [], pts[0]!.StopPosition!, pts[pts.length - 1]!.StopPosition!);
     const line: [number, number][] = shapeRaw.length >= 2 ? shapeRaw : pts.map((s) => [s.StopPosition!.PositionLon!, s.StopPosition!.PositionLat!]);
     routes.push({
       key,
