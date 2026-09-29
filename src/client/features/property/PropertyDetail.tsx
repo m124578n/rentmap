@@ -9,6 +9,7 @@ import { CommuteSection } from "@/features/commute/CommuteSection";
 import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
 import { PriceAgeSection } from "@/features/listing/PriceAgeSection";
+import { MarketSection } from "@/features/market/MarketSection";
 
 interface Props {
   id: number;
@@ -69,6 +70,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
       {photos.length > 0 && <PhotoStrip photos={photos} />}
 
       {extra?.market_hint && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">591:{extra.market_hint}</p>}
+
+      <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
 
       <FavoritePanel id={id} favorite={favorite} />
 

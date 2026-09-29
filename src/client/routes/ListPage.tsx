@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { applyFilters, setFilters, sortItems, useFilters, type SortKey } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
+import { useMarket } from "@/features/market/useMarket";
+import { MarketBadge } from "@/features/market/MarketSection";
 import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
@@ -16,7 +18,11 @@ export function ListPage() {
   const all = q.data?.items ?? [];
   const commute = useCommute();
   const along = useAlong();
-  const items = useMemo(() => sortItems(applyFilters(all, filters, commute.ctx, along.ids), filters, commute.ctx), [all, filters, commute.ctx, along.ids]);
+  const market = useMarket();
+  const items = useMemo(
+    () => sortItems(applyFilters(all, filters, commute.ctx, along.ids), filters, commute.ctx, market.data),
+    [all, filters, commute.ctx, along.ids, market.data],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -30,6 +36,7 @@ export function ListPage() {
               <option value="rent">租金低 → 高</option>
               <option value="newest">剛刊登的在前</option>
               <option value="drop">降價最多的在前</option>
+              <option value="market">比行情便宜的在前</option>
               <option value="commute" disabled={commute.places.length === 0}>
                 通勤短 → 長{commute.places.length > 1 ? "(取最久的地點)" : ""}
               </option>
@@ -56,8 +63,11 @@ export function ListPage() {
                 <Link to="/p/$id" params={{ id: String(p.id) }} className="card block hover:border-emerald-500">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-medium">{p.title}</h2>
-                    <span className="whitespace-nowrap text-lg font-semibold text-emerald-700 dark:text-emerald-400">
-                      {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}
+                    <span className="flex flex-col items-end gap-0.5">
+                      <span className="whitespace-nowrap text-lg font-semibold text-emerald-700 dark:text-emerald-400">
+                        {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}
+                      </span>
+                      <MarketBadge b={market.data?.items[p.id]} />
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-neutral-500">

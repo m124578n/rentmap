@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
 import type { DayType } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
+import type { MarketMatrix } from "@shared/market";
 import { ageOf, priceOf } from "@/features/listing/age";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
@@ -33,7 +34,7 @@ export interface Filters {
   sort: SortKey;
 }
 
-export type SortKey = "updated" | "rent" | "commute" | "newest" | "drop";
+export type SortKey = "updated" | "rent" | "commute" | "newest" | "drop" | "market";
 
 export const EMPTY: Filters = {
   kinds: [],
@@ -175,7 +176,15 @@ export function applyFilters(items: PropertySummary[], f: Filters, ctx?: Commute
   });
 }
 
-export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx): PropertySummary[] {
+export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, market?: MarketMatrix): PropertySummary[] {
+  if (f.sort === "market") {
+    // 比行情便宜最多的在前;樣本不足的排在有把握的後面,算不出的最後
+    const key = (p: PropertySummary) => {
+      const b = market?.items[p.id];
+      return b?.diff_pct == null ? Infinity : b.diff_pct + (b.enough ? 0 : 1000);
+    };
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
   if (f.sort === "rent") return [...items].sort((a, b) => (a.rent ?? Infinity) - (b.rent ?? Infinity));
   if (f.sort === "newest") {
     const key = (p: PropertySummary) => ageOf(p)?.days ?? Infinity;

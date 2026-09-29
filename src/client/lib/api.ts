@@ -1,5 +1,6 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
+import type { MarketMatrix, MarketResponse } from "@shared/market";
 import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
@@ -45,6 +46,9 @@ export const api = {
   commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen }) =>
     req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}`),
 
+  market: () => req<MarketMatrix>("/api/market"),
+  propertyMarket: (id: number) => req<MarketResponse>(`/api/properties/${id}/market`),
+
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),
   updatePlace: (id: number, input: PlaceUpdate) => req<{ place: Place }>(`/api/places/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
@@ -63,6 +67,7 @@ export interface PropertyDetail {
     lat: number | null;
     lng: number | null;
     buildingType: string | null;
+    kind: string | null;
     floor: number | null;
     totalFloors: number | null;
     buildingAge: number | null;
