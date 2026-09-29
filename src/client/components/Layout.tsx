@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
 import { PlacesDialogHost } from "@/features/places/PlacesDialog";
+import { CompareBar } from "@/features/compare/compare";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
@@ -70,6 +71,7 @@ export function Layout() {
           <>
             <Outlet />
             <PlacesDialogHost />
+            <CompareBar />
           </>
         ) : (
           <div className="card m-4 text-center">

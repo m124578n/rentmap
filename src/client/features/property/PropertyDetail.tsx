@@ -10,6 +10,7 @@ import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
 import { PriceAgeSection } from "@/features/listing/PriceAgeSection";
 import { MarketSection } from "@/features/market/MarketSection";
+import { CompareToggle } from "@/features/compare/compare";
 
 interface Props {
   id: number;
@@ -46,10 +47,13 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         <div className="min-w-0">
           <div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{main ? `$${main.rent.toLocaleString()}` : "—"}</div>
           <h1 className="font-semibold leading-snug">{p.title}</h1>
-          <p className="text-sm text-neutral-500">
-            {p.city}
-            {p.district}
-            {p.road ? ` ${p.road}` : ""}
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-neutral-500">
+            <span>
+              {p.city}
+              {p.district}
+              {p.road ? ` ${p.road}` : ""}
+            </span>
+            <CompareToggle id={id} />
           </p>
         </div>
         {onClose && (

@@ -7,6 +7,7 @@ import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
 import { useMarket } from "@/features/market/useMarket";
 import { MarketBadge } from "@/features/market/MarketSection";
+import { CompareToggle } from "@/features/compare/compare";
 import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
@@ -92,7 +93,8 @@ export function ListPage() {
                   <div className="mt-1.5">
                     <ListingBadges p={p} />
                   </div>
-                  <p className="mt-2 flex gap-2 text-xs">
+                  <p className="mt-2 flex items-center gap-2 text-xs">
+                    <CompareToggle id={p.id} className="mr-auto" />
                     {p.stage && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{STAGE_LABEL[p.stage as Stage] ?? p.stage}</span>}
                     {p.source && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{SOURCE_LABEL[p.source as Source] ?? p.source}</span>}
                   </p>
