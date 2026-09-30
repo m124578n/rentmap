@@ -3,8 +3,17 @@ import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/b
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
-import type { HazardResponse, HazardSummary } from "@shared/hazard";
-import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
+import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
+import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
+
+/** 地圖畫面範圍(度) */
+export interface Bbox {
+  w: number;
+  s: number;
+  e: number;
+  n: number;
+}
+const bboxParams = (b: Bbox) => `w=${b.w}&s=${b.s}&e=${b.e}&n=${b.n}`;
 
 export class ApiError extends Error {
   constructor(
@@ -59,6 +68,8 @@ export const api = {
   garbageFit: (maxM: number, after: string) => req<GarbageFit>(`/api/garbage/fit?max=${maxM}&after=${encodeURIComponent(after)}`),
   hazards: (lat: number, lng: number, city: string) => req<HazardResponse>(`/api/hazards?lat=${lat}&lng=${lng}&city=${encodeURIComponent(city)}`),
   hazardSummary: () => req<HazardSummary>("/api/hazards/summary"),
+  hazardZones: (kind: HazardKind, b: Bbox) => req<HazardZones>(`/api/hazards/zones?kind=${kind}&${bboxParams(b)}`),
+  commuteGrid: (b: Bbox, when: CommuteWhen, bike: boolean) => req<CommuteGrid>(`/api/commute/grid?${bboxParams(b)}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
   nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),

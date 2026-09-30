@@ -5,6 +5,9 @@ import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
+import { setHeat } from "./heatLayer";
+import type { Viewport } from "./heat";
+import type { FeatureCollection } from "geojson";
 import { priceOf } from "@/features/listing/age";
 
 interface Props {
@@ -28,6 +31,10 @@ interface Props {
   onPoint?: (p: { lat: number; lng: number }) => void;
   /** 「看附近」的點,畫一根圖釘 */
   point?: { lat: number; lng: number } | null;
+  /** 區域圖層(通勤網格、災害多邊形…) */
+  heat?: FeatureCollection | null;
+  /** 畫面移動結束(區域圖層依範圍抓資料) */
+  onViewport?: (v: Viewport) => void;
 }
 
 /** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
@@ -49,10 +56,28 @@ function priceLabel(rent: number | null) {
 }
 
 /**
+ * style 好了就做,否則等 idle 再做。maplibre v6 的 isStyleLoaded() 在任何 source(捷運、圖層)還在載入時也是 false,
+ * 直接略過的話資料晚到就永遠畫不上去。fn 要能重複呼叫(load / 換主題也會畫)。回傳取消。
+ */
+function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefined {
+  if (map.isStyleLoaded()) {
+    fn();
+    return;
+  }
+  const run = () => {
+    if (map.isStyleLoaded()) fn();
+  };
+  map.once("idle", run);
+  return () => {
+    map.off("idle", run);
+  };
+}
+
+/**
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
@@ -69,6 +94,10 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const onPointRef = useRef(onPoint);
   onPointRef.current = onPoint;
   const pointMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const heatRef = useRef(heat);
+  heatRef.current = heat;
+  const onViewportRef = useRef(onViewport);
+  onViewportRef.current = onViewport;
   padRef.current = padLeft;
   busRef.current = busOverlay;
   placeClickRef.current = onPlaceClick;
@@ -89,11 +118,18 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     if (import.meta.env.DEV) (window as unknown as { __map?: maplibregl.Map }).__map = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "top-right");
+    const emitView = () => {
+      const b = map.getBounds();
+      onViewportRef.current?.({ w: b.getWest(), s: b.getSouth(), e: b.getEast(), n: b.getNorth(), zoom: map.getZoom() });
+    };
     map.on("load", () => {
       localizeBasemap(map);
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
+      if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
+      emitView();
     });
+    map.on("moveend", emitView);
     map.on("click", () => onSelectRef.current(null));
     // 看附近:桌機右鍵;手機長按(maplibre 在觸控上不一定發 contextmenu,自己計時,手指一動就取消)
     const pick = (ll: maplibregl.LngLat) => onPointRef.current?.({ lat: Math.round(ll.lat * 1e6) / 1e6, lng: Math.round(ll.lng * 1e6) / 1e6 });
@@ -137,16 +173,23 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     map.once("styledata", () => {
       localizeBasemap(map);
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
+      if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
   }, [theme]);
+
+  // 區域圖層
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    return whenReady(map, () => setHeat(map, heatRef.current));
+  }, [heat]);
 
   // 捷運資料到了才加圖層
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mrt) return;
-    if (map.isStyleLoaded()) addMrtLayers(map, mrt, theme);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return whenReady(map, () => addMrtLayers(map, mrt, themeRef.current));
   }, [mrt]);
 
   // 公車路線:畫上去並把整條(通勤模式是上下車那段)框進畫面

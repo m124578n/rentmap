@@ -17,6 +17,8 @@ import type { PropertySummary } from "@shared/schemas";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
+import { COMMUTE_LEGEND, commuteColor, HEAT_LABEL, HEAT_MODES, useHeat, type HeatMode, type Viewport } from "@/features/map/heat";
+import { Layers } from "lucide-react";
 
 const PANEL_W = 400;
 
@@ -68,6 +70,12 @@ export function MapPage() {
     if (byFit && fitOf) return (p: PropertySummary) => { const r = fitOf(p); return r ? FIT_COLOR[r.level] : undefined; };
     return undefined;
   }, [byCommute, byFit, fitOf, filters, commute.ctx]);
+  const [heatMode, setHeatMode] = useHeatMode();
+  const [view, setView] = useState<Viewport | null>(null);
+  // 看區域圖層時標記會擋住,可以先藏起來(不記)
+  const [hideMarkers, setHideMarkers] = useState(false);
+  const shownOnMap = heatMode !== "none" && hideMarkers ? NO_ITEMS : items;
+  const heat = useHeat(heatMode, view, items);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
   const panelOpen = selectedId != null || point != null;
   const panel = (onOverlay: (o: BusOverlay | null) => void) =>
@@ -93,7 +101,7 @@ export function MapPage() {
         )}
         <div className="relative min-w-0 flex-1">
           <MapView
-            items={items}
+            items={shownOnMap}
             selectedId={selectedId}
             onSelect={setSelectedId}
             theme={theme}
@@ -106,6 +114,8 @@ export function MapPage() {
             colorOf={colorOf}
             onPoint={pickPoint}
             point={point}
+            heat={heat.fc}
+            onViewport={setView}
           />
 
           {q.isSuccess && all.length === 0 && (
@@ -117,83 +127,112 @@ export function MapPage() {
               ,或在終端機 <code>npm run collect -- add &lt;591網址&gt;</code>
             </div>
           )}
-          {modes.length > 1 && (
-            <div className={`absolute left-3 z-[5] rounded-lg border border-neutral-200 bg-white/95 px-2 py-1.5 text-xs shadow-sm dark:border-neutral-800 dark:bg-neutral-900/95 ${noCoords > 0 ? "top-10" : "top-3"}`}>
-              <div className="flex gap-1">
-                <span className="self-center text-neutral-500">標記顏色</span>
-                {modes.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setColorMode(m)}
-                    className={`rounded px-1.5 py-0.5 ${colorMode === m ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
-                  >
-                    {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
-                  </button>
-                ))}
-              </div>
-              {byFit && (
-                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                  {(
-                    [
-                      ["符合", FIT_COLOR.green],
-                      ["普通", FIT_COLOR.yellow],
-                      ["不符", FIT_COLOR.red],
-                    ] as const
-                  ).map(([label, c]) => (
-                    <span key={label} className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {byCommute && (
-                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                  {COMMUTE_LEGEND.map(([label, c]) => (
-                    <span key={label} className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
           {!panelOpen && (
             <div className="pointer-events-none absolute bottom-8 left-2 rounded bg-white/85 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-900/85">
               {narrow ? "長按" : "右鍵"}地圖任一點:看那裡的通勤、生活機能、災害
             </div>
           )}
-          {noCoords > 0 && (
-            <div className="absolute top-3 left-3 rounded bg-amber-100 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-              {noCoords} 間沒有座標,只在
-              <Link to="/list" className="underline">
-                列表
-              </Link>
-              看得到
+          <div className="absolute top-3 left-3 z-[5] grid max-w-[min(20rem,calc(100%-4.5rem))] justify-items-start gap-1 text-xs">
+            {noCoords > 0 && (
+              <div className="rounded bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                {noCoords} 間沒有座標,只在
+                <Link to="/list" className="underline">
+                  列表
+                </Link>
+                看得到
+              </div>
+            )}
+            {modes.length > 1 && (
+              <div className={BOX}>
+                <div className="flex flex-wrap gap-1">
+                  <span className="self-center text-neutral-500">標記顏色</span>
+                  {modes.map((m) => (
+                    <button key={m} onClick={() => setColorMode(m)} className={chip(colorMode === m)}>
+                      {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
+                    </button>
+                  ))}
+                </div>
+                {byFit && (
+                  <Legend
+                    items={[
+                      ["符合", FIT_COLOR.green],
+                      ["普通", FIT_COLOR.yellow],
+                      ["不符", FIT_COLOR.red],
+                    ]}
+                  />
+                )}
+                {byCommute && <Legend items={COMMUTE_LEGEND} />}
+              </div>
+            )}
+            <div className={BOX}>
+              <label className="flex items-center gap-1">
+                <Layers size={13} className="text-neutral-500" />
+                <span className="text-neutral-500">區域圖層</span>
+                <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-transparent px-1 py-0.5 dark:border-neutral-700">
+                  {HEAT_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {HEAT_LABEL[m]}
+                    </option>
+                  ))}
+                </select>
+                {heat.loading && <span className="text-neutral-400">計算中…</span>}
+              </label>
+              {heatMode !== "none" && (
+                <label className="mt-1 flex items-center gap-1 text-neutral-600 dark:text-neutral-400">
+                  <input type="checkbox" checked={hideMarkers} onChange={(e) => setHideMarkers(e.target.checked)} /> 隱藏房源標記
+                </label>
+              )}
+              {heat.legend.length > 0 && <Legend items={heat.legend} square />}
+              {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500">{heat.note}</p>}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ---- 標記依通勤上色 ----
+const NO_ITEMS: PropertySummary[] = [];
+const BOX = "rounded-lg border border-neutral-200 bg-white/95 px-2 py-1.5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/95";
+const chip = (on: boolean) =>
+  `rounded px-1.5 py-0.5 ${on ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`;
 
-const COMMUTE_LEGEND: [string, string][] = [
-  ["≤20 分", "#059669"],
-  ["≤30", "#65a30d"],
-  ["≤45", "#d97706"],
-  [">45", "#dc2626"],
-  ["搭不到", "#9ca3af"],
-];
+function Legend({ items, square = false }: { items: [string, string][]; square?: boolean }) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+      {items.map(([label, c]) => (
+        <span key={label} className="flex items-center gap-1">
+          <span className={`h-2.5 w-2.5 ${square ? "rounded-sm opacity-70" : "rounded-full"}`} style={{ background: c }} />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
-/** 最久那個地點的通勤分鐘 → 顏色;undefined(還在算)用預設 */
-function commuteColor(min: number | null | undefined): string | undefined {
-  if (min === undefined) return undefined;
-  if (min === null) return "#9ca3af";
-  return min <= 20 ? "#059669" : min <= 30 ? "#65a30d" : min <= 45 ? "#d97706" : "#dc2626";
+const HEAT_KEY = "rentmap.heatLayer";
+
+/** 區域圖層:這台瀏覽器的偏好 */
+function useHeatMode(): [HeatMode, (m: HeatMode) => void] {
+  const [mode, setMode] = useState<HeatMode>(() => {
+    try {
+      const v = localStorage.getItem(HEAT_KEY) as HeatMode | null;
+      return v && (HEAT_MODES as readonly string[]).includes(v) ? v : "none";
+    } catch {
+      return "none";
+    }
+  });
+  return [
+    mode,
+    (m) => {
+      setMode(m);
+      try {
+        localStorage.setItem(HEAT_KEY, m);
+      } catch {
+        /* 私密模式,忽略 */
+      }
+    },
+  ];
 }
 
 type ColorMode = "stage" | "commute" | "fit";

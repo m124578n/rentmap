@@ -67,3 +67,10 @@ export interface HazardSummary {
   has_data: boolean;
   items: Record<string, HazardLevels>;
 }
+
+/** /api/hazards/zones:畫面範圍內的多邊形(properties.level);too_big = 範圍太大沒給,要放大 */
+export interface HazardZones {
+  type: "FeatureCollection";
+  features: { type: "Feature"; geometry: { type: "Polygon"; coordinates: [number, number][][] }; properties: { level: number } }[];
+  too_big: boolean;
+}

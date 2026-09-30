@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { HazardResponse, HazardSummary, HazardZoneIn } from "../src/shared/hazard";
+import type { HazardResponse, HazardSummary, HazardZoneIn, HazardZones } from "../src/shared/hazard";
 
 const ORIGIN = "http://localhost:5173";
 let cookie = "";
@@ -61,6 +61,17 @@ describe("hazards", () => {
     const s = (await (await SELF.fetch(`${ORIGIN}/api/hazards/summary`, authed())).json()) as HazardSummary;
     expect(s.items[inside]).toEqual({ flood24: 3, liquefaction: 3 });
     expect(s.items[hole]).toEqual({ liquefaction: 3 });
+  });
+
+  it("zones in a viewport as GeoJSON; too big a viewport returns nothing", async () => {
+    const zones = async (q: string) => (await (await SELF.fetch(`${ORIGIN}/api/hazards/zones?${q}`, authed())).json()) as HazardZones;
+    const near = await zones(`kind=flood24&w=${LNG - 0.01}&s=${LAT - 0.01}&e=${LNG + 0.01}&n=${LAT + 0.01}`);
+    expect(near.too_big).toBe(false);
+    expect(near.features.map((f) => f.properties.level).sort()).toEqual([2, 3]);
+    expect(near.features[0]!.geometry.coordinates.length).toBeGreaterThan(0);
+    expect((await zones(`kind=flood24&w=121.9&s=25.3&e=121.95&n=25.35`)).features).toEqual([]);
+    expect((await zones(`kind=flood24&w=121&s=24.6&e=122&n=25.4`)).too_big).toBe(true);
+    expect((await SELF.fetch(`${ORIGIN}/api/hazards/zones?kind=bogus&w=1&s=1&e=2&n=2`, authed())).status).toBe(400);
   });
 
   it("commit refuses a much smaller re-import unless forced", async () => {

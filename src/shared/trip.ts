@@ -106,6 +106,15 @@ export interface CommuteMatrix {
   items: Record<string, Record<string, TripBrief | null>>;
 }
 
+/** 地圖「通勤」圖層:網格中心點到每個地點最快幾分(null = 搭不到);順序同 places */
+export interface CommuteGrid {
+  /** 格子高(緯度度數)、寬(經度度數) */
+  step: number;
+  step_lng: number;
+  places: number[];
+  cells: { lat: number; lng: number; mins: (number | null)[] }[];
+}
+
 export interface TripsResponse {
   has_bus: boolean;
   when: CommuteWhen;

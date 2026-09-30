@@ -6,6 +6,8 @@
  *                                                一個點到一個地點:每種搭法最快的 + 公車直達前三條(面板用)
  * 時段參數:day = wd / sat / sun、time = 出發時刻、dir = to(住處 → 地點,上班)/ from(地點 → 住處,下班);
  * 省略就是平日 08:00 上班。等車依那個時段的班距,那段時間沒開的路線不算。
+ *   GET /api/commute/grid?w=&s=&e=&n=&day=&time=&dir=
+ *                                                畫面範圍切網格(最多約 2500 格),每格到每個地點最快幾分(地圖「通勤」圖層)
  * bike=0 不算 YouBike(預設會算:騎到目的地或捷運站旁的站,見 transit/bike.ts)。
  *
  * 每個地點算一次「從目的地往回」的標記,之後每間房只看走得到的站,所以跟房源數幾乎無關。
@@ -15,7 +17,7 @@ import { Hono } from "hono";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { DAY_TYPES } from "@shared/bus";
-import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
+import { COMMUTE_DEFAULT, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
 import { db, schema } from "../db";
@@ -89,5 +91,36 @@ commute.get("/api/commute/trips", async (c) => {
     .map((x) => buildTrip(plan, x))
     .sort((a, b) => a.total_min - b.total_min);
   const body: TripsResponse = { when, has_bus: net.version != null, trips };
+  return c.json(body);
+});
+
+/** 網格最多幾格:再多一次請求 CPU 會太久 */
+const GRID_MAX = 2500;
+
+commute.get("/api/commute/grid", async (c) => {
+  const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => Number(c.req.query(k))) as [number, number, number, number];
+  if (![w, s, e, n].every(Number.isFinite) || e <= w || n <= s) return c.json({ error: "w, s, e, n required" }, 400);
+  const when = whenOf(c.req.query());
+  if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
+  // 格子邊長:至少 250m,畫面大就放大到不超過 GRID_MAX 格
+  const kx = Math.cos((((s + n) / 2) * Math.PI) / 180);
+  const minStep = 0.00225;
+  const step = Math.max(minStep, Math.sqrt(((e - w) * kx * (n - s)) / GRID_MAX));
+  const stepLng = step / kx;
+  const places = await db(c.env.DB)
+    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+    .from(schema.myPlaces)
+    .where(eq(schema.myPlaces.userId, c.get("user").id))
+    .orderBy(asc(schema.myPlaces.id));
+  const net = await loadBusNet(c.env.DB);
+  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
+  const plans = places.map((pl) => buildPlan(net, pl, when, bikes));
+  const cells: CommuteGrid["cells"] = [];
+  for (let lat = Math.floor(s / step) * step + step / 2; lat < n; lat += step)
+    for (let lng = Math.floor(w / stepLng) * stepLng + stepLng / 2; lng < e; lng += stepLng) {
+      const mins = plans.map((plan) => bestTrip(plan, lat, lng, 400)?.total_min ?? null);
+      cells.push({ lat: Math.round(lat * 1e5) / 1e5, lng: Math.round(lng * 1e5) / 1e5, mins });
+    }
+  const body: CommuteGrid = { step, step_lng: stepLng, places: places.map((p) => p.id), cells };
   return c.json(body);
 });

@@ -2,7 +2,7 @@ import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
 import type { AlongResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
-import type { CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
+import type { CommuteGrid, CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
 
 const ORIGIN = "http://localhost:5173";
@@ -239,6 +239,23 @@ describe("commute (bus + MRT, up to one transfer)", () => {
     // 和面板的行程一樣
     expect(best.total_min).toBe((await trips(LAT + 0.0003, lngAt(1), office)).trips[0]!.total_min);
     expect(body.items[near]![far]).toBeNull();
+  });
+
+  it("commute grid over a viewport: one cell per step, minutes per place", async () => {
+    const places = ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] }).items;
+    const res = await SELF.fetch(`${ORIGIN}/api/commute/grid?w=${lngAt(0)}&s=${LAT - 0.002}&e=${lngAt(1) + 0.002}&n=${LAT + 0.002}`, authed());
+    expect(res.status).toBe(200);
+    const g = (await res.json()) as CommuteGrid;
+    expect(g.places).toEqual(places.map((p) => p.id));
+    expect(g.cells.length).toBeGreaterThan(0);
+    for (const c of g.cells) expect(c.mins).toHaveLength(places.length);
+    // 沿線附近的格子到公司搭得到
+    const office = places.findIndex((p) => p.name === "公司");
+    expect(g.cells.some((c) => c.mins[office] != null)).toBe(true);
+    // 範圍太大:格子放大,不會超過上限太多
+    const big = (await (await SELF.fetch(`${ORIGIN}/api/commute/grid?w=121&s=24.6&e=122&n=25.4`, authed())).json()) as CommuteGrid;
+    expect(big.cells.length).toBeLessThan(2700);
+    expect((await SELF.fetch(`${ORIGIN}/api/commute/grid?w=1`, authed())).status).toBe(400);
   });
 
   it("time of day: routes not running then are skipped", async () => {

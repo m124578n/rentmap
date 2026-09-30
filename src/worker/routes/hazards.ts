@@ -4,6 +4,7 @@
  * 查詢(需登入):
  *   GET /api/hazards?lat=&lng=&city=台北市   這個點各種災害落在哪一級(city 用來判斷液化有沒有資料:只有台北市有)
  *   GET /api/hazards/summary       每間房源各種災害的等級(比較表、需求符合度用)
+ *   GET /api/hazards/zones?kind=&w=&s=&e=&n=   畫面範圍內某種災害的多邊形(GeoJSON,地圖圖層用;範圍太大回 too_big)
  *
  * 採集機推入(bearer INGEST_SECRET),整批覆蓋式:
  *   POST /api/ingest/hazards          { version, items: HazardZoneIn[] }
@@ -127,6 +128,22 @@ hazards.get("/api/hazards/summary", async (c) => {
   for (const h of results) items[h.id] = levelsAt(z, h.lat, h.lng);
   const body: HazardSummary = { has_data: z.zones.length > 0, items };
   return c.json(body);
+});
+
+/** 畫面範圍最大(度²):約 0.15° × 0.15°,再大就要使用者放大 */
+const ZONES_MAX_AREA = 0.025;
+
+hazards.get("/api/hazards/zones", async (c) => {
+  const kind = z.enum(HAZARD_KINDS).safeParse(c.req.query("kind"));
+  const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => Number(c.req.query(k))) as [number, number, number, number];
+  if (!kind.success || ![w, s, e, n].every(Number.isFinite)) return c.json({ error: "kind, w, s, e, n required" }, 400);
+  // 航空噪音只有一百多個里,整份給;其他看範圍
+  if (kind.data !== "airnoise" && (e - w) * (n - s) > ZONES_MAX_AREA) return c.json({ type: "FeatureCollection", features: [], too_big: true });
+  const zc = await loadZones(c.env.DB);
+  const features = zc.zones
+    .filter((zn) => zn.kind === kind.data && zn.maxLng >= w && zn.minLng <= e && zn.maxLat >= s && zn.minLat <= n)
+    .map((zn) => ({ type: "Feature" as const, geometry: { type: "Polygon" as const, coordinates: zn.rings }, properties: { level: zn.level } }));
+  return c.json({ type: "FeatureCollection", features, too_big: false });
 });
 
 // ---- 採集機推入 ----
