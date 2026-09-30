@@ -40,3 +40,9 @@ export async function cachedJson(c: Context<AppEnv>, parts: (string | number)[],
   if (cache) c.executionCtx.waitUntil(cache.put(key, new Response(body, { headers })));
   return new Response(body, { headers: { ...headers, "Cache-Control": "private, no-store", "x-cache": "miss" } });
 }
+
+/** ETag 用的短雜湊 */
+export async function shortHash(s: string) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf).slice(0, 10)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}

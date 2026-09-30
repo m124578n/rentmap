@@ -113,6 +113,21 @@ describe("properties", () => {
   });
 });
 
+describe("list ETag", () => {
+  it("304 when nothing changed; a new favorite changes it", async () => {
+    const first = await SELF.fetch(`${ORIGIN}/api/properties`, authed());
+    const etag = first.headers.get("etag")!;
+    expect(etag).toMatch(/^W\/"[0-9a-f]+"$/);
+    const again = await SELF.fetch(`${ORIGIN}/api/properties`, authed({ headers: { "If-None-Match": etag } }));
+    expect(again.status).toBe(304);
+    const { id } = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed({ method: "POST", body: JSON.stringify({ title: "etag", city: "台北市", district: "大安區", rent: 10000 }) }))).json()) as { id: number };
+    await SELF.fetch(`${ORIGIN}/api/properties/${id}/favorite`, authed({ method: "PUT", body: JSON.stringify({ stage: "saved" }) }));
+    const changed = await SELF.fetch(`${ORIGIN}/api/properties`, authed({ headers: { "If-None-Match": etag } }));
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("etag")).not.toBe(etag);
+  });
+});
+
 describe("price history and listing age in API", () => {
   it("list and detail return posted date and price history", async () => {
     const ing = (body: unknown) =>

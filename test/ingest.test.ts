@@ -70,6 +70,49 @@ describe("ingest", () => {
     expect(after.items.map((i) => i.source_listing_id)).not.toContain("999003");
   });
 
+  it("one batch: new and existing mixed, duplicates collapsed, each new listing linked to its own property", async () => {
+    await post({ items: [{ ...item, source_listing_id: "B1" }] });
+    const r = (await (
+      await post({
+        items: [
+          { ...item, source_listing_id: "B2", rent: 11000 },
+          { ...item, source_listing_id: "B1", rent: 12000 },
+          { ...item, source_listing_id: "B3", rent: 13000 },
+          { ...item, source_listing_id: "B2", rent: 11500 }, // 同批重複:取最後一筆
+        ],
+      })
+    ).json()) as { created: number; updated: number; ids: number[] };
+    expect(r).toMatchObject({ created: 2, updated: 1 });
+    expect(new Set(r.ids).size).toBe(3);
+    const rows = await env.DB.prepare(
+      "SELECT l.source_listing_id AS sid, l.rent, l.property_id AS pid, (SELECT COUNT(*) FROM listing_price_history h WHERE h.listing_id = l.id) AS hist FROM listings l WHERE l.source_listing_id IN ('B1','B2','B3') ORDER BY sid",
+    ).all<{ sid: string; rent: number; pid: number; hist: number }>();
+    expect(rows.results.map((x) => [x.sid, x.rent, x.hist])).toEqual([
+      ["B1", 12000, 2],
+      ["B2", 11500, 1],
+      ["B3", 13000, 1],
+    ]);
+    expect(new Set(rows.results.map((x) => x.pid)).size).toBe(3);
+  });
+
+  it("/seen and /status update many ids in one statement", async () => {
+    await post({ items: ["S1", "S2", "S3"].map((id) => ({ ...item, source_listing_id: id })) });
+    const call = (path: string, body: unknown) =>
+      SELF.fetch(`${ORIGIN}/api/ingest/${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer test-ingest" }, body: JSON.stringify(body) }).then((x) => x.json());
+    expect(await call("seen", { source: "591", ids: ["S1", "S2", "nope"] })).toEqual({ updated: 2 });
+    expect(
+      await call("status", {
+        items: [
+          { source: "591", source_listing_id: "S1", status: "removed" },
+          { source: "591", source_listing_id: "S2", status: "removed" },
+          { source: "591", source_listing_id: "S3", status: "unknown" },
+        ],
+      }),
+    ).toEqual({ updated: 3 });
+    const st = await env.DB.prepare("SELECT source_listing_id AS sid, status FROM listings WHERE source_listing_id IN ('S1','S2','S3') ORDER BY sid").all<{ sid: string; status: string }>();
+    expect(st.results.map((x) => x.status)).toEqual(["removed", "removed", "unknown"]);
+  });
+
   it("keeps manually corrected coordinates", async () => {
     const a = (await (await post({ items: [{ ...item, source_listing_id: "999002" }] })).json()) as { ids: number[] };
     const pid = a.ids[0]!;

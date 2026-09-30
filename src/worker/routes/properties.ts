@@ -15,6 +15,7 @@ import type { AppEnv } from "../env";
 import type { PricePoint } from "@shared/listing";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
+import { propertiesSig, shortHash, tableSig } from "../cache";
 
 export const properties = new Hono<AppEnv>();
 properties.use("/api/properties", requireUser());
@@ -22,6 +23,19 @@ properties.use("/api/properties/*", requireUser());
 
 properties.get("/api/properties", async (c) => {
   const user = c.get("user");
+  // ETag:房源、刊登、價格紀錄、這個人的收藏都沒變就回 304,不用跑整份清單(房源一天才同步一次)
+  const DB = c.env.DB;
+  const version = [
+    user.id,
+    await propertiesSig(DB),
+    await tableSig(DB, "listings", "last_seen_at"),
+    await tableSig(DB, "listing_price_history", "id"),
+    await tableSig(DB, "favorites", "updated_at", `WHERE user_id = ${Number(user.id)}`),
+  ].join("|");
+  const etag = `W/"${await shortHash(version)}"`;
+  c.header("ETag", etag);
+  c.header("Cache-Control", "private, no-cache");
+  if (c.req.header("If-None-Match") === etag) return c.body(null, 304);
   const d = db(c.env.DB);
   const p = schema.properties;
   const f = schema.favorites;
@@ -54,7 +68,6 @@ properties.get("/api/properties", async (c) => {
       listing_status: sql<string | null>`(SELECT status FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       posted_at: sql<string | null>`(SELECT posted_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       first_seen_at: sql<string | null>`(SELECT first_seen_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
-      last_seen_at: sql<string | null>`(SELECT last_seen_at FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       // 價格紀錄 [[rent, seen_at], …](通常一兩筆)
       price_json: sql<string | null>`(SELECT json_group_array(json_array(h.rent, h.seen_at)) FROM listing_price_history h WHERE h.listing_id = (SELECT id FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1))`,
       stage: f.stage,
@@ -62,8 +75,6 @@ properties.get("/api/properties", async (c) => {
       fav_note: f.note,
       tags_json: f.tagsJson,
       fav_updated_at: f.updatedAt,
-      created_at: p.createdAt,
-      updated_at: p.updatedAt,
     })
     .from(p)
     .leftJoin(f, and(eq(f.propertyId, p.id), eq(f.userId, user.id)))

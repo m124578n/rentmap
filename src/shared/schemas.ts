@@ -108,7 +108,6 @@ export interface PropertySummary {
   /** 來源的刊登日 YYYY-MM-DD(591 才有) */
   posted_at: string | null;
   first_seen_at: string | null;
-  last_seen_at: string | null;
   /** 價格紀錄(時間排序) */
   price_history: { rent: number; at: string }[];
   stage: string | null;
@@ -116,8 +115,6 @@ export interface PropertySummary {
   fav_note: string | null;
   tags: string[];
   fav_updated_at: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface SessionUser {
