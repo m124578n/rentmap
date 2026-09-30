@@ -11,6 +11,7 @@ import type { Place } from "@shared/schemas";
 import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
 import { COMMUTE_SIDE_LABEL, type CommuteSide } from "@shared/trip";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
+import { COMMUTE_MODES, COMMUTE_MODE_LABEL } from "@shared/drive";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
 
@@ -145,7 +146,7 @@ function CommuteChip({ f, hasPlaces, places, open, onToggle }: { f: Filters; has
       className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`}
       title="公車 + 捷運、轉乘一次內的最快搭法(含走路、紅綠燈與那個時段的等車);搭不到的房源會被濾掉"
     >
-      <Bus size={12} /> {side}
+      {f.commuteMode === "transit" ? <Bus size={12} /> : <span>{COMMUTE_MODE_LABEL[f.commuteMode]}</span>} {side}
       {on ? ` ≤ ${f.commuteMax} 分${who}` : ` ${f.commuteTimes[f.commuteSide].time}`}
       <ChevronDown size={12} className={open ? "rotate-180" : ""} />
     </button>
@@ -182,9 +183,20 @@ function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
           aria-label="出發時間"
         />
         <span className="text-neutral-400">出發</span>
-        <label className="ml-1 flex items-center gap-1" title="騎 YouBike 到目的地、或騎到捷運站旁再轉捷運(騎 5km / 3km 內)">
-          <input type="checkbox" checked={f.commuteBike} onChange={(e) => setFilters({ commuteBike: e.target.checked })} /> 含 YouBike
-        </label>
+        {f.commuteMode === "transit" && (
+          <label className="ml-1 flex items-center gap-1" title="騎 YouBike 到目的地、或騎到捷運站旁再轉捷運(騎 5km / 3km 內)">
+            <input type="checkbox" checked={f.commuteBike} onChange={(e) => setFilters({ commuteBike: e.target.checked })} /> 含 YouBike
+          </label>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-neutral-500">方式</span>
+        {COMMUTE_MODES.map((m) => (
+          <Chip key={m} small on={f.commuteMode === m} onClick={() => setFilters({ commuteMode: m })}>
+            {COMMUTE_MODE_LABEL[m]}
+          </Chip>
+        ))}
+        {f.commuteMode !== "transit" && <span className="text-neutral-400">(用距離與尖峰 / 離峰時速估,不是導航)</span>}
       </div>
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-neutral-500">通勤上限</span>

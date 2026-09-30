@@ -19,7 +19,8 @@ export const COMMUTE_DEFAULT: Record<CommuteSide, CommuteWhen> = {
 };
 export const whenParams = (w: CommuteWhen) => `day=${w.day}&time=${encodeURIComponent(w.time)}&dir=${w.dir}`;
 
-export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus" | "bike" | "bike+mrt" | "mrt+bike";
+/** scooter / car 是前端用距離估的(shared/drive.ts),不是路網算的 */
+export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus" | "bike" | "bike+mrt" | "mrt+bike" | "scooter" | "car";
 export const TRIP_KIND_LABEL: Record<TripKind, string> = {
   walk: "步行",
   bus: "公車直達",
@@ -30,6 +31,8 @@ export const TRIP_KIND_LABEL: Record<TripKind, string> = {
   bike: "YouBike",
   "bike+mrt": "YouBike 轉捷運",
   "mrt+bike": "捷運轉 YouBike",
+  scooter: "機車(估)",
+  car: "開車(估)",
 };
 
 export type TripLeg =
@@ -96,6 +99,8 @@ export interface TripBrief {
   total_min: number;
   transfers: number;
   summary: string;
+  /** 機車 / 開車:道路公里數(估),算油錢用 */
+  km?: number;
 }
 
 export interface CommuteMatrix {

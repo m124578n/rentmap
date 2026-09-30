@@ -11,6 +11,9 @@ import { openPlacesDialog, useCommuteTarget, usePlaces } from "@/features/places
 import { RouteTimes } from "@/features/bus/BusSection";
 import { useCommute } from "./useCommute";
 import { tripOverlay } from "./tripOverlay";
+import { driveMin, isPeak, roadKm } from "@shared/drive";
+import { haversine } from "@shared/bus";
+import { useRegion } from "@/lib/region";
 
 interface Props {
   lat: number;
@@ -89,6 +92,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
                   </span>
                   {open ? <ChevronUp size={14} className="shrink-0 text-neutral-400" /> : <ChevronDown size={14} className="shrink-0 text-neutral-400" />}
                 </button>
+                <DriveLine lat={lat} lng={lng} place={pl} when={whenOf(f, side)} />
                 {open && (
                   <Trips
                     lat={lat}
@@ -323,5 +327,16 @@ function TripDetail({ trip }: { trip: Trip }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** 機車 / 開車(距離估,shared/drive.ts):大眾運輸之外的參考,中南部多半騎車 */
+function DriveLine({ lat, lng, place, when }: { lat: number; lng: number; place: { lat: number; lng: number }; when: CommuteWhen }) {
+  const region = useRegion();
+  const m = haversine(lat, lng, place.lat, place.lng);
+  return (
+    <p className="px-1.5 pb-0.5 text-[11px] text-neutral-500" title={`直線 ${(m / 1000).toFixed(1)} km × 1.3 當道路距離,依${isPeak(when) ? "尖峰" : "離峰"}平均時速估;不是導航`}>
+      機車約 {driveMin("scooter", m, when, region.key)} 分 · 開車約 {driveMin("car", m, when, region.key)} 分 · {roadKm(m)} km(估)
+    </p>
   );
 }

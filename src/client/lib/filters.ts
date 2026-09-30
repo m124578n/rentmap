@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { PropertySummary } from "@shared/schemas";
 import type { DayType } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
+import type { CommuteMode } from "@shared/drive";
 import type { MarketMatrix } from "@shared/market";
 import type { FitResult } from "@shared/fit";
 import { ageOf, priceOf } from "@/features/listing/age";
@@ -31,6 +32,8 @@ export interface Filters {
   commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
   /** 通勤算不算 YouBike(騎到目的地或捷運站旁) */
   commuteBike: boolean;
+  /** 通勤方式:大眾運輸(路網算)或機車 / 開車(距離估,shared/drive.ts);篩選、排序、上色、符合度都跟著它 */
+  commuteMode: CommuteMode;
   /** 經過這些路線(任一條):公車主路線名(307)或捷運線名(板南線);走得到才留 */
   alongRoutes: string[];
   /** 隱藏不符需求(紅)的房源;沒設需求時無效 */
@@ -63,6 +66,7 @@ export const EMPTY: Filters = {
   fitOnly: false,
   commuteSide: "go",
   commuteBike: true,
+  commuteMode: "transit",
   commuteTimes: {
     go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
     back: { day: COMMUTE_DEFAULT.back.day, time: COMMUTE_DEFAULT.back.time },
@@ -96,7 +100,7 @@ export function setFilters(patch: Partial<Filters>) {
 
 /** 清除篩選;排序與上下班時間是設定,不跟著清 */
 export function resetFilters() {
-  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes, commuteBike: current.commuteBike });
+  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes, commuteBike: current.commuteBike, commuteMode: current.commuteMode });
 }
 
 /** 某一邊(上班 / 下班)的完整時段 */

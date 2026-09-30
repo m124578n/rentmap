@@ -13,6 +13,7 @@
  *   公車捷運轉乘 −8),× 每週天數 × 52 ÷ 12;有搭大眾運輸就以 TPASS 1200 元封頂(雙北 + 基隆桃園,含 YouBike 前 30 分)。
  */
 import type { TripBrief, TripKind } from "./trip";
+import { DRIVE_COST_PER_KM } from "./drive";
 
 export const TPASS = 1200;
 export const INTERNET_EST = 500;
@@ -85,6 +86,8 @@ export const TRIP_FARE: Record<TripKind, number> = {
   bike: 5,
   "bike+mrt": 30,
   "mrt+bike": 30,
+  scooter: 0, // 依公里數算油錢(DRIVE_COST_PER_KM),不是票價
+  car: 0,
 };
 
 export interface CostInput {
@@ -160,6 +163,18 @@ export function monthlyCost(p: CostInput, o: CostOpts = {}): MonthlyCost | null 
     const days = o.days ?? 5;
     if (!c.go || !c.back) lines.push({ key: "commute", label: "通勤", amount: 0, note: `到${c.place}搭不到(1 次轉乘內),沒算`, estimated: true });
     else {
+      const drive = c.go.kind === "scooter" || c.go.kind === "car" ? c.go.kind : null;
+      if (drive) {
+        const perDay = Math.round(((c.go.km ?? 0) + (c.back.km ?? 0)) * DRIVE_COST_PER_KM[drive]);
+        lines.push({
+          key: "commute",
+          label: "通勤",
+          amount: Math.round((perDay * days * 52) / 12),
+          note: `到${c.place}${drive === "scooter" ? "騎車" : "開車"}油錢約每天 ${perDay} 元 × 每週 ${days} 天(不含停車費)`,
+          estimated: true,
+        });
+        return { total: lines.reduce((s, l) => s + l.amount, 0), lines };
+      }
       const perDay = TRIP_FARE[c.go.kind] + TRIP_FARE[c.back.kind];
       const raw = Math.round((perDay * days * 52) / 12);
       const transit = perDay > 0;
