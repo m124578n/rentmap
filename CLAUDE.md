@@ -32,6 +32,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/hazard/ 是災害風險(淹水 / 液化;src/shared/hazard.ts、API routes/hazards.ts)
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
+              pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
               transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段
 src/shared/   Zod schema 與常數,前後端共用;**regions.ts 是生活圈與縣市定義(行政區、TDX / 實價登錄代碼、範圍、各縣市有哪些資料),新增縣市或判斷「某縣市有沒有某資料」一律走它**
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
@@ -71,6 +72,11 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 **2026-09-30 起兩個排程都已停用(Disabled),方向改為找房筆記、不再每日採集。** 要恢復:`Get-ScheduledTask RentmapSync-* | Enable-ScheduledTask`。以下是原本的設定:
 
 Windows 工作排程 `RentmapSync-*` 兩個時段(20:00 台北、21:00 新北 + 重抓 80 筆;好房中午與 23:00 重抓 2026-09-29 取消以減少喚醒,`--group=housefun|recheck` 仍可手動跑)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。排程會把睡眠中的電腦喚醒(WakeToRun,電源設定「允許喚醒計時器」已啟用),`run_daily.ps1` 開頭先等網路、`git pull`,自動睡眠預設關閉(`$env:AUTO_SLEEP=1` 才開:腳本開始後沒人動過電腦、且 menmap / 其他 rentmap 排程沒在跑才睡)。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
+
+## 私人模式(PRIVATE_POOL)
+
+本機 `.dev.vars` 要有 `PRIVATE_POOL=1`:共用的 591 / 好房房源池、照片、聯絡人、刊登天數、每坪開價圖層、採集推入(`/api/ingest/listings` 等)都靠它。
+**沒設就是公開模式**(正式站預設):每人只看自己建的房源,採集推入 404。新增讀 `properties` 的 API 時要照 `src/worker/pool.ts` 過濾,快取 key 用 `propertiesSig(DB, ownerOf(c))`。
 
 ## 本機登入
 

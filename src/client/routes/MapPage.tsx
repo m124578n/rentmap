@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { useRegion } from "@/lib/region";
+import { usePrivatePool } from "@/lib/useAuth";
 import { applyFilters, useFilters, worstCommute } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
@@ -72,7 +73,10 @@ export function MapPage() {
     if (byFit && fitOf) return (p: PropertySummary) => { const r = fitOf(p); return r ? FIT_COLOR[r.level] : undefined; };
     return undefined;
   }, [byCommute, byFit, fitOf, filters, commute.ctx]);
-  const [heatMode, setHeatMode] = useHeatMode();
+  const [storedHeat, setHeatMode] = useHeatMode();
+  // 每坪開價圖層靠共用房源池,公開版沒有(記住的選擇是 rent 就當沒開)
+  const pool = usePrivatePool();
+  const heatMode: HeatMode = storedHeat === "rent" && !pool ? "none" : storedHeat;
   const [view, setView] = useState<Viewport | null>(null);
   // 看區域圖層時標記會擋住,可以先藏起來(不記)
   const [hideMarkers, setHideMarkers] = useState(false);
@@ -116,7 +120,7 @@ export function MapPage() {
       <Layers size={13} className="text-neutral-500" />
       <span className="text-neutral-500">區域圖層</span>
       <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-transparent px-1 py-0.5 dark:border-neutral-700">
-        {HEAT_MODES.map((m) => (
+        {HEAT_MODES.filter((m) => m !== "rent" || pool).map((m) => (
           <option key={m} value={m}>
             {HEAT_LABEL[m]}
           </option>

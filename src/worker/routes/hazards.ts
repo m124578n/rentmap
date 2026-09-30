@@ -18,6 +18,7 @@ import { HAZARD_KINDS, HazardZoneIn, type HazardKind, type HazardLevels, type Ha
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
+import { ownerOf, ownerSql } from "../pool";
 
 export const hazards = new Hono<AppEnv>();
 hazards.use("/api/hazards", requireUser());
@@ -124,10 +125,11 @@ hazards.get("/api/hazards", async (c) => {
 
 hazards.get("/api/hazards/summary", async (c) => {
   const DB = c.env.DB;
-  const key = ["hazard-summary", await tableSig(DB, "hazard_zones", "version"), await propertiesSig(DB)];
+  const key = ["hazard-summary", await tableSig(DB, "hazard_zones", "version"), await propertiesSig(DB, ownerOf(c))];
+  const owner = ownerOf(c);
   return cachedJson(c, key, async (): Promise<HazardSummary> => {
     const z = await loadZones(DB);
-    const { results } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+    const { results } = await DB.prepare(`SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL${ownerSql(owner)}`).all<{ id: number; lat: number; lng: number }>();
     const items: HazardSummary["items"] = {};
     for (const h of results) items[h.id] = levelsAt(z, h.lat, h.lng);
     return { has_data: z.zones.length > 0, items };

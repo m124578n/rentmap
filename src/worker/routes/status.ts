@@ -10,6 +10,7 @@ import { coverageCities } from "@shared/regions";
 import mrtTimes from "../../../public/mrt-times.json";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
+import { isPrivatePool } from "../pool";
 
 export const status = new Hono<AppEnv>();
 status.use("/api/status", requireUser());
@@ -26,23 +27,8 @@ status.get("/api/status", async (c) => {
   };
   const items: StatusItem[] = [];
 
-  // 房源:每個來源最後一次看到、刊登中幾間、近一天新進幾間
-  const since = new Date(now - DAY).toISOString();
-  const { results: src } = await DB.prepare(
-    `SELECT source, COUNT(*) AS n, SUM(status = 'active') AS active, MAX(last_seen_at) AS seen, SUM(first_seen_at >= ?) AS fresh FROM listings GROUP BY source`,
-  )
-    .bind(since)
-    .all<{ source: string; n: number; active: number; seen: string | null; fresh: number }>();
-  const SRC: Record<string, { label: string; every: string; max: number | null; command: string }> = {
-    "591": { label: "591", every: "每天(排程 20:00 / 21:00)", max: 2, command: "npm run collect -- sync --group=taipei(或 newtaipei)" },
-    housefun: { label: "好房", every: "手動", max: null, command: "npm run collect -- sync --group=housefun" },
-  };
-  for (const s of src) {
-    const m = SRC[s.source] ?? { label: s.source, every: "手動", max: null, command: "npm run collect -- add <網址>" };
-    items.push(item({ key: `listings:${s.source}`, group: "房源", label: `${m.label} 房源`, count: s.n, updated: s.seen, every: m.every, command: m.command, note: `刊登中 ${s.active} 間 · 近一天新進 ${s.fresh} 間` }, m.max));
-  }
-  if (!src.some((s) => s.source === "591"))
-    items.push(item({ key: "listings:591", group: "房源", label: "591 房源", count: 0, updated: null, every: SRC["591"]!.every, command: SRC["591"]!.command }, 2));
+  // 房源:每個來源最後一次看到、刊登中幾間、近一天新進幾間(只有私人模式有採集)
+  if (isPrivatePool(c.env)) await listingItems(DB, now, item, items);
 
   // 公車、捷運
   const bus = await DB.prepare("SELECT COUNT(*) AS n, MAX(version) AS v FROM bus_routes").first<{ n: number; v: string | null }>();
@@ -98,3 +84,24 @@ status.get("/api/status", async (c) => {
   const body: StatusResponse = { now: new Date(now).toISOString(), items };
   return c.json(body);
 });
+
+type ItemFn = (x: Omit<StatusItem, "age_days" | "stale">, maxDays: number | null) => StatusItem;
+
+async function listingItems(DB: D1Database, now: number, item: ItemFn, items: StatusItem[]) {
+  const since = new Date(now - DAY).toISOString();
+  const { results: src } = await DB.prepare(
+    `SELECT source, COUNT(*) AS n, SUM(status = 'active') AS active, MAX(last_seen_at) AS seen, SUM(first_seen_at >= ?) AS fresh FROM listings GROUP BY source`,
+  )
+    .bind(since)
+    .all<{ source: string; n: number; active: number; seen: string | null; fresh: number }>();
+  const SRC: Record<string, { label: string; every: string; max: number | null; command: string }> = {
+    "591": { label: "591", every: "手動(每日排程已停用)", max: null, command: "npm run collect -- sync --group=taipei(或 newtaipei)" },
+    housefun: { label: "好房", every: "手動", max: null, command: "npm run collect -- sync --group=housefun" },
+  };
+  for (const s of src) {
+    const m = SRC[s.source] ?? { label: s.source, every: "手動", max: null, command: "npm run collect -- add <網址>" };
+    items.push(item({ key: `listings:${s.source}`, group: "房源", label: `${m.label} 房源`, count: s.n, updated: s.seen, every: m.every, command: m.command, note: `刊登中 ${s.active} 間 · 近一天新進 ${s.fresh} 間` }, m.max));
+  }
+  if (!src.some((s) => s.source === "591"))
+    items.push(item({ key: "listings:591", group: "房源", label: "591 房源", count: 0, updated: null, every: SRC["591"]!.every, command: SRC["591"]!.command }, null));
+}

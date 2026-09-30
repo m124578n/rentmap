@@ -3,6 +3,7 @@
  *   POST /api/ingest/listings { items: ImportedListing[] }
  *     → 依 (source, source_listing_id) upsert:已存在就更新 listing 的租金 / 狀態 / last_seen(租金變了寫價格歷史)
  *       並更新 property 欄位;不存在就建 property + listing + 價格歷史。回 { created, updated, ids }
+ * 只在私人模式(PRIVATE_POOL=1)存在,公開模式一律 404。
  */
 import { Hono } from "hono";
 import { and, eq, sql } from "drizzle-orm";
@@ -12,9 +13,13 @@ import type { AppEnv } from "../env";
 import { db, nowIso, schema, type Db } from "../db";
 import { parsePostedAt } from "@shared/listing";
 import { requireIngest } from "../auth";
+import { isPrivatePool } from "../pool";
 
 export const ingest = new Hono<AppEnv>();
 ingest.use("/api/ingest/*", requireIngest());
+// 房源採集這組只在私人模式存在(公開模式不收抓來的房源;開放資料的匯入 pois / bus / rent-stats / hazards 不受影響)
+for (const path of ["/api/ingest/listings", "/api/ingest/active", "/api/ingest/seen", "/api/ingest/status"])
+  ingest.use(path, async (c, next) => (isPrivatePool(c.env) ? next() : c.json({ error: "not found" }, 404)));
 
 const Body = z.object({ items: z.array(ImportedListing).min(1).max(100) });
 

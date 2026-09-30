@@ -10,10 +10,11 @@ import type { AppEnv } from "./env";
 const ORIGIN = "https://cache.rentmap.internal";
 const TTL = 7 * 86400;
 
-/** 房源變了(新增、重抓、座標)就換 key */
-export async function propertiesSig(DB: D1Database) {
-  const r = await DB.prepare("SELECT COUNT(*) AS n, MAX(updated_at) AS u FROM properties").first<{ n: number; u: string | null }>();
-  return `${r?.n ?? 0}.${r?.u ?? ""}`;
+/** 房源變了(新增、重抓、座標)就換 key;公開模式只看這個人的房源(owner 也進 key,別人的結果不會混進來) */
+export async function propertiesSig(DB: D1Database, owner: number | null = null) {
+  const where = owner == null ? "" : ` WHERE created_by = ${Math.trunc(owner)}`;
+  const r = await DB.prepare(`SELECT COUNT(*) AS n, MAX(updated_at) AS u FROM properties${where}`).first<{ n: number; u: string | null }>();
+  return `${owner ?? "all"}.${r?.n ?? 0}.${r?.u ?? ""}`;
 }
 
 /** 一張表的筆數 + 某欄最大值(version、id、date) */

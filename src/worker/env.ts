@@ -13,6 +13,7 @@ declare global {
       INGEST_SECRET?: string; // 採集機 bearer
       ANTHROPIC_API_KEY?: string;
       DEV_USER_EMAIL?: string; // 只放 .dev.vars:本機免 Google 登入(GET /api/auth/dev)
+      PRIVATE_POOL?: string; // 只放 .dev.vars:"1" = 私人模式(共用房源池、照片、聯絡人、採集推入);沒設 = 公開模式(見 pool.ts)
     }
   }
 }

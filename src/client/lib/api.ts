@@ -46,7 +46,7 @@ window.addEventListener(STALE_EVENT, () => (staleShown = true));
 window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
-  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean }>("/api/me"),
+  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean }>("/api/me"),
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
   listProperties: () => req<{ items: PropertySummary[] }>("/api/properties"),

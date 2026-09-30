@@ -16,6 +16,7 @@ import { sign, verify } from "hono/jwt";
 import type { SessionUser } from "@shared/schemas";
 import type { AppEnv, Env } from "./env";
 import { db, nowIso, schema } from "./db";
+import { isPrivatePool } from "./pool";
 
 export const SESSION_COOKIE = "rent_session";
 const STATE_COOKIE = "rent_oauth_state";
@@ -140,7 +141,8 @@ auth.get("/api/me", async (c) => {
   c.header("Cache-Control", "no-store");
   const user = await readSession(c);
   const dev = !!c.env.DEV_USER_EMAIL && /^https?:\/\/localhost(:\d+)?$/.test(c.env.APP_ORIGIN);
-  return c.json({ user, enabled: authConfigured(c.env), dev });
+  // private_pool:前端依此決定要不要顯示照片、聯絡人、開價圖層、刊登天數等(見 pool.ts)
+  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env) });
 });
 
 // ---- 給其他路由用 ----

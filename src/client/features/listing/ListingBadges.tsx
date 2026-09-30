@@ -1,14 +1,16 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { PropertySummary } from "@shared/schemas";
+import { usePrivatePool } from "@/lib/useAuth";
 import { ageOf, fmtMoney, priceOf } from "./age";
 
-/** 卡片上的小標:新上架 / 刊登 N 天 / 降價 / 漲價。沒有資料就什麼都不畫 */
+/** 卡片上的小標:新上架 / 刊登 N 天 / 降價 / 漲價。沒有資料就什麼都不畫;公開版(沒有每日採集)不畫 */
 export function ListingBadges({ p }: { p: Pick<PropertySummary, "posted_at" | "first_seen_at" | "price_history"> }) {
+  const pool = usePrivatePool();
   const age = ageOf(p);
   const price = priceOf(p);
   const drop = price && price.totalDelta < 0;
   const rise = price && price.totalDelta > 0;
-  if (!age && !drop && !rise) return null;
+  if (!pool || (!age && !drop && !rise)) return null;
   return (
     <span className="flex flex-wrap items-center gap-1 text-[11px]">
       {age?.isNew && <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-800 dark:bg-sky-900 dark:text-sky-200">新上架</span>}

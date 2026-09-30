@@ -22,6 +22,7 @@ import { DAY_TYPES } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
+import { ownerOf } from "../pool";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
 import { db, schema } from "../db";
 import { loadBusNet } from "../transit/network";
@@ -59,6 +60,7 @@ commute.get("/api/commute", async (c) => {
     .orderBy(asc(schema.myPlaces.id));
   const bike = c.req.query("bike") !== "0";
   const DB = c.env.DB;
+  const owner = ownerOf(c);
   // 我的地點是個人資料:放進 key(只存在伺服器端快取);公車、YouBike、房源任何一個更新 key 就變
   const key = [
     "commute",
@@ -70,10 +72,15 @@ commute.get("/api/commute", async (c) => {
     bike ? 1 : 0,
     await tableSig(DB, "bus_routes", "version"),
     bike ? await tableSig(DB, "pois", "version", "WHERE category = 'youbike'") : "-",
-    await propertiesSig(DB),
+    await propertiesSig(DB, owner),
   ];
   return cachedJson(c, key, async (): Promise<CommuteMatrix> => {
-    const props = (await d.select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng }).from(schema.properties)).filter(
+    const props = (
+      await d
+        .select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng })
+        .from(schema.properties)
+        .where(owner == null ? undefined : eq(schema.properties.createdBy, owner))
+    ).filter(
       (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
     );
     const net = await loadBusNet(DB);

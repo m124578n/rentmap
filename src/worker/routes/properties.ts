@@ -7,8 +7,9 @@
  *   PUT    /api/properties/:id/favorite  收藏 / 部分更新(stage、priority、note、tags)
  *   DELETE /api/properties/:id/favorite  取消收藏
  *   DELETE /api/properties/:id        刪除(連同 listings、favorite)
+ * 公開模式(pool.ts)每人只看得到、改得到自己建的;別人的一律 404。照片、屋況文字、聯絡人不收也不回。
  */
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { FavoriteInput, PropertyInput, StageInput, type PropertySummary } from "@shared/schemas";
 import type { AppEnv } from "../env";
@@ -16,6 +17,7 @@ import type { PricePoint } from "@shared/listing";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
 import { propertiesSig, shortHash, tableSig } from "../cache";
+import { isPrivatePool, ownerOf } from "../pool";
 
 export const properties = new Hono<AppEnv>();
 properties.use("/api/properties", requireUser());
@@ -27,7 +29,7 @@ properties.get("/api/properties", async (c) => {
   const DB = c.env.DB;
   const version = [
     user.id,
-    await propertiesSig(DB),
+    await propertiesSig(DB, ownerOf(c)),
     await tableSig(DB, "listings", "last_seen_at"),
     await tableSig(DB, "listing_price_history", "id"),
     await tableSig(DB, "favorites", "updated_at", `WHERE user_id = ${Number(user.id)}`),
@@ -39,6 +41,7 @@ properties.get("/api/properties", async (c) => {
   const d = db(c.env.DB);
   const p = schema.properties;
   const f = schema.favorites;
+  const owner = ownerOf(c);
   // 每個 property 取最新一筆 listing 當代表(Phase 1 一對一,之後去重才會多筆)
   const rows = await d
     .select({
@@ -78,6 +81,7 @@ properties.get("/api/properties", async (c) => {
     })
     .from(p)
     .leftJoin(f, and(eq(f.propertyId, p.id), eq(f.userId, user.id)))
+    .where(owner == null ? undefined : eq(p.createdBy, owner))
     .orderBy(desc(p.updatedAt));
   const items: PropertySummary[] = rows.map(({ tags_json, price_json, ...r }) => ({ ...r, tags: safeTags(tags_json), price_history: parsePrice(price_json) }));
   return c.json({ items });
@@ -96,6 +100,8 @@ properties.post("/api/properties", async (c) => {
   const v = parsed.data;
   const now = nowIso();
   const d = db(c.env.DB);
+  // 公開模式不存聯絡人(個資)
+  const keepContact = isPrivatePool(c.env);
 
   const [prop] = await d
     .insert(schema.properties)
@@ -142,9 +148,9 @@ properties.post("/api/properties", async (c) => {
       sourceListingId: v.source_listing_id ?? null,
       rent: v.rent,
       depositMonths: v.deposit_months ?? null,
-      contactName: v.contact_name ?? null,
-      contactPhone: v.contact_phone ?? null,
-      contactLine: v.contact_line ?? null,
+      contactName: keepContact ? (v.contact_name ?? null) : null,
+      contactPhone: keepContact ? (v.contact_phone ?? null) : null,
+      contactLine: keepContact ? (v.contact_line ?? null) : null,
       status: "active",
       firstSeenAt: now,
       lastSeenAt: now,
@@ -163,8 +169,10 @@ properties.get("/api/properties/:id", async (c) => {
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
   const d = db(c.env.DB);
   const prop = await d.query.properties.findFirst({ where: eq(schema.properties.id, id) });
-  if (!prop) return c.json({ error: "not found" }, 404);
-  const listings = await d.select().from(schema.listings).where(eq(schema.listings.propertyId, id)).orderBy(desc(schema.listings.id));
+  if (!prop || !visible(c, prop.createdBy)) return c.json({ error: "not found" }, 404);
+  const rows = await d.select().from(schema.listings).where(eq(schema.listings.propertyId, id)).orderBy(desc(schema.listings.id));
+  // 公開模式:照片、屋況文字(raw_json)、聯絡人一律不回(就算舊資料裡有)
+  const listings = isPrivatePool(c.env) ? rows : rows.map((l) => ({ ...l, rawJson: null, photosJson: null, contactName: null, contactPhone: null, contactLine: null }));
   const main = listings[0];
   const priceHistory = main
     ? (
@@ -184,6 +192,7 @@ properties.put("/api/properties/:id/stage", async (c) => {
   const user = c.get("user");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  if (!(await canSee(c, id))) return c.json({ error: "not found" }, 404);
   const parsed = StageInput.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
   const now = nowIso();
@@ -201,6 +210,7 @@ properties.put("/api/properties/:id/favorite", async (c) => {
   const user = c.get("user");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  if (!(await canSee(c, id))) return c.json({ error: "not found" }, 404);
   const parsed = FavoriteInput.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
   const v = parsed.data;
@@ -229,9 +239,23 @@ properties.delete("/api/properties/:id/favorite", async (c) => {
 properties.delete("/api/properties/:id", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  if (!(await canSee(c, id))) return c.json({ error: "not found" }, 404);
   await db(c.env.DB).delete(schema.properties).where(eq(schema.properties.id, id));
   return c.json({ ok: true });
 });
+
+/** 公開模式只看得到自己建的房源 */
+function visible(c: Context<AppEnv>, createdBy: number | null) {
+  const owner = ownerOf(c);
+  return owner == null || createdBy === owner;
+}
+
+export async function canSee(c: Context<AppEnv>, id: number) {
+  const owner = ownerOf(c);
+  if (owner == null) return true;
+  const r = await c.env.DB.prepare("SELECT 1 AS ok FROM properties WHERE id = ? AND created_by = ?").bind(id, owner).first<{ ok: number }>();
+  return !!r;
+}
 
 function parsePrice(raw: string | null): PricePoint[] {
   if (!raw) return [];

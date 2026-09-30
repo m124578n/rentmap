@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ExternalLink, Heart, Maximize2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePrivatePool } from "@/lib/useAuth";
 import { SOURCE_LABEL, type Source } from "@shared/constants";
 import { BusSection } from "@/features/bus/BusSection";
 import { CommuteSection } from "@/features/commute/CommuteSection";
@@ -36,6 +37,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
   const list = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const summary = list.data?.items.find((x) => x.id === id);
   const req = useRequirements();
+  // 公開版:沒有每日採集(刊登天數、價格變動、首次看到都沒意義),也不存聯絡人
+  const pool = usePrivatePool();
   const { costOf } = useMonthlyCost(req.data?.requirements ?? EMPTY_REQUIREMENTS);
   const del = useMutation({
     mutationFn: () => api.deleteProperty(id),
@@ -99,7 +102,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         <FavoritePanel id={id} favorite={favorite} />
       </div>
 
-      {main && <PriceAgeSection history={price_history} postedAt={main.postedAt} firstSeenAt={main.firstSeenAt} lastSeenAt={main.lastSeenAt} status={main.status} />}
+      {pool && main && <PriceAgeSection history={price_history} postedAt={main.postedAt} firstSeenAt={main.firstSeenAt} lastSeenAt={main.lastSeenAt} status={main.status} />}
 
       <section className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
         <Row k="坪數" v={p.sizePing != null ? `${p.sizePing} 坪` : null} />
@@ -148,15 +151,19 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
           <h2 className="mb-1.5 text-xs font-medium text-neutral-500">來源與聯絡</h2>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3">
             <Row k="來源" v={SOURCE_LABEL[main.source as Source] ?? main.source} />
-            <Row k="聯絡人" v={main.contactName} />
-            <Row k="電話" v={main.contactPhone} />
-            <Row k="首次看到" v={main.firstSeenAt.slice(0, 10)} />
-            <Row k="狀態" v={main.status === "active" ? "刊登中" : main.status} />
+            {pool && (
+              <>
+                <Row k="聯絡人" v={main.contactName} />
+                <Row k="電話" v={main.contactPhone} />
+                <Row k="首次看到" v={main.firstSeenAt.slice(0, 10)} />
+                <Row k="狀態" v={main.status === "active" ? "刊登中" : main.status} />
+              </>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {main.sourceUrl && (
               <a href={main.sourceUrl} target="_blank" rel="noreferrer" className="btn-ghost">
-                原始連結 <ExternalLink size={14} />
+                {pool ? "原始連結" : "原始頁面"} <ExternalLink size={14} />
               </a>
             )}
             {main.contactLine && (

@@ -19,6 +19,7 @@ import { AVOIDABLE_CATS, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekda
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
+import { isPrivatePool, ownerOf, ownerSql } from "../pool";
 
 export const nearby = new Hono<AppEnv>();
 nearby.use("/api/nearby", requireUser());
@@ -86,6 +87,8 @@ nearby.get("/api/nearby", async (c) => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = radiusOf(c.req.query("radius"));
   const { grid, n } = await loadGrid(c.env.DB);
+  // Google 評分只在私人模式給(公開版拉麵只留店名與位置)
+  const rated = isPrivatePool(c.env);
   const found = new Map<PoiCat, NearbyPoi[]>();
   around(grid, lat, lng, radius, (p, d) => {
     const list = found.get(p.category) ?? found.set(p.category, []).get(p.category)!;
@@ -96,7 +99,7 @@ nearby.get("/api/nearby", async (c) => {
       lng: p.lng,
       distance_m: Math.round(d),
       walk_min: walkMin(d),
-      rating: p.rating,
+      rating: rated ? p.rating : null,
       url: p.url,
       note: p.note,
       minute: p.minute,
@@ -126,13 +129,14 @@ nearby.get("/api/nearby", async (c) => {
 nearby.get("/api/nearby/summary", async (c) => {
   const radius = radiusOf(c.req.query("radius"));
   const DB = c.env.DB;
-  const key = ["nearby-summary", radius, await tableSig(DB, "pois", "version"), await propertiesSig(DB)];
-  return cachedJson(c, key, () => nearbySummary(DB, radius));
+  const owner = ownerOf(c);
+  const key = ["nearby-summary", radius, await tableSig(DB, "pois", "version"), await propertiesSig(DB, owner)];
+  return cachedJson(c, key, () => nearbySummary(DB, radius, owner));
 });
 
-async function nearbySummary(DB: D1Database, radius: number): Promise<NearbySummary> {
+async function nearbySummary(DB: D1Database, radius: number, owner: number | null): Promise<NearbySummary> {
   const { grid, n } = await loadGrid(DB);
-  const { results } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+  const { results } = await DB.prepare(`SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL${ownerSql(owner)}`).all<{ id: number; lat: number; lng: number }>();
   const items: NearbySummary["items"] = {};
   const nearest: NearbySummary["nearest"] = {};
   const avoidable = new Set<PoiCat>(AVOIDABLE_CATS);
@@ -160,7 +164,7 @@ nearby.get("/api/garbage/fit", async (c) => {
   // 房東有沒有寫代收:看最新一筆刊登的 raw_json(屋況介紹、標籤)
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.lat, p.lng, (SELECT raw_json FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS raw
-       FROM properties p WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL`,
+       FROM properties p WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL${ownerSql(ownerOf(c), "p")}`,
   ).all<{ id: number; lat: number; lng: number; raw: string | null }>();
   const items: GarbageFit["items"] = {};
   for (const h of results) {

@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 
+/** 只要私人模式旗標(不需要登入動作的元件用) */
+export function usePrivatePool() {
+  const q = useQuery({ queryKey: ["me"], queryFn: api.me, staleTime: 60_000 });
+  return q.data?.private_pool ?? false;
+}
+
 export function useAuth() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["me"], queryFn: api.me, staleTime: 60_000 });
@@ -25,6 +31,8 @@ export function useAuth() {
     user: q.data?.user ?? null,
     enabled: q.data?.enabled ?? false,
     dev: q.data?.dev ?? false,
+    /** 私人模式(本機):共用房源池、照片、聯絡人、刊登天數、開價圖層;公開版沒有(src/worker/pool.ts) */
+    privatePool: q.data?.private_pool ?? false,
     loading: q.isLoading,
     login,
     devLogin,

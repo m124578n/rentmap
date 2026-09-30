@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ApiError, api } from "@/lib/api";
 import { PropertyInput } from "@shared/schemas";
 import { useRegion } from "@/lib/region";
+import { usePrivatePool } from "@/lib/useAuth";
 import { BUILDING_TYPES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
@@ -11,6 +12,8 @@ export function NewPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const region = useRegion();
+  // 公開版不收聯絡人(個資);私人模式照舊
+  const pool = usePrivatePool();
   const [city, setCity] = useState<City>(region.cities[0]!);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -166,15 +169,19 @@ export function NewPage() {
             <Field label="原始連結" error={err("source_url")}>
               <input name="source_url" type="url" className="input" placeholder="https://" />
             </Field>
-            <Field label="聯絡人">
-              <input name="contact_name" className="input" />
-            </Field>
-            <Field label="電話">
-              <input name="contact_phone" className="input" />
-            </Field>
-            <Field label="LINE">
-              <input name="contact_line" className="input" />
-            </Field>
+            {pool && (
+              <>
+                <Field label="聯絡人">
+                  <input name="contact_name" className="input" />
+                </Field>
+                <Field label="電話">
+                  <input name="contact_phone" className="input" />
+                </Field>
+                <Field label="LINE">
+                  <input name="contact_line" className="input" />
+                </Field>
+              </>
+            )}
           </div>
           <Field label="備註">
             <textarea name="note" className="input" rows={3} />

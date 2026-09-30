@@ -19,6 +19,7 @@ import { z } from "zod";
 import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type AlongResponse, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { ownerOf, ownerSql } from "../pool";
 import { mrtGraph } from "../transit/mrt";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
@@ -167,7 +168,7 @@ bus.get("/api/bus/along", async (c) => {
     const k = `${Math.floor(p.lat / CELL)}:${Math.floor(p.lng / CELL)}`;
     (grid.get(k) ?? grid.set(k, []).get(k)!).push(p);
   }
-  const { results: props } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+  const { results: props } = await DB.prepare(`SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL${ownerSql(ownerOf(c))}`).all<{ id: number; lat: number; lng: number }>();
   const ids: number[] = [];
   for (const h of props) {
     const y = Math.floor(h.lat / CELL);

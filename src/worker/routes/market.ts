@@ -17,6 +17,7 @@ import { z } from "zod";
 import { briefOf, cleanPool, computeMarket, RentStatIn, type MarketMatrix, type MarketResponse, type MarketTarget, type RentStat } from "@shared/market";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { isPrivatePool, ownerOf, ownerSql } from "../pool";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
 
 export const market = new Hono<AppEnv>();
@@ -80,10 +81,11 @@ function marketOf(pools: Map<string, RentStat[]>, p: PropRow) {
 market.get("/api/market", async (c) => {
   const DB = c.env.DB;
   // 租金變動會寫價格紀錄,所以房源 + 價格紀錄 + 實價登錄三個一起當版本
-  const key = ["market", await tableSig(DB, "rent_stats", "id"), await propertiesSig(DB), await tableSig(DB, "listing_price_history", "id")];
+  const owner = ownerOf(c);
+  const key = ["market", await tableSig(DB, "rent_stats", "id"), await propertiesSig(DB, owner), await tableSig(DB, "listing_price_history", "id")];
   return cachedJson(c, key, async (): Promise<MarketMatrix> => {
     const pools = await loadPools(DB);
-    const { results } = await DB.prepare(PROP_SQL).all<PropRow>();
+    const { results } = await DB.prepare(`${PROP_SQL} WHERE 1${ownerSql(owner, "p")}`).all<PropRow>();
     const items: MarketMatrix["items"] = {};
     for (const p of results) items[p.id] = briefOf(marketOf(pools, p));
     return { has_data: pools.size > 0, items };
@@ -109,10 +111,11 @@ async function askingPools(DB: D1Database, p: PropRow) {
 market.get("/api/properties/:id/market", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
-  const p = await c.env.DB.prepare(`${PROP_SQL} WHERE p.id = ?`).bind(id).first<PropRow>();
+  const p = await c.env.DB.prepare(`${PROP_SQL} WHERE p.id = ?${ownerSql(ownerOf(c), "p")}`).bind(id).first<PropRow>();
   if (!p) return c.json({ error: "not found" }, 404);
   const pools = await loadPools(c.env.DB);
-  const ask = await askingPools(c.env.DB, p);
+  // 「目前開價」靠共用的房源池,只有私人模式有;公開版行情只看實價登錄
+  const ask = isPrivatePool(c.env) ? await askingPools(c.env.DB, p) : null;
   let asking: MarketResponse["asking"] = null;
   if (ask) {
     const t: MarketTarget = { kind: p.kind, size_ping: p.size_ping, rooms: p.rooms, building_age: p.building_age, has_elevator: p.has_elevator == null ? null : p.has_elevator === 1, rent: p.rent };

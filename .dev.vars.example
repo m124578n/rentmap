@@ -9,3 +9,5 @@ INGEST_SECRET=local-ingest-secret
 ANTHROPIC_API_KEY=
 # 設了就有「本機登入」鈕,免 Google(正式站不要設)
 DEV_USER_EMAIL=you@example.com
+# 私人模式:共用的 591 / 好房房源池、照片、聯絡人、採集推入(/api/ingest/listings)。只在自己電腦開;正式站不要設
+PRIVATE_POOL=1
