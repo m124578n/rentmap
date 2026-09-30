@@ -71,7 +71,9 @@ describe("台鐵併進軌道圖", () => {
 
   it("沒有台鐵資料時跟原本一樣", () => {
     const empty = buildRailGraph({ updated: null, headway: [15, 20, 30], stations: [], edges: {} });
-    expect(empty.stations.length).toBe(g.stations.length);
+    // g 讀的是 repo 裡的 public/tra.json(抓過台鐵後就有站),所以只比捷運站數,不假設那個檔是空的
+    expect(empty.stations.filter((s) => s.rail === "tra")).toEqual([]);
+    expect(empty.stations.length).toBe(g.stations.filter((s) => s.rail !== "tra").length);
   });
 
   it("摘要與站名", () => {

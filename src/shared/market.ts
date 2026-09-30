@@ -15,11 +15,12 @@
  *   - 租金超過全體中位數 3 倍或不到 1/3 的不算(實測信義區有業者把整戶 24 萬的租約以「分租套房」反覆登錄)
  */
 import { z } from "zod";
-import { CITIES } from "./constants";
+import { ALL_CITIES, type CityName } from "./regions";
 
 export const RentStatIn = z.object({
   serial: z.string().min(1).max(40),
-  city: z.enum(CITIES),
+  // 匯入接受所有縣市(含還沒開放的生活圈):開區前要能先把資料抓進來(docs/design/2026-09-30-open-a-region.md)
+  city: z.enum(ALL_CITIES as [CityName, ...CityName[]]),
   district: z.string().min(1).max(10),
   road: z.string().max(40).nullable(),
   kind: z.string().max(10).nullable(),

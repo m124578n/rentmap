@@ -6,6 +6,7 @@
 
 來源:
   淹水潛勢(經濟部水利署第四代,data.gov.tw 25766):每縣市一個 7z,內含各降雨情境的 SHP。
+    目前收七個縣市:基隆、台北、新北、桃園、台中、台南、高雄(FLOOD_CITIES;各縣市檔名與級距欄位不同,見 flood_level)。
     取兩種情境:6 小時 150 毫米(短時強降雨,最常見)、24 小時 500 毫米(颱風等級)。
     台北市 WGS84、GRIDCODE 1–5 = 0.3–0.5 / 0.5–1 / 1–2 / 2–3 / >3 公尺;
     新北市 TWD97 TM2、GRIDCODE 1–6 = 0–0.3 / 0.3–0.5 / …(0–0.3 幾乎整個新北都是,不收)→ 統一成 1–5 級。
@@ -192,15 +193,46 @@ def airnoise(zones):
         print("航空噪音:這些里在里界圖找不到(里界調整過?)", miss)
 
 
-def main():
-    os.makedirs(DIR, exist_ok=True)
-    zones = []
-    scenarios = {"flood6": ("06h_r150", "6h150r"), "flood24": ("24h_r500", "24h500r")}
-    for code, city in [("02", "台北市"), ("03", "新北市")]:
+# 淹水潛勢:水利署每縣市一個 7z(207-{代碼}.7z)。代碼 2026-09-30 逐一下載確認過。
+FLOOD_CITIES = [("01", "基隆市"), ("02", "台北市"), ("03", "新北市"), ("04", "桃園市"), ("07", "台中市"), ("12", "台南市"), ("13", "高雄市")]
+# 各縣市檔名不一:tp_06h_r150_polygon_class_1、6h150r、ty_06h_150mm、6Hr150r、6h150…
+FLOOD_FILE = {"flood6": re.compile(r"(?<!\d)0?6hr?_?r?_?150", re.I), "flood24": re.compile(r"24hr?_?r?_?500", re.I)}
+DEPTH_LEVEL = {0.0: 0, 0.3: 1, 0.5: 2, 1.0: 3, 2.0: 4, 3.0: 5}
+
+
+def flood_level(rec, n_classes):
+    """一筆紀錄 → 1–5 級(0.3–0.5 / 0.5–1 / 1–2 / 2–3 / >3 公尺);0–0.3 公尺回 0(不收)。
+    各縣市格式:深度區間文字('0.3-0.5'、'>3'、'0.3公尺>淹水深度>0.5公尺'、'淹水深度>3.0公尺'),或只有 GRIDCODE。"""
+    for v in rec:
+        if not isinstance(v, str):
+            continue
+        t = v.replace(" ", "").replace("m", "").replace("M", "")
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)", t) or re.match(r"(\d+(?:\.\d+)?)公尺>淹水深度>", t)
+        if m and float(m.group(1)) in DEPTH_LEVEL:
+            return DEPTH_LEVEL[float(m.group(1))]
+        if re.fullmatch(r">3(?:\.0)?", t) or re.match(r"淹水深度>3", t):
+            return 5
+    code = next((int(v) for v in rec if isinstance(v, (int, float)) and 1 <= v <= 6), None)
+    if code is None:
+        raise ValueError(f"看不懂的淹水級距:{list(rec)}")
+    # 只有 GRIDCODE:六級的第一級是 0–0.3(幾乎全市,不收),五級的從 0.3 起
+    return code - 1 if n_classes >= 6 else code
+
+
+def flood(zones, only):
+    for code, city in FLOOD_CITIES:
+        if only and city not in only:
+            continue
         arc = download(FLOOD.format(code), os.path.join(DIR, f"207-{code}.7z"))
         with py7zr.SevenZipFile(arc) as z:
             names = z.getnames()
-            want = [n for n in names if re.search(r"(06h_r150|24h_r500|6h150r|24h500r)(_polygon_class_1)?\.(shp|dbf|shx|prj)$", n)]
+            picked = {}
+            for kind, rx in FLOOD_FILE.items():
+                shps = [n for n in names if n.lower().endswith(".shp") and rx.search(os.path.basename(n))]
+                if len(shps) != 1:
+                    raise SystemExit(f"{city} {kind}:預期 1 個 SHP,找到 {shps}")
+                picked[kind] = shps[0]
+            want = [n for n in names if any(n[:-4] == s[:-4] for s in picked.values()) and n[-4:].lower() in (".shp", ".dbf", ".shx", ".prj")]
             # 壓縮檔裡的檔案帶唯讀屬性:重跑時覆寫會 PermissionError,先把舊的解除唯讀並刪掉
             for n in want:
                 old = os.path.join(DIR, "x", n)
@@ -208,19 +240,29 @@ def main():
                     os.chmod(old, 0o666)
                     os.remove(old)
             z.extract(path=os.path.join(DIR, "x"), targets=want)
-        for kind, keys in scenarios.items():
-            shp = next(os.path.join(DIR, "x", n) for n in want if n.endswith(".shp") and any(k in n for k in keys))
-            r = shapefile.Reader(shp, encoding="big5")
-            project = None if "GCS_WGS_1984" in open(shp[:-4] + ".prj").read() else (lambda x, y: twd97.transform(x, y))
+        for kind, name in picked.items():
+            shp = os.path.join(DIR, "x", name)
+            # 台南的壓縮檔沒有附 .prj:沒有就當 TWD97 TM2(除了台北市,其他縣市都是)
+            prj = open(shp[:-4] + ".prj").read() if os.path.exists(shp[:-4] + ".prj") else ""
+            project = None if "GCS_WGS_1984" in prj else (lambda x, y: twd97.transform(x, y))
             total = 0
-            for rec, shape in zip(r.records(), r.shapes()):
-                code_ = int(rec[0])
-                # 新北市多一級 0–0.3m(幾乎全市),其餘往前對齊
-                level = code_ - 1 if city == "新北市" else code_
-                if level < 1:
-                    continue
-                total += emit(zones, kind, min(level, 5), city, parts_to_polygons(shape), project)
+            with shapefile.Reader(shp, encoding="big5") as r:
+                recs = r.records()
+                n_classes = len(recs)
+                for rec, shape in zip(recs, r.shapes()):
+                    level = flood_level(rec, n_classes)
+                    if level < 1:
+                        continue
+                    total += emit(zones, kind, min(level, 5), city, parts_to_polygons(shape), project)
             print(f"{city} {kind}:{total} 個多邊形")
+
+
+def main():
+    os.makedirs(DIR, exist_ok=True)
+    zones = []
+    # --cities=台中市,高雄市 只重建某些縣市的淹水(其餘照舊全部);液化、航空噪音目前只有雙北來源
+    only = next((a[9:].split(",") for a in sys.argv[1:] if a.startswith("--cities=")), None)
+    flood(zones, only)
     liq = json.loads(open(download(LIQ_TPE, os.path.join(DIR, "tp_liquefaction.geojson")), encoding="utf-8-sig").read())
     total = 0
     for f in liq["features"]:

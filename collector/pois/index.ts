@@ -79,7 +79,7 @@ async function fetchGarbage(): Promise<PoiIn[]> {
   return [...a, ...b];
 }
 /** 量大的類別切塊查,避免 Overpass 逾時 */
-const TILES: Partial<Record<PoiCat, [number, number]>> = { food: [3, 3], park: [2, 2], school: [2, 2], worship: [2, 2], highway: [2, 2], railway: [2, 2] };
+export const TILES: Partial<Record<PoiCat, [number, number]>> = { food: [3, 3], park: [2, 2], school: [2, 2], worship: [2, 2], highway: [2, 2], railway: [2, 2] };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

@@ -9,6 +9,9 @@
 import type { RentStatIn } from "../../src/shared/market";
 
 /** 簡單 CSV(支援雙引號欄位) */
+/** 房 / 廳 / 衛偶爾有登錄錯誤的離譜值(>20):當成沒填,不要讓一筆髒資料擋掉整批匯入(Zod 上限 50) */
+const sane = (n: number | null): number | null => (n != null && n > 20 ? null : n);
+
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -175,8 +178,8 @@ export function transformRent(city: RentStatIn["city"], csv: string): { items: R
       building_age: age != null && age <= 150 ? age : null,
       size_ping: size,
       rooms,
-      livings: int(r[idx.livings]),
-      baths: int(r[idx.baths]),
+      livings: sane(int(r[idx.livings])),
+      baths: sane(int(r[idx.baths])),
       rent,
       date,
       has_elevator: yes(r[idx.elev]),

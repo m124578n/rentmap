@@ -40,12 +40,13 @@ async function getToken(): Promise<string | null> {
 
 async function tdxGet(dataset: string, city: string): Promise<unknown[]> {
   const url = `${API_BASE}/${dataset}/City/${city}?%24format=JSON`;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const t = await getToken();
     const res = await fetch(url, { headers: { Accept: "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) }, signal: AbortSignal.timeout(300_000) });
     if (res.status === 429 || res.status >= 500) {
-      console.log(`  ${dataset}/${city} HTTP ${res.status},${5 * (i + 1)} 秒後重試`);
-      await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+      // 429 = 短時間打太多次(連抓幾個縣市很容易碰到):15、30、45… 秒退避,最多等約 5 分鐘
+      console.log(`  ${dataset}/${city} HTTP ${res.status},${15 * (i + 1)} 秒後重試`);
+      await new Promise((r) => setTimeout(r, 15000 * (i + 1)));
       continue;
     }
     if (!res.ok) throw new Error(`TDX ${dataset}/${city} ${res.status}: ${(await res.text()).slice(0, 300)}`);

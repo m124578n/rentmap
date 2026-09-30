@@ -102,3 +102,23 @@ describe("hazards", () => {
     expect((await SELF.fetch(`${ORIGIN}/api/hazards`, authed())).status).toBe(400);
   });
 });
+
+describe("hazards are loaded per living region", () => {
+  it("a point is checked against its own region's zones only", async () => {
+    const KH = { lat: 22.63, lng: 120.3 }; // 高雄市區
+    const items: HazardZoneIn[] = [
+      { kind: "flood6", level: 4, city: "台北市", rings: [square(LAT, LNG, 0.003)] },
+      { kind: "flood6", level: 2, city: "高雄市", rings: [square(KH.lat, KH.lng, 0.003)] },
+    ];
+    expect((await post("hazards", { version: "v-regions", items })).status).toBe(200);
+    expect((await post("hazards/commit", { version: "v-regions", force: true })).status).toBe(200);
+    const at = async (lat: number, lng: number) => (await (await SELF.fetch(`${ORIGIN}/api/hazards?lat=${lat}&lng=${lng}`, authed())).json()) as HazardResponse;
+    expect(await at(LAT, LNG)).toMatchObject({ has_data: true, levels: { flood6: 4 } });
+    expect(await at(KH.lat, KH.lng)).toMatchObject({ has_data: true, levels: { flood6: 2 } });
+    // 台中沒有任何多邊形:那個生活圈回報沒有資料,不會誤用別區的
+    expect(await at(24.15, 120.67)).toMatchObject({ has_data: false, levels: {} });
+    // 圖層:畫面在高雄時只回高雄的多邊形
+    const zones = (await (await SELF.fetch(`${ORIGIN}/api/hazards/zones?kind=flood6&w=${KH.lng - 0.02}&s=${KH.lat - 0.02}&e=${KH.lng + 0.02}&n=${KH.lat + 0.02}`, authed())).json()) as HazardZones;
+    expect(zones.features.map((f) => f.properties.level)).toEqual([2]);
+  });
+});

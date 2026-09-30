@@ -10,7 +10,9 @@
  *   POST /api/ingest/hazards          { version, items: HazardZoneIn[] }
  *   POST /api/ingest/hazards/commit   { version, force? }  刪掉其他 version;新版不到舊版一半就擋
  *
- * 多邊形(雙北約 1.5 萬個)整份進記憶體,依外框放進約 1.1km 的網格;查點時只看同格的,先比外框再做 ray casting。
+ * 多邊形**一個生活圈一份**進記憶體(七個縣市共約 10.7 萬個、100 萬個頂點,全部一起載會逼近 Workers 記憶體上限;
+ *   北北基桃約 3 萬個),依外框放進約 1.1km 的網格;查點時只看同格的,先比外框再做 ray casting。
+ *   生活圈由座標決定(regionAt),所以查台中的點只會載台中那一份。
  */
 import { Hono } from "hono";
 import { z } from "zod";
@@ -18,7 +20,7 @@ import { HAZARD_KINDS, HazardZoneIn, type HazardKind, type HazardLevels, type Ha
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
-import { hasCoverage, type Coverage } from "@shared/regions";
+import { DEFAULT_REGION, REGIONS, hasCoverage, regionAt, type Coverage, type RegionKey } from "@shared/regions";
 import { ownerOf, ownerSql } from "../pool";
 
 export const hazards = new Hono<AppEnv>();
@@ -39,13 +41,22 @@ interface Zone {
 }
 const CELL = 0.01;
 const cellKey = (y: number, x: number) => `${y}:${x}`;
-let cache: { sig: string; zones: Zone[]; grid: Map<string, number[]>; cities: Set<string> } | null = null;
+type ZoneCache = { sig: string; zones: Zone[]; grid: Map<string, number[]>; cities: Set<string> };
+const caches = new Map<RegionKey, ZoneCache>();
+const regionCities = (r: RegionKey): string[] => [...REGIONS[r].cities, ...REGIONS[r].planned];
 
-async function loadZones(DB: D1Database) {
-  const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(version) AS v FROM hazard_zones").first<{ n: number; v: string | null }>();
+async function loadZones(DB: D1Database, region: RegionKey): Promise<ZoneCache> {
+  const cities = regionCities(region);
+  const inList = cities.map(() => "?").join(",");
+  const head = await DB.prepare(`SELECT COUNT(*) AS n, MAX(version) AS v FROM hazard_zones WHERE city IN (${inList})`)
+    .bind(...cities)
+    .first<{ n: number; v: string | null }>();
   const sig = `${head?.n ?? 0}#${head?.v ?? ""}`;
-  if (cache?.sig === sig) return cache;
-  const { results } = await DB.prepare("SELECT kind, level, city, min_lat, min_lng, max_lat, max_lng, rings FROM hazard_zones").all<{
+  const hit = caches.get(region);
+  if (hit?.sig === sig) return hit;
+  const { results } = await DB.prepare(`SELECT kind, level, city, min_lat, min_lng, max_lat, max_lng, rings FROM hazard_zones WHERE city IN (${inList})`)
+    .bind(...cities)
+    .all<{
     kind: HazardKind;
     level: number;
     city: string;
@@ -75,8 +86,9 @@ async function loadZones(DB: D1Database) {
         else grid.set(k, [i]);
       }
   });
-  cache = { sig, zones, grid, cities: new Set(zones.filter((z) => z.kind === "liquefaction").map((z) => z.city)) };
-  return cache;
+  const built: ZoneCache = { sig, zones, grid, cities: new Set(zones.filter((z) => z.kind === "liquefaction").map((z) => z.city)) };
+  caches.set(region, built);
+  return built;
 }
 
 /** ray casting */
@@ -91,7 +103,7 @@ function inRing(lng: number, lat: number, ring: [number, number][]) {
 }
 
 /** 各種災害取最嚴重的一級 */
-export function levelsAt(c: NonNullable<typeof cache>, lat: number, lng: number): HazardLevels {
+export function levelsAt(c: ZoneCache, lat: number, lng: number): HazardLevels {
   const out: HazardLevels = {};
   for (const i of c.grid.get(cellKey(Math.floor(lat / CELL), Math.floor(lng / CELL))) ?? []) {
     const z = c.zones[i]!;
@@ -113,7 +125,7 @@ hazards.get("/api/hazards", async (c) => {
   const lat = num(c.req.query("lat"));
   const lng = num(c.req.query("lng"));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
-  const z = await loadZones(c.env.DB);
+  const z = await loadZones(c.env.DB, regionAt(lat, lng) ?? DEFAULT_REGION);
   const body: HazardResponse = {
     has_data: z.zones.length > 0,
     levels: levelsAt(z, lat, lng),
@@ -131,11 +143,23 @@ hazards.get("/api/hazards/summary", async (c) => {
   const key = ["hazard-summary", await tableSig(DB, "hazard_zones", "version"), await propertiesSig(DB, ownerOf(c))];
   const owner = ownerOf(c);
   return cachedJson(c, key, async (): Promise<HazardSummary> => {
-    const z = await loadZones(DB);
     const { results } = await DB.prepare(`SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL${ownerSql(owner)}`).all<{ id: number; lat: number; lng: number }>();
+    // 房源依座標歸生活圈,只載用得到的那幾份(通常就一份)
+    const byRegion = new Map<RegionKey, ZoneCache>();
     const items: HazardSummary["items"] = {};
-    for (const h of results) items[h.id] = levelsAt(z, h.lat, h.lng);
-    return { has_data: z.zones.length > 0, items };
+    let hasData = false;
+    for (const h of results) {
+      const r = regionAt(h.lat, h.lng) ?? DEFAULT_REGION;
+      let z = byRegion.get(r);
+      if (!z) {
+        z = await loadZones(DB, r);
+        byRegion.set(r, z);
+        hasData ||= z.zones.length > 0;
+      }
+      items[h.id] = levelsAt(z, h.lat, h.lng);
+    }
+    if (results.length === 0) hasData = (await loadZones(DB, DEFAULT_REGION)).zones.length > 0;
+    return { has_data: hasData, items };
   });
 });
 
@@ -148,7 +172,7 @@ hazards.get("/api/hazards/zones", async (c) => {
   if (!kind.success || ![w, s, e, n].every(Number.isFinite)) return c.json({ error: "kind, w, s, e, n required" }, 400);
   // 航空噪音只有一百多個里,整份給;其他看範圍
   if (kind.data !== "airnoise" && (e - w) * (n - s) > ZONES_MAX_AREA) return c.json({ type: "FeatureCollection", features: [], too_big: true });
-  const zc = await loadZones(c.env.DB);
+  const zc = await loadZones(c.env.DB, regionAt((s + n) / 2, (w + e) / 2) ?? DEFAULT_REGION);
   const features = zc.zones
     .filter((zn) => zn.kind === kind.data && zn.maxLng >= w && zn.minLng <= e && zn.maxLat >= s && zn.minLat <= n)
     .map((zn) => ({ type: "Feature" as const, geometry: { type: "Polygon" as const, coordinates: zn.rings }, properties: { level: zn.level } }));
