@@ -3,6 +3,7 @@ import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/b
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
+import type { HazardResponse, HazardSummary } from "@shared/hazard";
 import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
@@ -56,6 +57,8 @@ export const api = {
 
   nearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyResponse>(`/api/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
   garbageFit: (maxM: number, after: string) => req<GarbageFit>(`/api/garbage/fit?max=${maxM}&after=${encodeURIComponent(after)}`),
+  hazards: (lat: number, lng: number, city: string) => req<HazardResponse>(`/api/hazards?lat=${lat}&lng=${lng}&city=${encodeURIComponent(city)}`),
+  hazardSummary: () => req<HazardSummary>("/api/hazards/summary"),
   nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),

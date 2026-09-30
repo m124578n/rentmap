@@ -60,6 +60,15 @@ describe("computeFit", () => {
     expect(computeFit(home, r, {})!.fails).toEqual([]);
   });
 
+  it("災害:颱風情境 ≥0.5m 或短時強降雨會淹 → 不符;液化只擋高潛勢", () => {
+    const r = req({ avoid_flood: true, avoid_liquefaction: true });
+    expect(computeFit(home, r, { hazards: { flood24: 1 } })!.fails).toEqual([]);
+    expect(computeFit(home, r, { hazards: { flood24: 2 } })!.fails).toEqual(["在淹水潛勢區(颱風情境 0.5m 以上)"]);
+    expect(computeFit(home, r, { hazards: { flood6: 1, flood24: 3 } })!.fails).toEqual(["在淹水潛勢區(短時強降雨就會淹)"]);
+    expect(computeFit(home, r, { hazards: { liquefaction: 2 } })!.fails).toEqual([]);
+    expect(computeFit(home, r, { hazards: { liquefaction: 3 } })!.fails).toEqual(["土壤液化高潛勢"]);
+  });
+
   it("屋齡:上限 ×0.4 內滿分", () => {
     const r = req({ age_max: 40, weights: { price: 0, market: 0, commute: 0, size: 0, age: 1 } });
     expect(computeFit({ ...home, building_age: 10 }, r)!.score).toBe(1);

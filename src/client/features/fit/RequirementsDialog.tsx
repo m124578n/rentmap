@@ -120,6 +120,16 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
             })}
           </div>
         </Group>
+        <Group title="災害風險">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={r.avoid_flood} onChange={(e) => set({ avoid_flood: e.target.checked })} /> 避開淹水潛勢區
+            <span className="text-neutral-500">(颱風情境 0.5m 以上,或短時強降雨就會淹)</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={r.avoid_liquefaction} onChange={(e) => set({ avoid_liquefaction: e.target.checked })} /> 避開土壤液化高潛勢
+            <span className="text-neutral-500">(只有台北市有資料)</span>
+          </label>
+        </Group>
         <Group title="垃圾車(房東沒寫代收時,要追得到車)">
           <label className="flex items-center gap-1">
             <input

@@ -51,6 +51,7 @@ export function useFit() {
     enabled: r.avoid.length > 0,
     staleTime: 30 * 60_000,
   });
+  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction, staleTime: 60 * 60_000 });
   const go = useCommute("go");
   const back = useCommute("back");
   const fitOf = useCallback(
@@ -72,9 +73,10 @@ export function useFit() {
       const mb = market.data?.items[p.id];
       return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id],
         nearest: nearby.data ? (nearby.data.nearest[p.id] ?? {}) : undefined,
+        hazards: hz.data ? (hz.data.items[p.id] ?? {}) : undefined,
       });
     },
-    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data],
+    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data, hz.data],
   );
   return { configured, requirements: r, loaded: rq.isSuccess, fitOf };
 }

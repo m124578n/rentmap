@@ -262,3 +262,23 @@ export const pois = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.category, t.key] }), index("pois_latlng_idx").on(t.lat, t.lng)],
 );
+
+/**
+ * 災害潛勢多邊形(淹水、土壤液化)。`collect -- hazards` 整批覆蓋式匯入;查詢時整份進記憶體依外框索引。
+ */
+export const hazardZones = sqliteTable(
+  "hazard_zones",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").notNull(), // flood6 | flood24 | liquefaction
+    level: integer("level").notNull(),
+    city: text("city").notNull(),
+    minLat: real("min_lat").notNull(),
+    minLng: real("min_lng").notNull(),
+    maxLat: real("max_lat").notNull(),
+    maxLng: real("max_lng").notNull(),
+    rings: text("rings").notNull(), // JSON [[[lng, lat], …], …]
+    version: text("version").notNull(),
+  },
+  (t) => [index("hazard_zones_kind_idx").on(t.kind)],
+);
