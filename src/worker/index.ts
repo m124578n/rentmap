@@ -10,6 +10,7 @@ import { market } from "./routes/market";
 import { requirements } from "./routes/requirements";
 import { nearby } from "./routes/nearby";
 import { hazards } from "./routes/hazards";
+import { status } from "./routes/status";
 
 const app = new Hono<AppEnv>();
 
@@ -31,6 +32,8 @@ app.route("/", requirements);
 app.route("/", nearby);
 // 災害潛勢 /api/hazards*;匯入 /api/ingest/hazards*
 app.route("/", hazards);
+// 資料狀態頁 /api/status
+app.route("/", status);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
