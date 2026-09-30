@@ -58,9 +58,9 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENTMAP_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
-| `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
-| `npm run collect -- rent-stats [--seasons=4] [--dry]` | 內政部租賃實價登錄(雙北最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
-| `npm run collect -- pois [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 一類一類抓 + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
+| `npm run collect -- bus [--region=north] [--dry] [--refresh]` | 從 TDX 下載該生活圈(預設所有已開放縣市)公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
+| `npm run collect -- rent-stats [--region=north] [--seasons=4] [--dry]` | 內政部租賃實價登錄(已開放縣市或指定生活圈,最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
+| `npm run collect -- pois [--region=north] [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 依生活圈一類一類抓(commit 只換該生活圈) + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
 | `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON + 雙北航空噪音防制區,依里公告對上里界 SHP)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
 | `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
