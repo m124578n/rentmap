@@ -29,6 +29,7 @@ import { loadBusNet } from "../transit/network";
 import { EMPTY_BIKES, loadBikes } from "../transit/bike";
 import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 import { RAIL_VERSION } from "../transit/mrt";
+import { parseRegion, regionAt, regionTdx } from "@shared/regions";
 
 export const commute = new Hono<AppEnv>();
 commute.use("/api/commute", requireUser());
@@ -62,16 +63,19 @@ commute.get("/api/commute", async (c) => {
   const bike = c.req.query("bike") !== "0";
   const DB = c.env.DB;
   const owner = ownerOf(c);
+  // 一次只算一個生活圈:那一區的公車 / 軌道 / YouBike 網路;不同區的地點與房源彼此不算(null)
+  const region = parseRegion(c.req.query("region"));
   // 我的地點是個人資料:放進 key(只存在伺服器端快取);公車、YouBike、房源任何一個更新 key 就變
   const key = [
     "commute",
+    region,
     places.map((p) => `${p.id}@${p.lat},${p.lng}`).join(";"),
     radius,
     when.day,
     when.time,
     when.dir,
     bike ? 1 : 0,
-    await tableSig(DB, "bus_routes", "version"),
+    await tableSig(DB, "bus_routes", "version", `WHERE city IN (${regionTdx(region).map((x) => `'${x}'`).join(",")})`),
     bike ? await tableSig(DB, "pois", "version", "WHERE category = 'youbike'") : "-",
     await propertiesSig(DB, owner),
     RAIL_VERSION,
@@ -83,13 +87,14 @@ commute.get("/api/commute", async (c) => {
         .from(schema.properties)
         .where(owner == null ? undefined : eq(schema.properties.createdBy, owner))
     ).filter(
-      (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
+      (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null && regionAt(p.lat, p.lng) === region,
     );
-    const net = await loadBusNet(DB);
-    const bikes = bike ? await loadBikes(DB) : EMPTY_BIKES;
+    const net = await loadBusNet(DB, region);
+    const bikes = bike ? await loadBikes(DB, region) : EMPTY_BIKES;
     const items: CommuteMatrix["items"] = {};
-    for (const p of props) items[p.id] = {};
+    for (const p of props) items[p.id] = Object.fromEntries(places.map((pl) => [pl.id, null]));
     for (const place of places) {
+      if (regionAt(place.lat, place.lng) !== region) continue;
       const plan = buildPlan(net, place, when, bikes);
       for (const p of props) {
         const t = bestTrip(plan, p.lat, p.lng, radius);
@@ -112,8 +117,9 @@ commute.get("/api/commute/trips", async (c) => {
     .from(schema.myPlaces)
     .where(and(eq(schema.myPlaces.id, placeId), eq(schema.myPlaces.userId, c.get("user").id)));
   if (!place) return c.json({ error: "place not found" }, 404);
-  const net = await loadBusNet(c.env.DB);
-  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
+  const region = parseRegion(regionAt(place.lat, place.lng));
+  const net = await loadBusNet(c.env.DB, region);
+  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
   const plan = buildPlan(net, place, when, bikes);
   const trips = candidates(plan, lat, lng, radiusOf(c.req.query("radius")), 3)
     .map((x) => buildTrip(plan, x))
@@ -140,8 +146,9 @@ commute.get("/api/commute/grid", async (c) => {
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
     .orderBy(asc(schema.myPlaces.id));
-  const net = await loadBusNet(c.env.DB);
-  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
+  const region = parseRegion(regionAt((s + n) / 2, (w + e) / 2) ?? c.req.query("region"));
+  const net = await loadBusNet(c.env.DB, region);
+  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
   const plans = places.map((pl) => buildPlan(net, pl, when, bikes));
   const cells: CommuteGrid["cells"] = [];
   for (let lat = Math.floor(s / step) * step + step / 2; lat < n; lat += step)
@@ -174,8 +181,9 @@ commute.post("/api/tour", async (c) => {
   const { points, start, day, time, bike } = parsed.data;
   const when: CommuteWhen = { day, time: time.padStart(5, "0"), dir: "to" };
   const nodes = start ? [start, ...points] : points;
-  const net = await loadBusNet(c.env.DB);
-  const bikes = bike ? await loadBikes(c.env.DB) : EMPTY_BIKES;
+  const region = parseRegion(regionAt(points[0]!.lat, points[0]!.lng));
+  const net = await loadBusNet(c.env.DB, region);
+  const bikes = bike ? await loadBikes(c.env.DB, region) : EMPTY_BIKES;
   const trips: TourResponse["trips"] = nodes.map(() => nodes.map(() => null));
   nodes.forEach((to, j) => {
     if (start && j === 0) return; // 不會回到起點

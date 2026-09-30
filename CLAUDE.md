@@ -36,6 +36,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
+              transit/ 一個生活圈一份(loadBusNet / mrtGraph / loadBikes 都帶 region;房源與地點用 regionAt 依座標歸區);開新生活圈照 docs/design/2026-09-30-open-a-region.md
               transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段
 src/shared/   Zod schema 與常數,前後端共用;**regions.ts 是生活圈與縣市定義(行政區、TDX / 實價登錄代碼、範圍、各縣市有哪些資料),新增縣市或判斷「某縣市有沒有某資料」一律走它**
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)

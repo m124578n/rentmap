@@ -90,6 +90,19 @@ describe("bus ingest", () => {
     await env.DB.prepare("DELETE FROM bus_route_stops WHERE version = 'v2'").run();
     await env.DB.prepare("DELETE FROM bus_routes WHERE version = 'v2'").run();
   });
+
+  it("commit 帶 cities 只換那些縣市,別的生活圈的公車不動", async () => {
+    // 台中的一條(另一個版本),北區 v1 不受影響
+    await ingest("routes", { version: "tc1", items: [route("T1:0", "300", 0, { city: "Taichung" })] });
+    await ingest("stops", { version: "tc1", items: stops("T1:0").map((x) => ({ ...x, lat: 24.15 })) });
+    const r = (await (await ingest("commit", { version: "tc1", cities: ["Taichung"] })).json()) as { deleted_routes: number };
+    expect(r.deleted_routes).toBe(0);
+    const n = await env.DB.prepare("SELECT city, COUNT(*) AS n FROM bus_routes GROUP BY city ORDER BY city").all<{ city: string; n: number }>();
+    expect(n.results).toEqual([
+      { city: "Taichung", n: 1 },
+      { city: "Taipei", n: 3 },
+    ]);
+  });
 });
 
 describe("bus nearby", () => {

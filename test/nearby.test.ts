@@ -77,6 +77,18 @@ describe("pois ingest + nearby", () => {
     expect(r.counts.park).toBe(2); // 別類不受影響
   });
 
+  it("commit 帶 region 只換那個生活圈,別區的同類不動", async () => {
+    const tc: PoiIn = { ...poi("tc1", "pharmacy", 0), lat: 24.15, lng: 120.67 }; // 台中
+    await post("pois", { version: "p1", items: [poi("ph1", "pharmacy", 0.001), tc] });
+    expect((await post("pois/commit", { version: "p1", category: "pharmacy" })).status).toBe(200);
+    // 北區重新匯入(只有北區的點):台中那筆要留著
+    await post("pois", { version: "p2", items: [poi("ph1", "pharmacy", 0.001), poi("ph2", "pharmacy", 0.002)] });
+    const r = (await (await post("pois/commit", { version: "p2", category: "pharmacy", region: "north" })).json()) as { total: number; deleted: number };
+    expect(r).toEqual({ category: "pharmacy", total: 2, deleted: 0 });
+    const left = await env.DB.prepare("SELECT key FROM pois WHERE category = 'pharmacy' ORDER BY key").all<{ key: string }>();
+    expect(left.results.map((x) => x.key)).toEqual(["ph1", "ph2", "tc1"]);
+  });
+
   it("garbage: 帶時間與星期;/api/garbage/fit 依距離、時間、平日天數判斷", async () => {
     const g = (key: string, dLat: number, minute: number, days = 0b1110110): PoiIn => ({ ...poi(key, "garbage", dLat), minute, days, note: `${minute}` });
     await post("pois", { version: "g1", items: [g("early", 0.001, 17 * 60), g("late", 0.002, 20 * 60), g("far-late", 0.006, 21 * 60), g("weekend", 0.001, 22 * 60, 0b1000001)] });

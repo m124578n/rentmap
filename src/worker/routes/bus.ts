@@ -20,7 +20,8 @@ import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type Along
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { ownerOf, ownerSql } from "../pool";
-import { mrtGraph, TRA_LINE } from "../transit/mrt";
+import { mrtGraph, TRA_LINE, type MrtGraph } from "../transit/mrt";
+import { parseRegion, regionTdx } from "@shared/regions";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
@@ -104,8 +105,11 @@ bus.get("/api/bus/routes/:key", async (c) => {
 });
 
 bus.get("/api/bus/names", async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT DISTINCT name FROM bus_routes").all<{ name: string }>();
-  const g = mrtGraph();
+  const region = parseRegion(c.req.query("region"));
+  const { results } = await c.env.DB.prepare("SELECT DISTINCT name FROM bus_routes WHERE city IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(regionTdx(region)))
+    .all<{ name: string }>();
+  const g = mrtGraph(region);
   const body = {
     bus: results.map((r) => r.name).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true })),
     // 台鐵還沒匯入(tra.json 沒有站)就不列
@@ -116,8 +120,7 @@ bus.get("/api/bus/names", async (c) => {
 });
 
 /** 「板南」「板南線」「BL」都對到板南線 */
-function mrtLineOf(q: string): { code: string; name: string } | null {
-  const g = mrtGraph();
+function mrtLineOf(q: string, g: MrtGraph): { code: string; name: string } | null {
   for (const [code, name] of Object.entries(g.lineName))
     if (name === q || name === `${q}線` || code === q.toUpperCase() || `捷運${name}` === q) return { code, name };
   return null;
@@ -128,19 +131,22 @@ bus.get("/api/bus/along", async (c) => {
   if (!qs.length) return c.json({ error: "names required" }, 400);
   const radius = Math.min(1000, Math.max(100, num(c.req.query("radius")) || 400));
   const DB = c.env.DB;
+  const region = parseRegion(c.req.query("region"));
+  const g = mrtGraph(region);
 
   // 「307」也要對到「307西藏三民」(TDX 把同一路的另一種走法建成另一條路線),但「紅3」不能對到「紅30」
-  const busQs = qs.filter((q) => !mrtLineOf(q)).map((q) => q.toUpperCase());
+  const busQs = qs.filter((q) => !mrtLineOf(q, g)).map((q) => q.toUpperCase());
   const dirCount = new Map<string, number>();
   const matched = new Map<string, Set<string>>();
   const pts: { lat: number; lng: number; r: number }[] = [];
   if (busQs.length) {
     const { results: rows } = await DB.prepare(
-      `SELECT r.key, r.name, j.value AS q FROM bus_routes r JOIN json_each(?) j
+      `SELECT r.key, r.name, j.value AS q FROM bus_routes r JOIN json_each(?1) j
          ON UPPER(r.name) = j.value
-         OR (substr(UPPER(r.name), 1, length(j.value)) = j.value AND substr(r.name, length(j.value) + 1, 1) NOT GLOB '[0-9A-Za-z]')`,
+         OR (substr(UPPER(r.name), 1, length(j.value)) = j.value AND substr(r.name, length(j.value) + 1, 1) NOT GLOB '[0-9A-Za-z]')
+       WHERE r.city IN (SELECT value FROM json_each(?2))`,
     )
-      .bind(JSON.stringify(busQs))
+      .bind(JSON.stringify(busQs), JSON.stringify(regionTdx(region)))
       .all<{ key: string; name: string; q: string }>();
     for (const r of rows) (matched.get(r.q) ?? matched.set(r.q, new Set()).get(r.q)!).add(r.name);
     const { results } = await DB.prepare("SELECT DISTINCT lat, lng FROM bus_route_stops WHERE route_key IN (SELECT value FROM json_each(?))")
@@ -149,9 +155,8 @@ bus.get("/api/bus/along", async (c) => {
     for (const r of results) pts.push({ ...r, r: radius });
     for (const r of rows) (dirCount.set(r.q, (dirCount.get(r.q) ?? 0) + 1));
   }
-  const g = mrtGraph();
   const queries: AlongResponse["queries"] = qs.map((q) => {
-    const line = mrtLineOf(q);
+    const line = mrtLineOf(q, g);
     if (line) {
       const sts = g.stations.filter((s) => s.lines.includes(line.code));
       for (const s of sts) pts.push({ lat: s.lat, lng: s.lng, r: Math.max(radius, ALONG_MRT_R) });
@@ -227,19 +232,22 @@ bus.post("/api/ingest/bus/stops", async (c) => {
   return c.json({ upserted: items.length });
 });
 
-const CommitBody = z.object({ version: Version, force: z.boolean().optional() });
+const CommitBody = z.object({ version: Version, force: z.boolean().optional(), cities: z.array(z.string().min(1).max(40)).min(1).max(20).optional() });
 bus.post("/api/ingest/bus/commit", async (c) => {
   const parsed = CommitBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid" }, 400);
-  const { version, force } = parsed.data;
+  const { version, force, cities } = parsed.data;
   const DB = c.env.DB;
-  const count = async (sql: string) => ((await DB.prepare(sql).bind(version).first<{ n: number }>())?.n ?? 0);
-  const fresh = await count("SELECT COUNT(*) AS n FROM bus_route_stops WHERE version = ?");
-  const stale = await count("SELECT COUNT(*) AS n FROM bus_route_stops WHERE version <> ?");
+  // 只換這次匯入的縣市(TDX City 代碼);別的生活圈的公車不動。沒帶 cities = 全部(舊行為)
+  const scope = cities ? "AND route_key IN (SELECT key FROM bus_routes WHERE city IN (SELECT value FROM json_each(?2)))" : "";
+  const bind = (sql: string) => (cities ? DB.prepare(sql).bind(version, JSON.stringify(cities)) : DB.prepare(sql).bind(version));
+  const count = async (sql: string) => (await bind(sql).first<{ n: number }>())?.n ?? 0;
+  const fresh = await count(`SELECT COUNT(*) AS n FROM bus_route_stops WHERE version = ?1 ${scope}`);
+  const stale = await count(`SELECT COUNT(*) AS n FROM bus_route_stops WHERE version <> ?1 ${scope}`);
   const total = fresh + stale;
   // 新版覆蓋了同 (route_key, seq) 的舊列,所以舊版總數 ≈ total;新版不到一半多半是抓壞了
   if (!force && fresh < total * 0.5) return c.json({ error: "新版站數不到現有的一半,疑似抓取不完整;確定要換就帶 force", fresh, total }, 409);
-  const r1 = await DB.prepare("DELETE FROM bus_route_stops WHERE version <> ?").bind(version).run();
-  const r2 = await DB.prepare("DELETE FROM bus_routes WHERE version <> ?").bind(version).run();
+  const r1 = await bind(`DELETE FROM bus_route_stops WHERE version <> ?1 ${scope}`).run();
+  const r2 = await bind(`DELETE FROM bus_routes WHERE version <> ?1 ${cities ? "AND city IN (SELECT value FROM json_each(?2))" : ""}`).run();
   return c.json({ stops: fresh, deleted_stops: r1.meta.changes ?? 0, deleted_routes: r2.meta.changes ?? 0 });
 });

@@ -177,3 +177,24 @@ export function hasCoverage(city: string | null | undefined, what: Coverage): bo
 export function coverageCities(what: Coverage, region: RegionKey = DEFAULT_REGION): string {
   return REGIONS[region].cities.filter((c) => hasCoverage(c, what)).join("、");
 }
+
+/** API 參數 → 生活圈(不認得或還沒開放 → 預設) */
+export function parseRegion(s: string | null | undefined): RegionKey {
+  return s && (REGION_KEYS as readonly string[]).includes(s) && REGIONS[s as RegionKey].enabled ? (s as RegionKey) : DEFAULT_REGION;
+}
+
+/** 生活圈已開放縣市的 TDX City 代碼(公車資料用) */
+export function regionTdx(key: RegionKey): string[] {
+  return REGIONS[key].cities.map((c) => CITY_INFO[c].tdx);
+}
+
+/**
+ * 採集 CLI 的 --region=:回傳要抓的縣市(已開放 + 規劃中,讓還沒開的生活圈可以先在家把資料抓好);沒帶 = 所有已開放縣市。
+ * 不認得的值丟錯。
+ */
+export function collectCities(args: string[]): CityName[] {
+  const r = args.find((a) => a.startsWith("--region="))?.slice(9);
+  if (!r) return OPEN_CITIES;
+  if (!(REGION_KEYS as readonly string[]).includes(r)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
+  return [...REGIONS[r as RegionKey].cities, ...REGIONS[r as RegionKey].planned];
+}

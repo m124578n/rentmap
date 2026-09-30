@@ -112,7 +112,7 @@ export function busWaits(net: BusNet, when: CommuteWhen): Float64Array {
  * 兩個方向都是「以地點為錨、一次算完所有房源」,查詢量不因房源數增加。
  */
 export function buildPlan(fwd: BusNet, dest: { lat: number; lng: number; name: string }, when: CommuteWhen = COMMUTE_DEFAULT.go, bikes: BikeNet = EMPTY_BIKES): Plan {
-  const g = mrtGraph();
+  const g = mrtGraph(fwd.region);
   const net = when.dir === "from" ? reverseNet(fwd) : fwd;
   const n = net.sLat.length;
   const waits = busWaits(net, when);

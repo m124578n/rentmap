@@ -1,8 +1,10 @@
 /**
- * 公車網路整份放進 Worker 記憶體(雙北約數萬個「路線 × 站」),以 bus_routes 的 version 為快取鍵:
- * 同一個 isolate 只在公車資料重新匯入後重讀一次。轉乘要看「任何路線在任何站附近」,逐次查 D1 太多次。
+ * 公車網路放進 Worker 記憶體,**一個生活圈一份**(北北基桃約數萬個「路線 × 站」;全台放不下),
+ * 以該生活圈 bus_routes 的 version + 筆數為快取鍵:同一個 isolate 只在公車資料重新匯入後重讀一次。
+ * 轉乘要看「任何路線在任何站附近」,逐次查 D1 太多次。
  */
 import { BUS_M_PER_MIN, type Schedule } from "@shared/bus";
+import { DEFAULT_REGION, regionTdx, type RegionKey } from "@shared/regions";
 import { parseSchedule } from "../busdata";
 
 export interface BusRoute {
@@ -18,6 +20,8 @@ export interface BusRoute {
 }
 
 export interface BusNet {
+  /** 哪個生活圈的網路(捷運 / 台鐵圖也用同一個) */
+  region: RegionKey;
   version: string | null;
   routes: BusRoute[];
   routeIdx: Map<string, number>;
@@ -46,9 +50,9 @@ export function nearStops(net: BusNet, lat: number, lng: number, r: number, cb: 
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) for (const i of net.grid.get(cellKey(y, x)) ?? []) cb(i);
 }
 
-let cache: BusNet | null = null;
+const cache = new Map<RegionKey, BusNet>();
 
-const EMPTY: BusNet = {
+const EMPTY: Omit<BusNet, "region"> = {
   version: null,
   routes: [],
   routeIdx: new Map(),
@@ -62,20 +66,30 @@ const EMPTY: BusNet = {
   grid: new Map(),
 };
 
-export async function loadBusNet(DB: D1Database): Promise<BusNet> {
-  const head = await DB.prepare("SELECT MAX(version) AS v, COUNT(*) AS n FROM bus_routes").first<{ v: string | null; n: number }>();
-  if (head?.v == null) return EMPTY;
+export async function loadBusNet(DB: D1Database, region: RegionKey = DEFAULT_REGION): Promise<BusNet> {
+  const cities = JSON.stringify(regionTdx(region));
+  const head = await DB.prepare("SELECT MAX(version) AS v, COUNT(*) AS n FROM bus_routes WHERE city IN (SELECT value FROM json_each(?1))")
+    .bind(cities)
+    .first<{ v: string | null; n: number }>();
+  if (head?.v == null) return { ...EMPTY, region };
   const v = `${head.v}#${head.n}`;
-  if (cache && cache.version === v) return cache;
+  const hit = cache.get(region);
+  if (hit && hit.version === v) return hit;
 
-  const { results: rrows } = await DB.prepare("SELECT key, name, variant, to_name, schedule_json FROM bus_routes").all<{
+  const { results: rrows } = await DB.prepare("SELECT key, name, variant, to_name, schedule_json FROM bus_routes WHERE city IN (SELECT value FROM json_each(?1))").bind(cities).all<{
     key: string;
     name: string;
     variant: string | null;
     to_name: string | null;
     schedule_json: string | null;
   }>();
-  const { results: srows } = await DB.prepare("SELECT route_key, seq, name, lat, lng, dist_m, t_min FROM bus_route_stops ORDER BY route_key, seq").all<{
+  const { results: srows } = await DB.prepare(
+    `SELECT s.route_key, s.seq, s.name, s.lat, s.lng, s.dist_m, s.t_min FROM bus_route_stops s
+      WHERE s.route_key IN (SELECT key FROM bus_routes WHERE city IN (SELECT value FROM json_each(?1)))
+      ORDER BY s.route_key, s.seq`,
+  )
+    .bind(cities)
+    .all<{
     route_key: string;
     seq: number;
     name: string;
@@ -93,6 +107,7 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
   }
   const n = srows.length;
   const net: BusNet = {
+    region,
     version: v,
     routes,
     routeIdx,
@@ -129,7 +144,7 @@ export async function loadBusNet(DB: D1Database): Promise<BusNet> {
     i = j;
   }
   buildGrid(net);
-  cache = net;
+  cache.set(region, net);
   return net;
 }
 
@@ -143,7 +158,7 @@ function buildGrid(net: BusNet) {
   }
 }
 
-let revCache: { src: BusNet; net: BusNet } | null = null;
+const revCache = new WeakMap<BusNet, BusNet>();
 
 /**
  * 反方向網路(下班「地點 → 住處」用):每條路線方向的站序倒過來、sT 改成「從終點往回」,
@@ -151,7 +166,8 @@ let revCache: { src: BusNet; net: BusNet } | null = null;
  * 路線本身(key、名稱、班表)不變,sSeq 保留原本的站序。
  */
 export function reverseNet(net: BusNet): BusNet {
-  if (revCache?.src === net) return revCache.net;
+  const hit = revCache.get(net);
+  if (hit) return hit;
   const n = net.sLat.length;
   const rev: BusNet = {
     ...net,
@@ -177,6 +193,6 @@ export function reverseNet(net: BusNet): BusNet {
     }
   }
   if (n) buildGrid(rev);
-  revCache = { src: net, net: rev };
+  revCache.set(net, rev);
   return rev;
 }

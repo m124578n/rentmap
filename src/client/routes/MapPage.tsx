@@ -15,6 +15,7 @@ import { useMrt } from "@/features/map/mrt";
 import { PropertyDetail } from "@/features/property/PropertyDetail";
 import { PointDetail, type MapPoint } from "@/features/map/PointDetail";
 import { AddressSearch } from "@/features/report/AddressSearch";
+import { RegionPicker } from "@/features/report/RegionPicker";
 import type { BusOverlay } from "@/features/map/busLayer";
 import type { PropertySummary } from "@shared/schemas";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
@@ -196,6 +197,7 @@ export function MapPage() {
             className="absolute top-3 left-3 z-[5] grid max-w-[min(20rem,calc(100%-4.5rem))] justify-items-start gap-1 text-xs"
             style={panelOpen && !narrow ? { left: PANEL_W + 12 } : undefined}
           >
+            <RegionPicker />
             <AddressSearch onPick={pickPoint} />
             {noCoords > 0 && (
               <div className="rounded bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200">

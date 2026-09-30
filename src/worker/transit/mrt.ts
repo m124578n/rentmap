@@ -13,6 +13,7 @@ import mrtTimes from "../../../public/mrt-times.json";
 import traJson from "../../../public/tra.json";
 import { haversine, type DayType } from "@shared/bus";
 import { mrtPairKey } from "@shared/trip";
+import { DEFAULT_REGION, regionAt, type RegionKey } from "@shared/regions";
 
 interface RawStation {
   id: string;
@@ -99,22 +100,25 @@ function parseRef(ref: string) {
   return m ? { line: m[1]!, n: Number(m[2]), suffix: m[3]! } : null;
 }
 
-let cached: MrtGraph | null = null;
+const cached = new Map<RegionKey, MrtGraph>();
 
-export function mrtGraph(): MrtGraph {
-  cached ??= buildRailGraph(tra);
-  return cached;
+/** 一個生活圈一張圖(站依座標歸區);北區是雙北捷運 + 機捷 + 輕軌 + 台鐵 */
+export function mrtGraph(region: RegionKey = DEFAULT_REGION): MrtGraph {
+  let g = cached.get(region);
+  if (!g) cached.set(region, (g = buildRailGraph(tra, region)));
+  return g;
 }
 
 /** 捷運 + 台鐵的圖;traData 可換(測試用) */
-export function buildRailGraph(traData: TraFile): MrtGraph {
+export function buildRailGraph(traData: TraFile, region: RegionKey = DEFAULT_REGION): MrtGraph {
   const raw = mrtJson as unknown as { lines: RawLine[]; stations: RawStation[] };
-  const stations: MrtStation[] = raw.stations.map((s, idx) => ({ idx, id: s.id, name: s.name, lat: s.lat, lng: s.lng, lines: s.lines, rail: "mrt" }));
+  const rawStations = raw.stations.filter((s) => regionAt(s.lat, s.lng) === region);
+  const stations: MrtStation[] = rawStations.map((s, idx) => ({ idx, id: s.id, name: s.name, lat: s.lat, lng: s.lng, lines: s.lines, rail: "mrt" }));
   const nodes: MrtGraph["nodes"] = [];
   const nodeIdx = new Map<string, number>();
   const nodesOfStation: number[][] = stations.map(() => []);
   const byRef = new Map<string, { station: number; line: string }>();
-  raw.stations.forEach((s, i) => {
+  rawStations.forEach((s, i) => {
     for (const ref of s.refs) {
       const p = parseRef(ref);
       if (!p) continue;
@@ -165,7 +169,7 @@ export function buildRailGraph(traData: TraFile): MrtGraph {
   // 台鐵:每站一個節點(線 TRA),邊用時刻表的站間秒數;附近的捷運站可以轉
   const mrtCount = stations.length;
   const traNode = new Map<string, number>();
-  for (const t of traData.stations) {
+  for (const t of traData.stations.filter((x) => regionAt(x.lat, x.lng) === region)) {
     const idx = stations.length;
     stations.push({ idx, id: `TRA${t.id}`, name: `台鐵${t.name}`, lat: t.lat, lng: t.lng, lines: [TRA_LINE], rail: "tra" });
     traNode.set(t.id, nodes.length);

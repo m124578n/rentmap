@@ -265,7 +265,8 @@ function FitChip({ f }: { f: Filters }) {
 
 /** 經過路線:輸入公車主路線名(307、紅30)或捷運線名(板南線),任一條走得到就留下 */
 function AlongRow({ f }: { f: Filters }) {
-  const names = useQuery({ queryKey: ["bus-names"], queryFn: api.busNames, staleTime: 60 * 60_000 });
+  const region = useRegion();
+  const names = useQuery({ queryKey: ["bus-names", region.key], queryFn: () => api.busNames(region.key), staleTime: 60 * 60_000 });
   const along = useAlong();
   const [text, setText] = useState("");
   const info = new Map((along.data?.queries ?? []).map((q) => [q.q, q]));

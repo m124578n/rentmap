@@ -2,12 +2,12 @@
  * `npm run collect -- tra [--dry] [--date=YYYY-MM-DD]`
  *
  * 從 TDX 下載台鐵車站 + 某個平日(預設下週三)的每日時刻表 → public/tra.json(進 git,Worker 建軌道圖時 import;Worker 不抓外站)。
- * 只收目前生活圈(north)外框內的站與區間車。時刻表改點(通常一年幾次)才要重跑。
+ * 只收已開放生活圈外框內的站與區間車(班距用第一個生活圈的)。時刻表改點(通常一年幾次)才要重跑。
  * 金鑰同公車:.env 的 TDX_CLIENT_ID / TDX_CLIENT_SECRET。原始回應快取在 data/tdx/tra-*.json。
  */
 import fs from "node:fs";
 import path from "node:path";
-import { regionBbox } from "../src/shared/regions";
+import { REGION_KEYS, REGIONS, regionBbox, type RegionKey } from "../src/shared/regions";
 import { buildTra, type TdxTraStation, type TdxTraTimetable } from "./tra-transform";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -57,7 +57,16 @@ export async function runTra(args: string[]) {
   await new Promise((r) => setTimeout(r, 3000));
   const trains = await get<TdxTraTimetable>(token, `daily-${date}`, `DailyTrainTimetable/TrainDate/${date}`, "TrainTimetables");
   console.log(`  車站 ${stations.length},${date} 車次 ${trains.length}`);
-  const out = buildTra(stations, trains, regionBbox("north"));
+  // 全部開放的生活圈一起放進 tra.json(Worker 建圖時再依座標分區);--region= 可以先抓還沒開的
+  const keys = args.find((a) => a.startsWith("--region="))
+    ? [args.find((a) => a.startsWith("--region="))!.slice(9) as RegionKey]
+    : REGION_KEYS.filter((k) => REGIONS[k].enabled);
+  const merged = keys.map((k) => buildTra(stations, trains, regionBbox(k)));
+  const out = {
+    headway: merged[0]!.headway,
+    stations: merged.flatMap((m) => m.stations),
+    edges: Object.assign({}, ...merged.map((m) => m.edges)) as Record<string, number>,
+  };
   console.log(`生活圈內 ${out.stations.length} 站、站間 ${Object.keys(out.edges).length} 段,區間車班距 ${out.headway.join(" / ")} 分(尖峰 / 離峰 / 晚上)`);
   if (args.includes("--dry")) return console.log(JSON.stringify(out.stations.slice(0, 5)));
   fs.writeFileSync(OUT, JSON.stringify({ updated: new Date().toISOString().slice(0, 10), date, ...out }) + "\n");

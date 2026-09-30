@@ -61,10 +61,12 @@ export const api = {
 
   busNearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyBusResponse>(`/api/bus/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
-  busNames: () => req<{ bus: string[]; mrt: string[] }>("/api/bus/names"),
-  busAlong: (names: string[], radius = 400) => req<AlongResponse>(`/api/bus/along?names=${encodeURIComponent(names.join(","))}&radius=${radius}`),
+  busNames: (region = "north") => req<{ bus: string[]; mrt: string[] }>(`/api/bus/names?region=${region}`),
+  busAlong: (names: string[], region = "north", radius = 400) =>
+    req<AlongResponse>(`/api/bus/along?names=${encodeURIComponent(names.join(","))}&region=${region}&radius=${radius}`),
 
-  commute: (when: CommuteWhen, bike = true, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
+  commute: (when: CommuteWhen, bike = true, region = "north", radius = 400) =>
+    req<CommuteMatrix>(`/api/commute?radius=${radius}&region=${region}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
   commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen; bike: boolean }) =>
     req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}${q.bike ? "" : "&bike=0"}`),
 

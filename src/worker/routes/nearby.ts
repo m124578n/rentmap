@@ -20,6 +20,7 @@ import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
 import { isPrivatePool, ownerOf, ownerSql } from "../pool";
+import { DEFAULT_REGION, REGION_KEYS, regionAt, regionBbox, type RegionKey } from "@shared/regions";
 
 export const nearby = new Hono<AppEnv>();
 nearby.use("/api/nearby", requireUser());
@@ -42,13 +43,18 @@ interface Poi {
 }
 const CELL = 0.005; // 約 550m
 const cellKey = (y: number, x: number) => `${y}:${x}`;
-let cache: { sig: string; grid: Map<string, Poi[]>; n: number } | null = null;
+type Grid = { sig: string; grid: Map<string, Poi[]>; n: number };
+const cache = new Map<RegionKey, Grid>();
 
-async function loadGrid(DB: D1Database) {
-  const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(version) AS v FROM pois").first<{ n: number; v: string | null }>();
+/** 一個生活圈一份(依外框取點);座標在哪個生活圈就用哪份 */
+async function loadGrid(DB: D1Database, region: RegionKey = DEFAULT_REGION): Promise<Grid> {
+  const [w, s, e, n] = regionBbox(region);
+  const box = "WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4";
+  const head = await DB.prepare(`SELECT COUNT(*) AS n, MAX(version) AS v FROM pois ${box}`).bind(s, n, w, e).first<{ n: number; v: string | null }>();
   const sig = `${head?.n ?? 0}#${head?.v ?? ""}`;
-  if (cache?.sig === sig) return cache;
-  const { results } = await DB.prepare("SELECT category, subtype, name, lat, lng, rating, url, note, minute, days FROM pois").all<Poi>();
+  const hit = cache.get(region);
+  if (hit?.sig === sig) return hit;
+  const { results } = await DB.prepare(`SELECT category, subtype, name, lat, lng, rating, url, note, minute, days FROM pois ${box}`).bind(s, n, w, e).all<Poi>();
   const grid = new Map<string, Poi[]>();
   for (const p of results) {
     const k = cellKey(Math.floor(p.lat / CELL), Math.floor(p.lng / CELL));
@@ -56,8 +62,18 @@ async function loadGrid(DB: D1Database) {
     if (list) list.push(p);
     else grid.set(k, [p]);
   }
-  cache = { sig, grid, n: results.length };
-  return cache;
+  const out = { sig, grid, n: results.length };
+  cache.set(region, out);
+  return out;
+}
+
+const regionOf = (lat: number, lng: number) => regionAt(lat, lng) ?? DEFAULT_REGION;
+
+/** 一批房源各自所在生活圈的網格(先載好,迴圈裡同步取) */
+async function gridsFor(DB: D1Database, pts: { lat: number; lng: number }[]) {
+  const out = new Map<RegionKey, Grid>();
+  for (const k of new Set(pts.map((p) => regionOf(p.lat, p.lng)))) out.set(k, await loadGrid(DB, k));
+  return out;
 }
 
 function around(grid: Map<string, Poi[]>, lat: number, lng: number, radius: number, cb: (p: Poi, d: number) => void) {
@@ -86,7 +102,7 @@ nearby.get("/api/nearby", async (c) => {
   const lng = num(c.req.query("lng"));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = radiusOf(c.req.query("radius"));
-  const { grid, n } = await loadGrid(c.env.DB);
+  const { grid, n } = await loadGrid(c.env.DB, regionOf(lat, lng));
   // Google 評分只在私人模式給(公開版拉麵只留店名與位置)
   const rated = isPrivatePool(c.env);
   const found = new Map<PoiCat, NearbyPoi[]>();
@@ -135,15 +151,16 @@ nearby.get("/api/nearby/summary", async (c) => {
 });
 
 async function nearbySummary(DB: D1Database, radius: number, owner: number | null): Promise<NearbySummary> {
-  const { grid, n } = await loadGrid(DB);
   const { results } = await DB.prepare(`SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL${ownerSql(owner)}`).all<{ id: number; lat: number; lng: number }>();
+  const grids = await gridsFor(DB, results);
+  const n = [...grids.values()].reduce((a, g) => a + g.n, 0);
   const items: NearbySummary["items"] = {};
   const nearest: NearbySummary["nearest"] = {};
   const avoidable = new Set<PoiCat>(AVOIDABLE_CATS);
   for (const h of results) {
     const counts: Partial<Record<PoiCat, number>> = {};
     const near: Partial<Record<PoiCat, number>> = {};
-    around(grid, h.lat, h.lng, radius, (p, d) => {
+    around(grids.get(regionOf(h.lat, h.lng))!.grid, h.lat, h.lng, radius, (p, d) => {
       counts[p.category] = (counts[p.category] ?? 0) + 1;
       if (avoidable.has(p.category) && (near[p.category] == null || d < near[p.category]!)) near[p.category] = Math.round(d);
     });
@@ -160,16 +177,16 @@ nearby.get("/api/garbage/fit", async (c) => {
   const m = HHMM.exec(after);
   if (!m) return c.json({ error: "after must be HH:MM" }, 400);
   const afterMin = Number(m[1]) * 60 + Number(m[2]);
-  const { grid } = await loadGrid(c.env.DB);
   // 房東有沒有寫代收:看最新一筆刊登的 raw_json(屋況介紹、標籤)
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.lat, p.lng, (SELECT raw_json FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS raw
        FROM properties p WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL${ownerSql(ownerOf(c), "p")}`,
   ).all<{ id: number; lat: number; lng: number; raw: string | null }>();
+  const grids = await gridsFor(c.env.DB, results);
   const items: GarbageFit["items"] = {};
   for (const h of results) {
     let best: { distance_m: number; minute: number; name: string | null } | null = null;
-    around(grid, h.lat, h.lng, max, (p, d) => {
+    around(grids.get(regionOf(h.lat, h.lng))!.grid, h.lat, h.lng, max, (p, d) => {
       if (p.category !== "garbage" || p.minute == null || p.minute < afterMin) return;
       if (p.days != null && weekdayCount(p.days) < 3) return;
       if (!best || d < best.distance_m) best = { distance_m: Math.round(d), minute: p.minute, name: p.name };
@@ -200,17 +217,27 @@ nearby.post("/api/ingest/pois", async (c) => {
   return c.json({ upserted: items.length });
 });
 
-const CommitBody = z.object({ version: Version, category: z.enum(POI_CATS as [PoiCat, ...PoiCat[]]), force: z.boolean().optional() });
+const CommitBody = z.object({ version: Version, category: z.enum(POI_CATS as [PoiCat, ...PoiCat[]]), force: z.boolean().optional(), region: z.enum(REGION_KEYS).optional() });
 nearby.post("/api/ingest/pois/commit", async (c) => {
   const parsed = CommitBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid" }, 400);
-  const { version, category, force } = parsed.data;
+  const { version, category, force, region } = parsed.data;
   const DB = c.env.DB;
-  const count = async (sql: string) => (await DB.prepare(sql).bind(category, version).first<{ n: number }>())?.n ?? 0;
-  const fresh = await count("SELECT COUNT(*) AS n FROM pois WHERE category = ? AND version = ?");
-  const stale = await count("SELECT COUNT(*) AS n FROM pois WHERE category = ? AND version <> ?");
+  // 帶 region 就只換那個生活圈的舊資料(外框先粗篩,再用 regionAt 判斷,相鄰生活圈外框重疊的部分不會誤刪);沒帶 = 全部(舊行為)
+  const [w, s, e, n] = region ? regionBbox(region) : [-180, -90, 180, 90];
+  const box = "AND lat BETWEEN ?3 AND ?4 AND lng BETWEEN ?5 AND ?6";
+  const q = (sql: string) => DB.prepare(sql).bind(category, version, s, n, w, e);
+  const mine = (r: { lat: number; lng: number }) => !region || regionAt(r.lat, r.lng) === region;
+  const fresh = (await q(`SELECT lat, lng FROM pois WHERE category = ?1 AND version = ?2 ${box}`).all<{ lat: number; lng: number }>()).results.filter(mine).length;
+  const staleRows = (await q(`SELECT key, lat, lng FROM pois WHERE category = ?1 AND version <> ?2 ${box}`).all<{ key: string; lat: number; lng: number }>()).results.filter(mine);
+  const stale = staleRows.length;
   // 新版覆蓋了同 key 的舊列,所以舊版總數 ≈ fresh + stale;新版不到一半多半是抓壞了
   if (!force && fresh < (fresh + stale) * 0.5) return c.json({ error: "新版筆數不到現有的一半,疑似抓取不完整;確定要換就帶 --force", category, fresh, total: fresh + stale }, 409);
-  const r = await DB.prepare("DELETE FROM pois WHERE category = ? AND version <> ?").bind(category, version).run();
-  return c.json({ category, total: fresh, deleted: r.meta.changes ?? 0 });
+  let deleted = 0;
+  for (let i = 0; i < staleRows.length; i += 5000) {
+    const keys = staleRows.slice(i, i + 5000).map((r) => r.key);
+    const r = await DB.prepare("DELETE FROM pois WHERE category = ?1 AND key IN (SELECT value FROM json_each(?2))").bind(category, JSON.stringify(keys)).run();
+    deleted += r.meta.changes ?? 0;
+  }
+  return c.json({ category, total: fresh, deleted });
 });

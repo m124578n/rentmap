@@ -1,14 +1,15 @@
 /**
  * `npm run collect -- pois [--only=convenience,food] [--dry] [--refresh]`
  *
- * 生活機能:OpenStreetMap(Overpass)雙北一類一類抓 + menmap 拉麵店 + 雙北環保局垃圾車清運點 → 推 /api/ingest/pois(每類覆蓋式:推完該類再 commit,舊版刪掉)。
+ * 生活機能:OpenStreetMap(Overpass)依生活圈(--region=,預設 north)一類一類抓 + menmap 拉麵店 + 雙北環保局垃圾車清運點 → 推 /api/ingest/pois(每類覆蓋式:推完該類再 commit,舊版刪掉)。
  * Overpass 公用伺服器連續查會 429 / 504:每次查詢之間歇 10 秒、失敗退避重試;餐飲量大切 3×3 塊查。
  * 原始回應快取在 data/osm/{類別}[-{塊}].json(30 天內不重抓,中斷後重跑會從沒抓完的那塊繼續;--refresh 全部重抓)。
  * 一個月跑一次就夠。
  */
 import fs from "node:fs";
 import path from "node:path";
-import { POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
+import { CRIME_CATS, POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
+import { REGION_KEYS, type RegionKey } from "../../src/shared/regions";
 import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -119,15 +120,16 @@ async function overpass(query: string): Promise<OsmElement[]> {
 }
 
 /** 一類(可能多塊)→ 元素;有新鮮快取就用 */
-async function loadCategory(cat: PoiCat, refresh: boolean): Promise<{ elements: OsmElement[]; fetched: number }> {
+async function loadCategory(cat: PoiCat, refresh: boolean, region: RegionKey): Promise<{ elements: OsmElement[]; fetched: number }> {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   const [rows, cols] = TILES[cat] ?? [1, 1];
-  // 目前只有 north;開其他生活圈時 pois 的覆蓋式 commit 要改成依生活圈分開(不然會刪掉別區的同類資料)
-  const boxes = tiles(bboxOf("north"), rows, cols);
+  const boxes = tiles(bboxOf(region), rows, cols);
+  // 北區沿用舊的快取檔名;其他生活圈加前綴
+  const prefix = region === "north" ? "" : `${region}-`;
   const elements: OsmElement[] = [];
   let fetched = 0;
   for (let i = 0; i < boxes.length; i++) {
-    const file = path.join(CACHE_DIR, boxes.length > 1 ? `${cat}-${i}.json` : `${cat}.json`);
+    const file = path.join(CACHE_DIR, boxes.length > 1 ? `${prefix}${cat}-${i}.json` : `${prefix}${cat}.json`);
     const fresh = fs.existsSync(file) && Date.now() - fs.statSync(file).mtimeMs < CACHE_DAYS * 86400_000;
     if (fresh && !refresh) {
       elements.push(...(JSON.parse(fs.readFileSync(file, "utf8")) as OsmElement[]));
@@ -155,9 +157,10 @@ async function post(base: string, secret: string, p: string, body: unknown) {
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-export async function push(base: string, secret: string, version: string, cat: PoiCat, items: PoiIn[], force: boolean) {
+export async function push(base: string, secret: string, version: string, cat: PoiCat, items: PoiIn[], force: boolean, region: RegionKey = "north") {
   for (let i = 0; i < items.length; i += 2000) await post(base, secret, "", { version, items: items.slice(i, i + 2000) });
-  return post(base, secret, "/commit", { version, category: cat, force });
+  // 只覆蓋這個生活圈外框內的舊資料,別區的同類不動
+  return post(base, secret, "/commit", { version, category: cat, force, region });
 }
 
 export async function runPois(opts: { base: string; secret: string; args: string[] }) {
@@ -166,7 +169,12 @@ export async function runPois(opts: { base: string; secret: string; args: string
   const refresh = args.includes("--refresh");
   const force = args.includes("--force");
   const only = args.find((a) => a.startsWith("--only="))?.slice(7).split(",").filter(Boolean);
-  const cats = POI_CATS.filter((c) => !only || only.includes(c));
+  const regionArg = args.find((a) => a.startsWith("--region="))?.slice(9) ?? "north";
+  if (!(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
+  const region = regionArg as RegionKey;
+  // 垃圾車、YouBike、拉麵、治安是雙北各自的來源,其他生活圈還沒有
+  const NORTH_ONLY: PoiCat[] = ["garbage", "youbike", "ramen", ...CRIME_CATS];
+  const cats = POI_CATS.filter((c) => (!only || only.includes(c)) && (region === "north" || !NORTH_ONLY.includes(c)));
   if (!dry && !opts.secret) throw new Error(".env 沒有 INGEST_SECRET");
   const version = new Date().toISOString();
   let waited = false;
@@ -181,7 +189,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
         items = await fetchYoubike();
       } else if (cat === "nightmarket") {
         // 用市場的資料(快取)挑出夜市,不另外查
-        items = nightMarkets(fromOverpass("market", (await loadCategory("market", false)).elements));
+        items = nightMarkets(fromOverpass("market", (await loadCategory("market", false, region)).elements));
       } else if (cat === "ramen") {
         const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
         if (!res.ok) throw new Error(`menmap ${res.status}`);
@@ -189,7 +197,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
       } else {
         if (!("osm" in POI_CATEGORIES[cat])) continue;
         if (waited) await sleep(10_000);
-        const { elements, fetched } = await loadCategory(cat, refresh);
+        const { elements, fetched } = await loadCategory(cat, refresh, region);
         waited = fetched > 0;
         items = fromOverpass(cat, elements);
       }
@@ -203,7 +211,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
     const named = items.filter((x) => x.name).length;
     console.log(`  ${POI_CATEGORIES[cat].label}(${cat}):${items.length} 筆,有名字 ${named}`);
     if (dry) continue;
-    console.log("   ", await push(opts.base, opts.secret, version, cat, items, force));
+    console.log("   ", await push(opts.base, opts.secret, version, cat, items, force, region));
   }
   if (failed.length) throw new Error(`這些類別沒抓到,稍後再跑:npm run collect -- pois --only=${failed.join(",")}`);
 }

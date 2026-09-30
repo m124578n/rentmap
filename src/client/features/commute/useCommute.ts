@@ -23,8 +23,8 @@ export function useCommute(side?: CommuteSide) {
   const sig = list.map((p) => `${p.id}@${p.lat},${p.lng}`).join("|");
   const mode = f.commuteMode;
   const q = useQuery({
-    queryKey: ["commute", sig, when.day, when.time, when.dir, f.commuteBike],
-    queryFn: () => api.commute(when, f.commuteBike),
+    queryKey: ["commute", region.key, sig, when.day, when.time, when.dir, f.commuteBike],
+    queryFn: () => api.commute(when, f.commuteBike, region.key),
     enabled: list.length > 0 && mode === "transit",
     staleTime: 5 * 60_000,
   });

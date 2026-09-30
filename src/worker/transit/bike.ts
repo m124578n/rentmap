@@ -3,6 +3,7 @@
  *   騎乘分鐘 = 直線距離 × 1.25(沿街)÷ 200 m/分(12 km/h),另加租 + 還 2 分;站點不看即時車數。
  */
 import { haversine } from "@shared/bus";
+import { DEFAULT_REGION, regionBbox, type RegionKey } from "@shared/regions";
 
 export const BIKE_M_PER_MIN = 200;
 export const BIKE_DETOUR = 1.25;
@@ -31,17 +32,23 @@ export interface BikeNet {
 
 const CELL = 0.005;
 const cellKey = (y: number, x: number) => `${y}:${x}`;
-let cache: BikeNet | null = null;
+const cache = new Map<RegionKey, BikeNet>();
 
-export async function loadBikes(DB: D1Database): Promise<BikeNet> {
-  const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(version) AS v FROM pois WHERE category = 'youbike'").first<{ n: number; v: string | null }>();
-  const sig = `${head?.n ?? 0}#${head?.v ?? ""}`;
-  if (cache?.sig === sig) return cache;
-  const { results } = await DB.prepare("SELECT name, lat, lng FROM pois WHERE category = 'youbike' AND (subtype IS NULL OR subtype <> '暫停營運')").all<{
-    name: string | null;
-    lat: number;
-    lng: number;
-  }>();
+/** 一個生活圈一份(依生活圈外框取站) */
+export async function loadBikes(DB: D1Database, region: RegionKey = DEFAULT_REGION): Promise<BikeNet> {
+  const [w, s, e, n] = regionBbox(region);
+  const box = "lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4";
+  const head = await DB.prepare(`SELECT COUNT(*) AS n, MAX(version) AS v FROM pois WHERE category = 'youbike' AND ${box}`).bind(s, n, w, e).first<{ n: number; v: string | null }>();
+  const sig = `${region}#${head?.n ?? 0}#${head?.v ?? ""}`;
+  const hit = cache.get(region);
+  if (hit?.sig === sig) return hit;
+  const { results } = await DB.prepare(`SELECT name, lat, lng FROM pois WHERE category = 'youbike' AND (subtype IS NULL OR subtype <> '暫停營運') AND ${box}`)
+    .bind(s, n, w, e)
+    .all<{
+      name: string | null;
+      lat: number;
+      lng: number;
+    }>();
   const stations = results.map((r) => ({ name: r.name ?? "YouBike", lat: r.lat, lng: r.lng }));
   const grid = new Map<string, number[]>();
   stations.forEach((s, i) => {
@@ -50,8 +57,9 @@ export async function loadBikes(DB: D1Database): Promise<BikeNet> {
     if (list) list.push(i);
     else grid.set(k, [i]);
   });
-  cache = { sig, stations, grid };
-  return cache;
+  const net = { sig, stations, grid };
+  cache.set(region, net);
+  return net;
 }
 
 export const EMPTY_BIKES: BikeNet = { sig: "", stations: [], grid: new Map() };
