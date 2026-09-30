@@ -98,6 +98,9 @@ export interface PropertySummary {
   /** 整層住家 | 獨立套房 | 分租套房 | 雅房 | 其他;舊資料可能為 null */
   kind?: string | null;
   mgmt_fee: number | null;
+  /** 水電怎麼算(591:「水:臺水繳費 電:每度5元」) */
+  utilities_note: string | null;
+  has_internet: boolean | null;
   rent: number | null;
   source: string | null;
   source_url: string | null;

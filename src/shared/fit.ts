@@ -37,6 +37,8 @@ export const Requirements = z.object({
   /** 災害:避開淹水潛勢(颱風情境 ≥ 0.5m 或短時強降雨會淹)、避開土壤液化高潛勢 */
   avoid_flood: z.boolean(),
   avoid_liquefaction: z.boolean(),
+  /** 避開航空噪音防制區第二級以上(65 dB+;第一級只在房源面板提醒) */
+  avoid_airnoise: z.boolean(),
   garbage_max_m: z.number().int().min(50).max(1000),
   /** 嫌惡設施:avoid_m 公尺內不要有這些(加油站、殯葬、快速道路…) */
   avoid: z.array(z.enum(AVOIDABLE_CATS as [PoiCat, ...PoiCat[]])).max(AVOIDABLE_CATS.length),
@@ -45,6 +47,11 @@ export const Requirements = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .nullable(),
+  /** 每月支出:預算比「總支出(估)」而不是房租;通勤費用算到哪個地點(null = 第一個)、每週幾天、每月用電度數(null = 依房型估) */
+  budget_total: z.boolean(),
+  cost_place_id: z.number().int().positive().nullable(),
+  commute_days: z.number().int().min(0).max(7),
+  kwh: z.number().int().min(10).max(2000).nullable(),
   weights: z.object({ price: weight, market: weight, commute: weight, size: weight, age: weight }),
 });
 export type Requirements = z.infer<typeof Requirements>;
@@ -67,8 +74,13 @@ export const EMPTY_REQUIREMENTS: Requirements = {
   avoid_m: 100,
   avoid_flood: false,
   avoid_liquefaction: false,
+  avoid_airnoise: false,
   garbage_max_m: 300,
   garbage_after: null,
+  budget_total: false,
+  cost_place_id: null,
+  commute_days: 5,
+  kwh: null,
   weights: { price: 3, market: 2, commute: 3, size: 2, age: 1 },
 };
 
@@ -94,7 +106,9 @@ export interface FitCtx {
   /** 可避開類別的最近距離(/api/nearby/summary 的 nearest);undefined = 還在查 */
   nearest?: Partial<Record<PoiCat, number>>;
   /** 災害潛勢等級(/api/hazards/summary);undefined = 還在查 */
-  hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction", number>>;
+  hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction" | "airnoise", number>>;
+  /** 每月總支出(估,shared/cost.ts);需求 budget_total 時預算比這個 */
+  total?: number | null;
 }
 
 export type FitLevel = "green" | "yellow" | "red";
@@ -130,7 +144,8 @@ export function hasRequirements(r: Requirements) {
     r.garbage_after != null ||
     r.avoid.length > 0 ||
     r.avoid_flood ||
-    r.avoid_liquefaction
+    r.avoid_liquefaction ||
+    r.avoid_airnoise
   );
 }
 
@@ -147,9 +162,13 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
   const unknown: string[] = [];
 
   // ---- 硬性 ----
+  // 預算比房租,或(budget_total)比每月總支出;總支出還沒算出來就先比房租
+  const useTotal = r.budget_total && ctx.total != null;
+  const spend = useTotal ? ctx.total! : p.rent;
+  const spendLabel = useTotal ? "每月支出" : "租金";
   if (r.budget_max != null) {
-    if (p.rent == null) unknown.push("租金");
-    else if (p.rent > r.budget_max) fails.push(`租金 ${money(p.rent)} 超過預算 ${money(r.budget_max)}`);
+    if (spend == null) unknown.push("租金");
+    else if (spend > r.budget_max) fails.push(`${spendLabel} ${money(spend)} 超過預算 ${money(r.budget_max)}`);
   }
   if (r.kinds.length) {
     if (!p.kind) unknown.push("房型");
@@ -183,6 +202,7 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
     if (r.avoid_flood && ((h.flood24 ?? 0) >= 2 || (h.flood6 ?? 0) >= 1))
       fails.push(`在淹水潛勢區(${(h.flood6 ?? 0) >= 1 ? "短時強降雨就會淹" : "颱風情境 0.5m 以上"})`);
     if (r.avoid_liquefaction && (h.liquefaction ?? 0) >= 3) fails.push("土壤液化高潛勢");
+    if (r.avoid_airnoise && (h.airnoise ?? 0) >= 2) fails.push(`航空噪音防制區第${["", "一", "二", "三"][h.airnoise!]}級`);
   }
   if (r.garbage_after != null && ctx.garbage) {
     if (!ctx.garbage.ok) fails.push(`走 ${r.garbage_max_m}m 內沒有 ${r.garbage_after} 以後的垃圾車(也沒寫代收)`);
@@ -191,10 +211,10 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
   // ---- 軟性 ----
   const dims: FitDim[] = [];
   const w = r.weights;
-  if (w.price > 0 && p.rent != null && (r.budget_max != null || r.budget_ideal != null)) {
+  if (w.price > 0 && spend != null && (r.budget_max != null || r.budget_ideal != null)) {
     const ideal = r.budget_ideal ?? Math.round(r.budget_max! * 0.85);
     const top = r.budget_max ?? Math.round(ideal * 1.3);
-    dims.push({ key: "price", weight: w.price, score: lowerBetter(p.rent, ideal, top), note: `${money(p.rent)}(理想 ${money(ideal)} 以內)` });
+    dims.push({ key: "price", weight: w.price, score: lowerBetter(spend, ideal, top), note: `${useTotal ? "每月 " : ""}${money(spend)}(理想 ${money(ideal)} 以內)` });
   }
   if (w.market > 0 && ctx.marketDiff != null) {
     const d = ctx.marketDiff;

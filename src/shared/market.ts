@@ -85,6 +85,8 @@ export interface MarketMatrix {
 export interface MarketResponse {
   has_data: boolean;
   market: MarketResult | null;
+  /** 目前開價:系統裡還在刊登的同區同房型(不含這間),用同一套相似條件;comparables 不給(那是房源不是實價登錄) */
+  asking: Omit<MarketResult, "comparables"> | null;
 }
 
 export const MIN_SAMPLES = 5;

@@ -87,6 +87,17 @@ const num = (s: string | number | null | undefined): number | undefined => {
 };
 
 /** 物件頁 HTML → ImportedListing(尚未經 Zod 驗證,呼叫端再 parse) */
+/**
+ * 水電怎麼算:「水:臺水繳費 電:每度5元」。房東自訂的金額在 water_fee / electric_fee(type 只寫「自訂」之類),
+ * 要一起留下來,每月支出(shared/cost.ts)才算得出電費。
+ */
+export function utilitiesNote(r: { water_fee_type?: string; water_fee?: number; electric_fee_type?: string; electric_fee?: number } | undefined) {
+  if (!r) return undefined;
+  const water = r.water_fee_type ? `水:${r.water_fee_type}${r.water_fee ? ` ${r.water_fee}元/月` : ""}` : "";
+  const elec = r.electric_fee_type ? `電:${r.electric_fee && !/[臺台]電/.test(r.electric_fee_type) ? `每度${r.electric_fee}元` : r.electric_fee_type}` : "";
+  return [water, elec].filter(Boolean).join(" ") || undefined;
+}
+
 export function parse591Detail(html: string, url: string): ImportedListing {
   const id = listingIdFromUrl(url);
   if (!id) throw new Error(`不是 591 物件網址:${url}`);
@@ -154,9 +165,7 @@ export function parse591Detail(html: string, url: string): ImportedListing {
     has_washer: facility.washer,
     has_internet: facility.net,
     mgmt_fee: d.rent_calculation_data?.manage_fee || (d.rent_calculation_data?.manage_fee_text === "無" ? 0 : undefined),
-    utilities_note: [d.rent_calculation_data?.water_fee_type && `水:${d.rent_calculation_data.water_fee_type}`, d.rent_calculation_data?.electric_fee_type && `電:${d.rent_calculation_data.electric_fee_type}`]
-      .filter(Boolean)
-      .join(" ") || undefined,
+    utilities_note: utilitiesNote(d.rent_calculation_data),
     note: undefined,
     source: "591",
     source_url: `https://rent.591.com.tw/${id}`,

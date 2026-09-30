@@ -106,6 +106,15 @@ export interface CommuteMatrix {
   items: Record<string, Record<string, TripBrief | null>>;
 }
 
+/** 地圖「通勤」圖層:網格中心點到每個地點最快幾分(null = 搭不到);順序同 places */
+export interface CommuteGrid {
+  /** 格子高(緯度度數)、寬(經度度數) */
+  step: number;
+  step_lng: number;
+  places: number[];
+  cells: { lat: number; lng: number; mins: (number | null)[] }[];
+}
+
 export interface TripsResponse {
   has_bus: boolean;
   when: CommuteWhen;
@@ -120,3 +129,41 @@ export function mrtRefKey(ref: string) {
 }
 /** 兩站不分方向的 key */
 export const mrtPairKey = (a: string, b: string) => [mrtRefKey(a), mrtRefKey(b)].sort().join("-");
+
+/** POST /api/tour:節點 = [起點?, ...看房點];trips[i][j] = i → j 最快搭法 */
+export interface TourResponse {
+  when: CommuteWhen;
+  has_start: boolean;
+  trips: (Trip | null)[][];
+}
+
+/**
+ * 看房順序:從起點(或任一間)出發、每間都去一次、不用回來,總交通時間最短。最多 8 間,直接試全部排列(8! = 40320)。
+ * minutes[i][j] 是節點 i → j 的分鐘(null = 到不了)。回傳看房點的順序(0-based,不含起點);都到不了回 null。
+ */
+export function bestTourOrder(minutes: (number | null)[][], hasStart: boolean): { order: number[]; total: number } | null {
+  const off = hasStart ? 1 : 0;
+  const n = minutes.length - off;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  let best: { order: number[]; total: number } | null = null;
+  const walk = (path: number[], used: boolean[], cost: number) => {
+    if (best && cost >= best.total) return;
+    if (path.length === n) {
+      best = { order: [...path], total: cost };
+      return;
+    }
+    for (const k of idx) {
+      if (used[k]) continue;
+      const prev = path.length ? path[path.length - 1]! + off : hasStart ? 0 : -1;
+      const m = prev < 0 ? 0 : minutes[prev]![k + off];
+      if (m == null) continue;
+      used[k] = true;
+      path.push(k);
+      walk(path, used, cost + m);
+      path.pop();
+      used[k] = false;
+    }
+  };
+  walk([], new Array(n).fill(false), 0);
+  return best;
+}

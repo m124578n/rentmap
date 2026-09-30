@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, SlidersHorizontal, Sun } from "lucide-react";
+import { Database, Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -44,6 +44,11 @@ export function Layout() {
                 <Plus size={16} /> <span className="hidden sm:inline">新增</span>
               </Link>
             </div>
+          )}
+          {user && (
+            <Link to="/status" className="btn-ghost hidden sm:inline-flex" title="資料狀態(各份資料何時更新、要不要重跑)" activeProps={{ className: "btn-ghost hidden sm:inline-flex bg-neutral-100 dark:bg-neutral-800" }}>
+              <Database size={16} />
+            </Link>
           )}
           <button onClick={toggle} className="btn-ghost" aria-label="切換主題">
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}

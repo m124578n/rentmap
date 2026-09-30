@@ -5,7 +5,10 @@ import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
-import { priceOf } from "@/features/listing/age";
+import { setHeat } from "./heatLayer";
+import { PriceMarkers } from "./priceMarkers";
+import type { Viewport } from "./heat";
+import type { FeatureCollection } from "geojson";
 
 interface Props {
   items: PropertySummary[];
@@ -24,34 +27,42 @@ interface Props {
   onPlaceClick?: (p: Place) => void;
   /** 有給就用它決定標記顏色(例如依通勤時間),回 undefined 用預設(找房狀態) */
   colorOf?: (p: PropertySummary) => string | undefined;
-}
-
-/** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
-const NEUTRAL = "#6b7280";
-const STAGE_COLOR: Record<string, string> = {
-  saved: "#059669",
-  contacted: "#d97706",
-  scheduled: "#d97706",
-  visited: "#2563eb",
-  considering: "#2563eb",
-  finalist: "#7c3aed",
-  rejected: "#9ca3af",
-  signed: "#111827",
-};
-
-function priceLabel(rent: number | null) {
-  if (rent == null) return "—";
-  return rent >= 10000 ? `${(rent / 10000).toFixed(rent % 10000 === 0 ? 0 : 1)}萬` : `$${rent.toLocaleString()}`;
+  /** 右鍵 / 長按任意一點(「看附近」) */
+  onPoint?: (p: { lat: number; lng: number }) => void;
+  /** 「看附近」的點,畫一根圖釘 */
+  point?: { lat: number; lng: number } | null;
+  /** 區域圖層(通勤網格、災害多邊形…) */
+  heat?: FeatureCollection | null;
+  /** 畫面移動結束(區域圖層依範圍抓資料) */
+  onViewport?: (v: Viewport) => void;
 }
 
 /**
- * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
+ * style 好了就做,否則等 idle 再做。maplibre v6 的 isStyleLoaded() 在任何 source(捷運、圖層)還在載入時也是 false,
+ * 直接略過的話資料晚到就永遠畫不上去。fn 要能重複呼叫(load / 換主題也會畫)。回傳取消。
+ */
+function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefined {
+  if (map.isStyleLoaded()) {
+    fn();
+    return;
+  }
+  const run = () => {
+    if (map.isStyleLoaded()) fn();
+  };
+  map.once("idle", run);
+  return () => {
+    map.off("idle", run);
+  };
+}
+
+/**
+ * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
+  const priceRef = useRef<PriceMarkers | null>(null);
   const fittedRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   const mrtRef = useRef(mrt);
@@ -62,6 +73,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const busRef = useRef(busOverlay);
   const placeClickRef = useRef(onPlaceClick);
   const placeMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const onPointRef = useRef(onPoint);
+  onPointRef.current = onPoint;
+  const pointMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const heatRef = useRef(heat);
+  heatRef.current = heat;
+  const onViewportRef = useRef(onViewport);
+  onViewportRef.current = onViewport;
   padRef.current = padLeft;
   busRef.current = busOverlay;
   placeClickRef.current = onPlaceClick;
@@ -82,17 +100,51 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     if (import.meta.env.DEV) (window as unknown as { __map?: maplibregl.Map }).__map = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "top-right");
+    const emitView = () => {
+      const b = map.getBounds();
+      onViewportRef.current?.({ w: b.getWest(), s: b.getSouth(), e: b.getEast(), n: b.getNorth(), zoom: map.getZoom() });
+    };
+    priceRef.current = new PriceMarkers(map, (id) => onSelectRef.current(id));
     map.on("load", () => {
       localizeBasemap(map);
+      priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
+      if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
+      emitView();
     });
+    map.on("moveend", emitView);
     map.on("click", () => onSelectRef.current(null));
+    // 看附近:桌機右鍵;手機長按(maplibre 在觸控上不一定發 contextmenu,自己計時,手指一動就取消)
+    const pick = (ll: maplibregl.LngLat) => onPointRef.current?.({ lat: Math.round(ll.lat * 1e6) / 1e6, lng: Math.round(ll.lng * 1e6) / 1e6 });
+    let press: ReturnType<typeof setTimeout> | null = null;
+    let pressed = false;
+    const cancel = () => {
+      if (press) clearTimeout(press);
+      press = null;
+    };
+    map.on("contextmenu", (e) => {
+      e.preventDefault();
+      if (pressed) return; // 長按已經處理過
+      pick(e.lngLat);
+    });
+    map.on("touchstart", (e) => {
+      cancel();
+      pressed = false;
+      if (e.points.length !== 1) return;
+      press = setTimeout(() => {
+        pressed = true;
+        pick(e.lngLat);
+      }, 550);
+    });
+    map.on("touchend", cancel);
+    map.on("touchcancel", cancel);
+    map.on("movestart", cancel);
 
     return () => {
       map.remove();
       mapRef.current = null;
-      markersRef.current.clear();
+      priceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -104,17 +156,25 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     map.setStyle(STYLE[theme]);
     map.once("styledata", () => {
       localizeBasemap(map);
+      priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
+      if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
   }, [theme]);
+
+  // 區域圖層
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    return whenReady(map, () => setHeat(map, heatRef.current));
+  }, [heat]);
 
   // 捷運資料到了才加圖層
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mrt) return;
-    if (map.isStyleLoaded()) addMrtLayers(map, mrt, theme);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return whenReady(map, () => addMrtLayers(map, mrt, themeRef.current));
   }, [mrt]);
 
   // 公車路線:畫上去並把整條(通勤模式是上下車那段)框進畫面
@@ -153,59 +213,46 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     });
   }, [places]);
 
-  // 房源標記:依 id 差異新增 / 更新 / 移除
+  // 看附近的圖釘
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const markers = markersRef.current;
-    const seen = new Set<number>();
-    const bounds = new maplibregl.LngLatBounds();
-    for (const p of items) {
-      if (p.lat == null || p.lng == null) continue;
-      seen.add(p.id);
-      bounds.extend([p.lng, p.lat]);
-      const color = colorOf?.(p) ?? (p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL);
-      let entry = markers.get(p.id);
-      if (!entry) {
-        const el = document.createElement("button");
-        el.type = "button";
-        el.className = "rh-marker";
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          onSelectRef.current(p.id);
-        });
-        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(map);
-        entry = { marker, el };
-        markers.set(p.id, entry);
-      } else {
-        entry.marker.setLngLat([p.lng, p.lat]);
-      }
-      const drop = (priceOf(p)?.totalDelta ?? 0) < 0;
-      entry.el.textContent = (drop ? "↓" : "") + priceLabel(p.rent);
-      entry.el.classList.toggle("is-drop", drop);
-      entry.el.title = p.title;
-      entry.el.style.setProperty("--c", color);
-      entry.el.classList.toggle("is-rejected", p.stage === "rejected");
-      entry.el.classList.toggle("is-fav", !!p.stage);
-      entry.el.classList.toggle("is-top", (p.priority ?? 0) >= 3);
-    }
-    for (const [id, entry] of markers) {
-      if (!seen.has(id)) {
-        entry.marker.remove();
-        markers.delete(id);
+    pointMarkerRef.current?.remove();
+    pointMarkerRef.current = null;
+    if (!point) return;
+    pointMarkerRef.current = new maplibregl.Marker({ color: "#2563eb" }).setLngLat([point.lng, point.lat]).addTo(map);
+    const narrow = window.innerWidth < 640;
+    map.easeTo({
+      center: [point.lng, point.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 500,
+      padding: narrow ? { top: 0, bottom: padBottomRef.current, left: 0, right: 0 } : { top: 0, bottom: 0, left: padRef.current, right: 0 },
+    });
+  }, [point]);
+
+  // 房源標記:外觀照舊,縮小時群集(priceMarkers.ts)
+  useEffect(() => {
+    const map = mapRef.current;
+    const pm = priceRef.current;
+    if (!map || !pm) return;
+    pm.setItems(items, colorOf);
+    const cancel = whenReady(map, () => pm.attach());
+    if (!fittedRef.current) {
+      const bounds = new maplibregl.LngLatBounds();
+      for (const p of items) if (p.lat != null && p.lng != null) bounds.extend([p.lng, p.lat]);
+      if (!bounds.isEmpty()) {
+        fittedRef.current = true;
+        map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
       }
     }
-    if (!fittedRef.current && seen.size > 0) {
-      fittedRef.current = true;
-      map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
-    }
+    return cancel;
   }, [items, colorOf]);
 
   // 選中:標記高亮 + 平移過去
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const [id, entry] of markersRef.current) entry.el.classList.toggle("is-selected", id === selectedId);
+    priceRef.current?.setSelected(selectedId);
     const p = items.find((x) => x.id === selectedId);
     if (p && p.lat != null && p.lng != null) {
       const narrow = window.innerWidth < 640;

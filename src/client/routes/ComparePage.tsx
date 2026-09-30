@@ -14,9 +14,11 @@ import { MarketBadge } from "@/features/market/MarketSection";
 import { ageOf, fmtMoney, priceOf } from "@/features/listing/age";
 import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/compare/compare";
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
+import { useMonthlyCost } from "@/features/cost/cost";
 import { FIT_DIM_LABEL } from "@shared/fit";
-import { NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
-import { HAZARD_KINDS, HAZARD_LABEL, hazardLevelLabel } from "@shared/hazard";
+import { CRIME_CATS, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
+import { useCrimeDistricts } from "@/features/crime/CrimeSection";
+import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
 interface Cell {
@@ -66,6 +68,8 @@ export function ComparePage() {
   const back = useCommute("back");
   const f = useFilters();
   const fit = useFit();
+  const cost = useMonthlyCost(fit.requirements);
+  const crimeDist = useCrimeDistricts();
   const hazards = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, staleTime: 60 * 60_000 });
   const nearby = useQuery({ queryKey: ["nearby-summary", 500], queryFn: () => api.nearbySummary(500), staleTime: 30 * 60_000 });
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
@@ -170,6 +174,16 @@ export function ComparePage() {
         },
         { label: "管理費", better: "low", cells: props.map((p) => ({ node: p.mgmt_fee != null ? fmtMoney(p.mgmt_fee) : dash, v: p.mgmt_fee })) },
         {
+          label: "每月支出(估)",
+          better: "low",
+          cells: props.map((p) => {
+            const c = cost.costOf(p);
+            if (!c) return { node: dash, v: null };
+            const tip = c.lines.map((l) => `${l.label} ${fmtMoney(l.amount)}${l.note ? `(${l.note})` : ""}`).join("\n");
+            return { node: <span className="tabular-nums" title={tip}>{fmtMoney(c.total)}</span>, v: c.total };
+          }),
+        },
+        {
           label: "價格變化",
           cells: props.map((p) => {
             const s = priceOf(p);
@@ -247,6 +261,24 @@ export function ComparePage() {
         : [],
     },
     {
+      title: "治安(500m 內竊盜,近 3 年;只有台北市有點位)",
+      rows:
+        nearby.data?.has_data && crimeDist.data
+          ? CRIME_CATS.map(
+              (c): Row => ({
+                label: poiLabel(c),
+                better: "low",
+                cells: props.map((p) => {
+                  if (p.lat == null) return { node: dash, v: null };
+                  if (!/^[台臺]北/.test(p.city)) return { node: <span className="text-neutral-400">沒有點位</span>, v: null };
+                  const n = nearby.data.items[p.id]?.[c] ?? 0;
+                  return { node: <span className="tabular-nums">{n}</span>, v: n };
+                }),
+              }),
+            )
+          : [],
+    },
+    {
       title: "嫌惡設施(最近距離,500m 內)",
       rows: nearby.data?.has_data
         ? NUISANCE_CATS.filter((c) => props.some((p) => nearby.data.nearest[p.id]?.[c] != null)).map(
@@ -273,11 +305,11 @@ export function ComparePage() {
               better: "low",
               cells: props.map((p) => {
                 if (p.lat == null) return { node: dash, v: null };
+                // 液化只有台北市有資料:其他縣市不能說「不在潛勢區」
+                if (k === "liquefaction" && !/^[台臺]北/.test(p.city ?? "")) return { node: <span className="text-neutral-400">沒有資料</span>, v: null };
                 const lv = hazards.data.items[p.id]?.[k] ?? 0;
-                return {
-                  node: lv ? <span className="text-red-600 dark:text-red-400">{hazardLevelLabel(k, lv)}</span> : <span className="text-emerald-700 dark:text-emerald-400">不在潛勢區</span>,
-                  v: lv,
-                };
+                const cls = !lv ? "text-emerald-700 dark:text-emerald-400" : hazardSevere(k, lv) ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
+                return { node: <span className={cls}>{hazardText(k, lv)}</span>, v: lv };
               }),
             }),
           )

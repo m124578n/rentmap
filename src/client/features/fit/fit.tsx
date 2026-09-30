@@ -4,6 +4,7 @@ import { CircleCheck, CircleAlert, CircleX, SlidersHorizontal } from "lucide-rea
 import { computeFit, EMPTY_REQUIREMENTS, FIT_DIM_LABEL, hasRequirements, type FitLevel, type FitResult, type Requirements } from "@shared/fit";
 import type { PropertySummary } from "@shared/schemas";
 import { api } from "@/lib/api";
+import { useMonthlyCost } from "@/features/cost/cost";
 import { useCommute } from "@/features/commute/useCommute";
 import { useMarket } from "@/features/market/useMarket";
 
@@ -51,9 +52,10 @@ export function useFit() {
     enabled: r.avoid.length > 0,
     staleTime: 30 * 60_000,
   });
-  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction, staleTime: 60 * 60_000 });
+  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction || r.avoid_airnoise, staleTime: 60 * 60_000 });
   const go = useCommute("go");
   const back = useCommute("back");
+  const { costOf } = useMonthlyCost(r);
   const fitOf = useCallback(
     (p: PropertySummary): FitResult | null => {
       if (!configured) return null;
@@ -74,9 +76,10 @@ export function useFit() {
       return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id],
         nearest: nearby.data ? (nearby.data.nearest[p.id] ?? {}) : undefined,
         hazards: hz.data ? (hz.data.items[p.id] ?? {}) : undefined,
+        total: r.budget_total ? (costOf(p)?.total ?? null) : undefined,
       });
     },
-    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data, hz.data],
+    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data, hz.data, costOf],
   );
   return { configured, requirements: r, loaded: rq.isSuccess, fitOf };
 }

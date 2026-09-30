@@ -154,7 +154,7 @@ async function post(base: string, secret: string, p: string, body: unknown) {
   return JSON.parse(text) as Record<string, unknown>;
 }
 
-async function push(base: string, secret: string, version: string, cat: PoiCat, items: PoiIn[], force: boolean) {
+export async function push(base: string, secret: string, version: string, cat: PoiCat, items: PoiIn[], force: boolean) {
   for (let i = 0; i < items.length; i += 2000) await post(base, secret, "", { version, items: items.slice(i, i + 2000) });
   return post(base, secret, "/commit", { version, category: cat, force });
 }

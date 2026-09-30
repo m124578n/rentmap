@@ -270,7 +270,7 @@ export const hazardZones = sqliteTable(
   "hazard_zones",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    kind: text("kind").notNull(), // flood6 | flood24 | liquefaction
+    kind: text("kind").notNull(), // flood6 | flood24 | liquefaction | airnoise
     level: integer("level").notNull(),
     city: text("city").notNull(),
     minLat: real("min_lat").notNull(),

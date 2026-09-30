@@ -15,7 +15,8 @@ import { tripOverlay } from "./tripOverlay";
 interface Props {
   lat: number;
   lng: number;
-  propertyId: number;
+  /** 沒給 = 地圖上任意一點(「看附近」):逐個地點打 /api/commute/trips 算最快的 */
+  propertyId?: number;
   /** 地圖頁才有:選了哪種搭法就畫到地圖上 */
   onOverlay?: (o: BusOverlay | null) => void;
 }
@@ -35,8 +36,11 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
   const [side, setSide] = useState<CommuteSide>(f.commuteSide);
   useEffect(() => setSide(f.commuteSide), [f.commuteSide]);
   const list = places.data?.items ?? [];
-  const rows = { go: go.matrix?.items[propertyId], back: back.matrix?.items[propertyId] };
-  const matrices = { go: go.matrix, back: back.matrix };
+  const pointRows = usePointBriefs(propertyId == null ? lat : null, lng, list, { go: whenOf(f, "go"), back: whenOf(f, "back") }, f.commuteBike);
+  const rows = propertyId != null ? { go: go.matrix?.items[propertyId], back: back.matrix?.items[propertyId] } : pointRows;
+  // 摘要:undefined = 還在算、null = 搭不到
+  const briefOf = (s: CommuteSide, placeId: number) =>
+    propertyId != null ? ((s === "go" ? go : back).matrix ? (rows[s]?.[placeId] ?? null) : undefined) : rows[s]?.[placeId];
 
   useEffect(() => () => onOverlay?.(null), [onOverlay]);
 
@@ -79,7 +83,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
                     {(["go", "back"] as CommuteSide[]).map((s) => (
                       <span key={s} className="truncate">
                         <span className="mr-1 text-neutral-500">{COMMUTE_SIDE_LABEL[s]}</span>
-                        <BriefText b={matrices[s] ? (rows[s]?.[pl.id] ?? null) : undefined} />
+                        <BriefText b={briefOf(s, pl.id)} />
                       </span>
                     ))}
                   </span>
@@ -108,6 +112,30 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
       )}
     </section>
   );
+}
+
+const tripsQuery = (lat: number, lng: number, place: Place, radius: number, when: CommuteWhen, bike: boolean) => ({
+  queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir, bike],
+  queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when, bike }),
+  staleTime: 10 * 60_000,
+});
+
+/** 任意點:每個地點 × 上下班各打一次 trips(和點開的搭法共用快取),取最快的當摘要;還沒算完的地點不放 */
+function usePointBriefs(lat: number | null, lng: number, places: Place[], when: Record<CommuteSide, CommuteWhen>, bike: boolean) {
+  const sides: CommuteSide[] = ["go", "back"];
+  const qs = useQueries({
+    queries: lat == null ? [] : sides.flatMap((s) => places.map((pl) => ({ ...tripsQuery(lat, lng, pl, 400, when[s], bike) }))),
+  });
+  const out: Record<CommuteSide, Record<string, TripBrief | null> | undefined> = { go: {}, back: {} };
+  sides.forEach((s, si) =>
+    places.forEach((pl, pi) => {
+      const d = qs[si * places.length + pi]?.data;
+      if (!d) return;
+      const t = d.trips[0];
+      out[s]![pl.id] = t ? { kind: t.kind, total_min: t.total_min, transfers: t.transfers, summary: t.summary } : null;
+    }),
+  );
+  return out;
 }
 
 export function BriefText({ b }: { b: TripBrief | null | undefined }) {
@@ -142,11 +170,7 @@ function Trips({
   onOverlay?: (o: BusOverlay | null) => void;
 }) {
   const bike = useFilters().commuteBike;
-  const q = useQuery({
-    queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir, bike],
-    queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when, bike }),
-    staleTime: 10 * 60_000,
-  });
+  const q = useQuery(tripsQuery(lat, lng, place, radius, when, bike));
   const [sel, setSel] = useState<number | null>(null);
   useEffect(() => setSel(null), [side, when.day, when.time]);
   const trips = q.data?.trips ?? [];
