@@ -6,9 +6,9 @@ import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 import { setHeat } from "./heatLayer";
+import { PriceMarkers } from "./priceMarkers";
 import type { Viewport } from "./heat";
 import type { FeatureCollection } from "geojson";
-import { priceOf } from "@/features/listing/age";
 
 interface Props {
   items: PropertySummary[];
@@ -37,24 +37,6 @@ interface Props {
   onViewport?: (v: Viewport) => void;
 }
 
-/** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
-const NEUTRAL = "#6b7280";
-const STAGE_COLOR: Record<string, string> = {
-  saved: "#059669",
-  contacted: "#d97706",
-  scheduled: "#d97706",
-  visited: "#2563eb",
-  considering: "#2563eb",
-  finalist: "#7c3aed",
-  rejected: "#9ca3af",
-  signed: "#111827",
-};
-
-function priceLabel(rent: number | null) {
-  if (rent == null) return "—";
-  return rent >= 10000 ? `${(rent / 10000).toFixed(rent % 10000 === 0 ? 0 : 1)}萬` : `$${rent.toLocaleString()}`;
-}
-
 /**
  * style 好了就做,否則等 idle 再做。maplibre v6 的 isStyleLoaded() 在任何 source(捷運、圖層)還在載入時也是 false,
  * 直接略過的話資料晚到就永遠畫不上去。fn 要能重複呼叫(load / 換主題也會畫)。回傳取消。
@@ -74,13 +56,13 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
 }
 
 /**
- * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
+ * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
 export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
+  const priceRef = useRef<PriceMarkers | null>(null);
   const fittedRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   const mrtRef = useRef(mrt);
@@ -122,8 +104,10 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       const b = map.getBounds();
       onViewportRef.current?.({ w: b.getWest(), s: b.getSouth(), e: b.getEast(), n: b.getNorth(), zoom: map.getZoom() });
     };
+    priceRef.current = new PriceMarkers(map, (id) => onSelectRef.current(id));
     map.on("load", () => {
       localizeBasemap(map);
+      priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
       if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
@@ -160,7 +144,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     return () => {
       map.remove();
       mapRef.current = null;
-      markersRef.current.clear();
+      priceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -172,6 +156,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     map.setStyle(STYLE[theme]);
     map.once("styledata", () => {
       localizeBasemap(map);
+      priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
       if (heatRef.current) setHeat(map, heatRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
@@ -245,59 +230,29 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     });
   }, [point]);
 
-  // 房源標記:依 id 差異新增 / 更新 / 移除
+  // 房源標記:外觀照舊,縮小時群集(priceMarkers.ts)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-    const markers = markersRef.current;
-    const seen = new Set<number>();
-    const bounds = new maplibregl.LngLatBounds();
-    for (const p of items) {
-      if (p.lat == null || p.lng == null) continue;
-      seen.add(p.id);
-      bounds.extend([p.lng, p.lat]);
-      const color = colorOf?.(p) ?? (p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL);
-      let entry = markers.get(p.id);
-      if (!entry) {
-        const el = document.createElement("button");
-        el.type = "button";
-        el.className = "rh-marker";
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          onSelectRef.current(p.id);
-        });
-        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(map);
-        entry = { marker, el };
-        markers.set(p.id, entry);
-      } else {
-        entry.marker.setLngLat([p.lng, p.lat]);
-      }
-      const drop = (priceOf(p)?.totalDelta ?? 0) < 0;
-      entry.el.textContent = (drop ? "↓" : "") + priceLabel(p.rent);
-      entry.el.classList.toggle("is-drop", drop);
-      entry.el.title = p.title;
-      entry.el.style.setProperty("--c", color);
-      entry.el.classList.toggle("is-rejected", p.stage === "rejected");
-      entry.el.classList.toggle("is-fav", !!p.stage);
-      entry.el.classList.toggle("is-top", (p.priority ?? 0) >= 3);
-    }
-    for (const [id, entry] of markers) {
-      if (!seen.has(id)) {
-        entry.marker.remove();
-        markers.delete(id);
+    const pm = priceRef.current;
+    if (!map || !pm) return;
+    pm.setItems(items, colorOf);
+    const cancel = whenReady(map, () => pm.attach());
+    if (!fittedRef.current) {
+      const bounds = new maplibregl.LngLatBounds();
+      for (const p of items) if (p.lat != null && p.lng != null) bounds.extend([p.lng, p.lat]);
+      if (!bounds.isEmpty()) {
+        fittedRef.current = true;
+        map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
       }
     }
-    if (!fittedRef.current && seen.size > 0) {
-      fittedRef.current = true;
-      map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
-    }
+    return cancel;
   }, [items, colorOf]);
 
   // 選中:標記高亮 + 平移過去
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const [id, entry] of markersRef.current) entry.el.classList.toggle("is-selected", id === selectedId);
+    priceRef.current?.setSelected(selectedId);
     const p = items.find((x) => x.id === selectedId);
     if (p && p.lat != null && p.lng != null) {
       const narrow = window.innerWidth < 640;
