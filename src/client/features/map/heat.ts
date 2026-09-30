@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Feature, FeatureCollection } from "geojson";
 import type { PropertySummary } from "@shared/schemas";
 import { HAZARD_LABEL, hazardText, type HazardKind } from "@shared/hazard";
+import { coverageCities } from "@shared/regions";
 import { COMMUTE_SIDE_LABEL } from "@shared/trip";
 import { api, type Bbox } from "@/lib/api";
 import { useFilters, whenOf } from "@/lib/filters";
@@ -162,7 +163,7 @@ export function useHeat(mode: HeatMode, view: Viewport | null, items: PropertySu
       features: (z?.features ?? []).map((ft) => ({ ...ft, properties: { color: hazardColor(k, ft.properties.level) } })),
     };
     const note =
-      k === "liquefaction" ? "只有台北市有資料" : k === "airnoise" ? "環保局依「里」公告的航空噪音防制區(松山機場)" : "水利署淹水潛勢(防洪設施正常運作下的模擬)";
+      k === "liquefaction" ? `只有${coverageCities("liquefaction")}有資料` : k === "airnoise" ? "環保局依「里」公告的航空噪音防制區(松山機場)" : "水利署淹水潛勢(防洪設施正常運作下的模擬)";
     return { fc, legend, note, loading: zones.isFetching };
   }, [mode, grid.data, grid.isFetching, zones.data, zones.isFetching, items, nPlaces, f.commuteSide]);
 }

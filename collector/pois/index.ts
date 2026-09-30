@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromYoubike, nightMarkets, overpassQuery, tiles, TPE_BBOX, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type YoubikeRow } from "./transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
@@ -122,7 +122,8 @@ async function overpass(query: string): Promise<OsmElement[]> {
 async function loadCategory(cat: PoiCat, refresh: boolean): Promise<{ elements: OsmElement[]; fetched: number }> {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   const [rows, cols] = TILES[cat] ?? [1, 1];
-  const boxes = tiles(TPE_BBOX, rows, cols);
+  // 目前只有 north;開其他生活圈時 pois 的覆蓋式 commit 要改成依生活圈分開(不然會刪掉別區的同類資料)
+  const boxes = tiles(bboxOf("north"), rows, cols);
   const elements: OsmElement[] = [];
   let fetched = 0;
   for (let i = 0; i < boxes.length; i++) {

@@ -3,13 +3,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ApiError, api } from "@/lib/api";
 import { PropertyInput } from "@shared/schemas";
-import { BUILDING_TYPES, CITIES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
+import { useRegion } from "@/lib/region";
+import { BUILDING_TYPES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
 export function NewPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [city, setCity] = useState<City>("台北市");
+  const region = useRegion();
+  const [city, setCity] = useState<City>(region.cities[0]!);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const create = useMutation({
@@ -56,7 +58,7 @@ export function NewPage() {
         <div className="grid grid-cols-2 gap-3">
           <Field label="縣市">
             <select name="city" className="input" value={city} onChange={(e) => setCity(e.target.value as City)}>
-              {CITIES.map((c) => (
+              {region.cities.map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>

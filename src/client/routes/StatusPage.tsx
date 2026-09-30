@@ -3,6 +3,7 @@ import { Database } from "lucide-react";
 import { api } from "@/lib/api";
 import type { StatusItem } from "@shared/status";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
+import { useRegion } from "@/lib/region";
 
 const GROUPS: StatusItem["group"][] = ["房源", "交通", "生活機能", "行情", "災害", "治安"];
 
@@ -20,6 +21,7 @@ function when(i: StatusItem) {
 export function StatusPage() {
   const q = useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 });
   const crime = useCrimeDistricts();
+  const region = useRegion();
   if (q.isLoading) return <p className="p-4 text-neutral-500">載入中…</p>;
   if (!q.data) return <p className="p-4 text-red-600">讀不到資料狀態</p>;
   const items = q.data.items;
@@ -74,7 +76,7 @@ export function StatusPage() {
                 ))}
                 {g === "治安" && crime.data && (
                   <tr className="border-t border-neutral-100 dark:border-neutral-800">
-                    <td className="py-1 pr-2">各區件數(雙北)</td>
+                    <td className="py-1 pr-2">各區件數({region.label})</td>
                     <td className="py-1 pr-2 text-right tabular-nums">{Object.keys(crime.data.items).length} 區</td>
                     <td className="py-1 pr-2 text-neutral-600 dark:text-neutral-400">
                       {crime.data.from} ~ {crime.data.to}

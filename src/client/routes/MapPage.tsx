@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
+import { useRegion } from "@/lib/region";
 import { applyFilters, useFilters, worstCommute } from "@/lib/filters";
 import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
@@ -25,6 +26,7 @@ const PANEL_W = 400;
 /** 首頁:篩選列 + 地圖 + 點標記後左側詳細面板(手機改成下方抽屜) */
 export function MapPage() {
   const { theme } = useTheme();
+  const region = useRegion();
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const mrt = useMrt();
   const filters = useFilters();
@@ -161,6 +163,7 @@ export function MapPage() {
             colorOf={colorOf}
             onPoint={pickPoint}
             point={point}
+            view={region.view}
             heat={heat.fc}
             onViewport={setView}
           />

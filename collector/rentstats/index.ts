@@ -10,14 +10,13 @@ import path from "node:path";
 import zlib from "node:zlib";
 import type { RentStatIn } from "../../src/shared/market";
 import { transformRent } from "./transform";
+import { CITY_INFO, OPEN_CITIES } from "../../src/shared/regions";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "lvr");
 const url = (season: string) => `https://plvr.land.moi.gov.tw/DownloadSeason?season=${season}&type=zip&fileName=lvr_landcsv.zip`;
-const FILES = [
-  { file: "a_lvr_land_c.csv", city: "台北市" },
-  { file: "f_lvr_land_c.csv", city: "新北市" },
-] as const;
+/** 已開放縣市的租賃檔(a_lvr_land_c.csv = 台北市 …,代碼在 regions.ts) */
+const FILES = OPEN_CITIES.map((city) => ({ file: `${CITY_INFO[city].lvr}_lvr_land_c.csv`, city }));
 
 /** 從現在這季往回數:115S3、115S2、115S1、114S4… */
 export function recentSeasons(now: Date, n: number): string[] {

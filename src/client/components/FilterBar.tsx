@@ -5,14 +5,14 @@ import { api } from "@/lib/api";
 import { useAlong } from "@/features/bus/useAlong";
 import { openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { activeCount, resetFilters, setFilters, useFilters, type Filters } from "@/lib/filters";
-import { DISTRICTS, STAGES, STAGE_LABEL } from "@shared/constants";
+import { DISTRICTS, STAGES, STAGE_LABEL, type City } from "@shared/constants";
+import { useRegion } from "@/lib/region";
 import type { Place } from "@shared/schemas";
 import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
 import { COMMUTE_SIDE_LABEL, type CommuteSide } from "@shared/trip";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
-const DISTRICT_OPTIONS = [...DISTRICTS.台北市.map((d) => ({ city: "台北市", d })), ...DISTRICTS.新北市.map((d) => ({ city: "新北市", d }))];
 
 /** 篩選列:一排 chip,點開展開細項。地圖與列表共用同一份條件。 */
 export function FilterBar({ shown, total }: { shown: number; total: number }) {
@@ -304,11 +304,13 @@ function AlongRow({ f }: { f: Filters }) {
 }
 
 function DistrictPicker({ f, toggle }: { f: Filters; toggle: (d: string) => void }) {
-  const [city, setCity] = useState<"台北市" | "新北市">("台北市");
+  const region = useRegion();
+  const [picked, setCity] = useState<string>(region.cities[0] ?? "");
+  const city = (region.cities as readonly string[]).includes(picked) ? (picked as City) : region.cities[0]!;
   return (
     <div>
       <div className="mb-1 flex gap-1">
-        {(["台北市", "新北市"] as const).map((c) => (
+        {region.cities.map((c) => (
           <button key={c} onClick={() => setCity(c)} className={`rounded px-2 py-0.5 text-xs ${city === c ? "bg-neutral-200 dark:bg-neutral-700" : "text-neutral-500"}`}>
             {c}
           </button>
@@ -320,8 +322,8 @@ function DistrictPicker({ f, toggle }: { f: Filters; toggle: (d: string) => void
         )}
       </div>
       <div className="flex flex-wrap gap-1">
-        {DISTRICT_OPTIONS.filter((o) => o.city === city).map(({ d }) => (
-          <Chip key={d} on={f.districts.includes(d)} onClick={() => toggle(d)} small>
+        {DISTRICTS[city].map((d) => (
+          <Chip key={d} on={f.districts.includes(`${city}${d}`) || f.districts.includes(d)} onClick={() => toggle(f.districts.includes(d) ? d : `${city}${d}`)} small>
             {d}
           </Chip>
         ))}

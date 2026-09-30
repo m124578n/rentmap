@@ -7,11 +7,6 @@ export const STYLE = {
 } as const;
 export type Theme = keyof typeof STYLE;
 
-/** 雙北大致範圍 */
-export const TW_BOUNDS: [[number, number], [number, number]] = [
-  [121.28, 24.88],
-  [121.75, 25.22],
-];
 
 /**
  * 底圖標籤在地化(搬自 menmap)。CARTO 樣式的地名在中低縮放用拼音,且會畫出 OSM 的鄰里名,對本地使用者是雜訊:

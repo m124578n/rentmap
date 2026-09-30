@@ -4,6 +4,7 @@
  * 圖資由 scripts/build_hazards.py 轉成 data/hazard/hazards.json,`npm run collect -- hazards` 推進 D1。
  */
 import { z } from "zod";
+import { coverageCities } from "./regions";
 
 export const HAZARD_KINDS = ["flood6", "flood24", "liquefaction", "airnoise"] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
@@ -17,7 +18,7 @@ export const HAZARD_LABEL: Record<HazardKind, string> = {
 export const HAZARD_NOTE: Record<HazardKind, string> = {
   flood6: "6 小時累積 150 毫米(梅雨、午後雷陣雨)",
   flood24: "24 小時累積 500 毫米(颱風)",
-  liquefaction: "臺北市工務局潛勢圖(新北市沒有開放資料)",
+  liquefaction: `各縣市的土壤液化潛勢圖(目前有資料:${coverageCities("liquefaction")})`,
   airnoise: "環保局公告的航空噪音防制區,以「里」為單位(松山機場):第一級 60–65 dB、第二級 65–75、第三級 75 以上(日夜音量)",
 };
 /** 淹水 level 1–5 = 淹水深度級距;液化 level 1–3 = 低 / 中 / 高;航空噪音 1–3 = 第一 ~ 三級 */

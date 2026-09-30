@@ -4,10 +4,15 @@
  *   menmap shops.json → PoiIn(拉麵,只收雙北、營業中,帶 Google 評分與地圖連結)
  */
 import { POI_CATEGORIES, type PoiCat, type PoiIn } from "../../src/shared/poi";
+import { normalizeCity, OPEN_CITIES, regionBbox, type RegionKey } from "../../src/shared/regions";
 
-/** 雙北(南到烏來、北到石門、東到貢寮、西到林口) */
-export const TPE_BBOX = { s: 24.67, w: 121.28, n: 25.3, e: 122.01 } as const;
 type Bbox = { s: number; w: number; n: number; e: number };
+
+/** 生活圈的外框(已開放縣市的聯集,regions.ts);目前 north = 雙北(南到烏來、北到石門、東到貢寮、西到林口) */
+export function bboxOf(region: RegionKey): Bbox {
+  const [w, s, e, n] = regionBbox(region);
+  return { s, w, n, e };
+}
 
 /** 大類(餐飲)一次查會逾時,切成 rows × cols 塊 */
 export function tiles(b: Bbox, rows: number, cols: number): Bbox[] {
@@ -133,7 +138,7 @@ export interface MenmapShop {
 
 export function fromMenmap(shops: MenmapShop[]): PoiIn[] {
   return shops
-    .filter((s) => (s.city === "台北市" || s.city === "新北市") && s.status === "OPERATIONAL" && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+    .filter((s) => OPEN_CITIES.includes(normalizeCity(s.city)!) && s.status === "OPERATIONAL" && Number.isFinite(s.lat) && Number.isFinite(s.lng))
     .map((s) => ({
       key: `m${s.ftid}`.slice(0, 80),
       category: "ramen" as const,

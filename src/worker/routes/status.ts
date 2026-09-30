@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { NUISANCE_CATS, POI_CATEGORIES, type PoiCat } from "@shared/poi";
 import type { StatusItem, StatusResponse } from "@shared/status";
+import { coverageCities } from "@shared/regions";
 import mrtTimes from "../../../public/mrt-times.json";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
@@ -88,7 +89,7 @@ status.get("/api/status", async (c) => {
 
   // 災害潛勢:圖資幾年才更新,不標過期
   const { results: hz } = await DB.prepare("SELECT kind, COUNT(*) AS n, MAX(version) AS v FROM hazard_zones GROUP BY kind").all<{ kind: string; n: number; v: string }>();
-  const HZ: Record<string, string> = { flood6: "淹水(短時強降雨)", flood24: "淹水(颱風)", liquefaction: "土壤液化(台北市)", airnoise: "航空噪音防制區" };
+  const HZ: Record<string, string> = { flood6: "淹水(短時強降雨)", flood24: "淹水(颱風)", liquefaction: `土壤液化(${coverageCities("liquefaction")})`, airnoise: "航空噪音防制區" };
   for (const [kind, label] of Object.entries(HZ)) {
     const h = hz.find((x) => x.kind === kind);
     items.push(item({ key: `hazard:${kind}`, group: "災害", label, count: h?.n ?? 0, updated: h?.v ?? null, every: "圖資改版才要", command: "python scripts/build_hazards.py && npm run collect -- hazards" }, null));

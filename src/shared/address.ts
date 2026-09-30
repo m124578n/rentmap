@@ -3,6 +3,8 @@
  *   完整 → 去掉樓層 → 到「號」→ 到「巷」→ 只到路 / 街 / 段
  * 全形數字轉半形;「台」與「臺」OSM 用「臺」。
  */
+import { ALL_CITIES } from "./regions";
+
 export interface AddressQuery {
   q: string;
   /** exact = 有門牌號;road = 只到巷 / 路 */
@@ -42,8 +44,11 @@ export function shortLabel(displayName: string) {
 }
 
 /** 查詢字串裡最細的路名:「…390巷2弄」→「390巷2弄」前面的路 + 巷弄;「…復興南路一段」→「復興南路一段」 */
+/** 開頭的「XX市 / 臺XX市 + 行政區」 */
+const CITY_PREFIX = new RegExp(`^(${ALL_CITIES.flatMap((c) => [c, c.replace(/^台/, "臺")]).join("|")})?[^市]*?區`);
+
 export function roadOf(q: string): string | null {
-  const s = normalizeAddress(q).replace(/^(臺北市|新北市)?[^市]*?區/, "");
+  const s = normalizeAddress(q).replace(CITY_PREFIX, "");
   const m = /([^\d號樓]+?(?:路|街|大道)(?:[一二三四五六七八九十]段)?)((?:\d+巷)?(?:\d+弄)?)/.exec(s);
   return m ? m[1]! + m[2]! : null;
 }

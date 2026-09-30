@@ -2,6 +2,8 @@ import { lazy, Suspense, useState } from "react";
 import { MapPin, Pencil, Search, Trash2, X } from "lucide-react";
 import type { Place } from "@shared/schemas";
 import { searchAddress, type GeoHit } from "./geocode";
+import { regionBbox } from "@shared/regions";
+import { useRegion } from "@/lib/region";
 // 小地圖要載地圖引擎,打開對話框才載
 const PinMap = lazy(() => import("./PinMap").then((m) => ({ default: m.PinMap })));
 import { setCommuteTarget, usePlaceMutations, usePlaces, usePlacesDialogOpen } from "./places";
@@ -126,6 +128,7 @@ function PlaceForm({
   onSave: (v: Draft & { pin: { lat: number; lng: number } }) => void;
 }) {
   const [name, setName] = useState(initial.name);
+  const region = useRegion();
   const [address, setAddress] = useState(initial.address);
   const [pin, setPin] = useState(initial.pin);
   const [hits, setHits] = useState<GeoHit[] | null>(null);
@@ -138,7 +141,7 @@ function PlaceForm({
     setSearching(true);
     setErr(null);
     try {
-      const r = await searchAddress(address);
+      const r = await searchAddress(address, regionBbox(region.key));
       setHits(r);
       if (r.length) {
         setChosen(r[0]!);

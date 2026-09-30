@@ -33,7 +33,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段
-src/shared/   Zod schema 與常數,前後端共用
+src/shared/   Zod schema 與常數,前後端共用;**regions.ts 是生活圈與縣市定義(行政區、TDX / 實價登錄代碼、範圍、各縣市有哪些資料),新增縣市或判斷「某縣市有沒有某資料」一律走它**
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
 collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);sources/ 每站一檔(591 純 fetch、好房 Playwright),sources/index.ts 是註冊表;parser 測試在 test/collector/

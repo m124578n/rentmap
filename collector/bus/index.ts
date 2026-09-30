@@ -8,6 +8,7 @@
  * 不帶 token 的 API 呼叫一律 401「Valid API Key Required」(網站上的訪客額度是給網頁試用介面的)。
  * 一次跑約 8 次請求(4 個資料集 × 台北、新北),7 天內重跑用快取;註冊後的免費月額度綽綽有餘。
  */
+import { CITY_INFO, OPEN_CITIES } from "../../src/shared/regions";
 import fs from "node:fs";
 import path from "node:path";
 import type { BusRouteIn, BusStopIn } from "../../src/shared/bus";
@@ -91,7 +92,7 @@ export async function runBus(opts: { base: string; secret: string; args: string[
   const dry = args.includes("--dry");
   const refresh = args.includes("--refresh");
   const force = args.includes("--force");
-  const cities = (args.find((a) => a.startsWith("--cities="))?.slice(9) ?? "Taipei,NewTaipei").split(",").filter(Boolean);
+  const cities = (args.find((a) => a.startsWith("--cities="))?.slice(9) ?? OPEN_CITIES.map((c) => CITY_INFO[c].tdx).join(",")).split(",").filter(Boolean);
   if (!process.env.TDX_CLIENT_ID || !process.env.TDX_CLIENT_SECRET)
     console.log("(.env 沒有 TDX_CLIENT_ID / TDX_CLIENT_SECRET:只能用 data/tdx/ 的快取,要下載新資料得先到 TDX 申請金鑰)");
 

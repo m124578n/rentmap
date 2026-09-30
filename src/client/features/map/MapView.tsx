@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Place, PropertySummary } from "@shared/schemas";
-import { localizeBasemap, STYLE, TW_BOUNDS, type Theme } from "./basemap";
+import { localizeBasemap, STYLE, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 import { setHeat } from "./heatLayer";
@@ -31,6 +31,8 @@ interface Props {
   onPoint?: (p: { lat: number; lng: number }) => void;
   /** 「看附近」的點,畫一根圖釘 */
   point?: { lat: number; lng: number } | null;
+  /** 一開始看的範圍(生活圈的都會核心);換生活圈時地圖跟著移過去 */
+  view: [[number, number], [number, number]];
   /** 區域圖層(通勤網格、災害多邊形…) */
   heat?: FeatureCollection | null;
   /** 畫面移動結束(區域圖層依範圍抓資料) */
@@ -59,7 +61,7 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport, view }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -93,7 +95,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: STYLE[theme],
-      bounds: TW_BOUNDS,
+      bounds: view,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
@@ -162,6 +164,18 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
   }, [theme]);
+
+  // 換生活圈:移到那一區(第一次由初始化的 bounds 處理)
+  const viewKey = view.flat().join(",");
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    mapRef.current?.fitBounds(view, { duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey]);
 
   // 區域圖層
   useEffect(() => {

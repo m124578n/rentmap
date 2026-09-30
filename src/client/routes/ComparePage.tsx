@@ -16,6 +16,7 @@ import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/c
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { useMonthlyCost } from "@/features/cost/cost";
 import { FIT_DIM_LABEL } from "@shared/fit";
+import { coverageCities, hasCoverage } from "@shared/regions";
 import { CRIME_CATS, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
@@ -261,7 +262,7 @@ export function ComparePage() {
         : [],
     },
     {
-      title: "治安(500m 內竊盜,近 3 年;只有台北市有點位)",
+      title: `治安(500m 內竊盜,近 3 年;只有${coverageCities("theftPoints")}有點位)`,
       rows:
         nearby.data?.has_data && crimeDist.data
           ? CRIME_CATS.map(
@@ -270,7 +271,7 @@ export function ComparePage() {
                 better: "low",
                 cells: props.map((p) => {
                   if (p.lat == null) return { node: dash, v: null };
-                  if (!/^[台臺]北/.test(p.city)) return { node: <span className="text-neutral-400">沒有點位</span>, v: null };
+                  if (!hasCoverage(p.city, "theftPoints")) return { node: <span className="text-neutral-400">沒有點位</span>, v: null };
                   const n = nearby.data.items[p.id]?.[c] ?? 0;
                   return { node: <span className="tabular-nums">{n}</span>, v: n };
                 }),
@@ -306,7 +307,7 @@ export function ComparePage() {
               cells: props.map((p) => {
                 if (p.lat == null) return { node: dash, v: null };
                 // 液化只有台北市有資料:其他縣市不能說「不在潛勢區」
-                if (k === "liquefaction" && !/^[台臺]北/.test(p.city ?? "")) return { node: <span className="text-neutral-400">沒有資料</span>, v: null };
+                if (k === "liquefaction" && !hasCoverage(p.city, "liquefaction")) return { node: <span className="text-neutral-400">沒有資料</span>, v: null };
                 const lv = hazards.data.items[p.id]?.[k] ?? 0;
                 const cls = !lv ? "text-emerald-700 dark:text-emerald-400" : hazardSevere(k, lv) ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
                 return { node: <span className={cls}>{hazardText(k, lv)}</span>, v: lv };

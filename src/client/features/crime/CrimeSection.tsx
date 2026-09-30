@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Siren } from "lucide-react";
 import { CRIME_CATS, poiLabel } from "@shared/poi";
+import { hasCoverage } from "@shared/regions";
+import { useRegion } from "@/lib/region";
 import { api } from "@/lib/api";
 
 /** public/crime-districts.json(collect -- crime 產生):雙北各區近一年竊盜件數 */
@@ -25,7 +27,6 @@ export function useCrimeDistricts() {
 }
 
 const KIND_LABEL = { house: "住宅", moto: "機車", car: "汽車", bike: "自行車" } as const;
-const isTaipei = (city: string) => /^[台臺]北/.test(city);
 
 /**
  * 房源面板「治安」:
@@ -34,7 +35,8 @@ const isTaipei = (city: string) => /^[台臺]北/.test(city);
  */
 export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: number; city: string; district: string }) {
   const dist = useCrimeDistricts();
-  const tp = isTaipei(city);
+  const tp = hasCoverage(city, "theftPoints");
+  const region = useRegion();
   const near = useQuery({ queryKey: ["nearby", lat, lng, 500], queryFn: () => api.nearby({ lat, lng, radius: 500 }), staleTime: 30 * 60_000, enabled: tp });
   const [open, setOpen] = useState(false);
   const d = dist.data;
@@ -43,7 +45,11 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
   const row = d?.items[key];
   const rank = (k: "house" | "moto") => {
     if (!d || !row?.[k]) return null;
-    const all = Object.values(d.items).map((x) => x[k] ?? 0).sort((a, b) => b - a);
+    // 排名只跟同一個生活圈的區比
+    const all = Object.entries(d.items)
+      .filter(([key]) => (region.cities as readonly string[]).includes(key.split("|")[0]!))
+      .map(([, x]) => x[k] ?? 0)
+      .sort((a, b) => b - a);
     return { n: all.indexOf(row[k]!) + 1, of: all.length };
   };
   const houseRank = rank("house");
@@ -93,12 +99,12 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
             </span>
             {houseRank && (
               <span className="ml-1.5 text-neutral-500">
-                (住宅竊盜雙北 {houseRank.of} 區第 {houseRank.n} 多)
+                (住宅竊盜{region.label} {houseRank.of} 區第 {houseRank.n} 多)
               </span>
             )}
           </div>
           <p className="text-[11px] text-neutral-400">
-            警察局開放資料 {d.from.slice(0, 7)}~{d.to.slice(0, 7)}。{tp ? "臺北市的點是巷或路段的中點(門牌查不到),只能看大概;" : "新北市只到行政區、沒有點位;"}區的件數不是每人比率,人多的區自然多。
+            警察局開放資料 {d.from.slice(0, 7)}~{d.to.slice(0, 7)}。{tp ? "點位是巷或路段的中點(門牌查不到),只能看大概;" : `${city}只到行政區、沒有點位;`}區的件數不是每人比率,人多的區自然多。
           </p>
         </div>
       )}

@@ -15,10 +15,11 @@
  *   - 租金超過全體中位數 3 倍或不到 1/3 的不算(實測信義區有業者把整戶 24 萬的租約以「分租套房」反覆登錄)
  */
 import { z } from "zod";
+import { CITIES } from "./constants";
 
 export const RentStatIn = z.object({
   serial: z.string().min(1).max(40),
-  city: z.enum(["台北市", "新北市"]),
+  city: z.enum(CITIES),
   district: z.string().min(1).max(10),
   road: z.string().max(40).nullable(),
   kind: z.string().max(10).nullable(),

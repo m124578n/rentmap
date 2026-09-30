@@ -11,7 +11,7 @@ export interface Filters {
   kinds: string[]; // 空 = 全部;值:整層住家 / 獨立套房 / 分租套房 / 雅房 / 其他
   rentMin: number | null;
   rentMax: number | null;
-  districts: string[]; // 空 = 全部
+  districts: string[]; // 「台北市中正區」(縣市 + 行政區,不同縣市有同名的區);舊資料只有「中正區」也認得;空 = 全部
   roomsMin: number | null; // 1 / 2 / 3(3 = 3 以上)
   sizeMin: number | null;
   elevator: boolean; // true = 只要有電梯
@@ -171,7 +171,7 @@ export function applyFilters(items: PropertySummary[], f: Filters, ctx?: Commute
     if (f.kinds.length && !(p.kind && f.kinds.includes(p.kind))) return false;
     if (f.rentMin != null && (p.rent == null || p.rent < f.rentMin)) return false;
     if (f.rentMax != null && (p.rent == null || p.rent > f.rentMax)) return false;
-    if (f.districts.length && !f.districts.includes(p.district)) return false;
+    if (f.districts.length && !f.districts.includes(`${p.city}${p.district}`) && !f.districts.includes(p.district)) return false;
     if (f.roomsMin != null && (p.rooms == null || p.rooms < f.roomsMin)) return false;
     if (f.sizeMin != null && (p.size_ping == null || p.size_ping < f.sizeMin)) return false;
     if (f.elevator && p.has_elevator !== true) return false;

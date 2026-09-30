@@ -10,7 +10,11 @@
  *   沒有座標、沒有房型(整層 / 套房)→ 座標用 Nominatim 以「縣市+行政區+路名」定位;房型從標題 / 格局推。
  * - 不存在的物件導到 /errorPage?ch=rent_404。
  */
+import { ALL_CITIES } from "../../src/shared/regions";
 import type { ImportedListing } from "../../src/shared/schemas";
+
+/** 地址開頭的縣市(台 / 臺 都認,regions.ts 的所有縣市) */
+const CITY_RE = new RegExp(`^(${ALL_CITIES.flatMap((c) => [c, c.replace(/^台/, "臺")]).join("|")})`);
 
 const DETAIL_URL = /^https?:\/\/rent\.housefun\.com\.tw\/rent\/house\/(\d+)\/?/;
 const LIST_URL = /^https?:\/\/rent\.housefun\.com\.tw\/region\//;
@@ -93,7 +97,7 @@ export function parseHousefunDetail(html: string, url: string): Omit<ImportedLis
   const title = titleRaw.replace(/\(房屋編號[:：]\s*\d+\)\s*$/, "").trim() || titleRaw || `好房 ${id}`;
 
   const addrRaw = (fields["地址"] ?? "").replace(/租金行情.*$/, "").trim();
-  const cityM = addrRaw.match(/^(台北市|臺北市|新北市)/);
+  const cityM = addrRaw.match(CITY_RE);
   const city = (cityM?.[1] ?? "").replace("臺", "台");
   const rest = addrRaw.slice(cityM?.[1]?.length ?? 0);
   const district = rest.match(/^(.+?區)/)?.[1] ?? "";

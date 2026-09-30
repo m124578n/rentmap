@@ -5,6 +5,8 @@ import { KINDS } from "@shared/constants";
 import { AVOIDABLE_CATS, poiLabel } from "@shared/poi";
 import { useRequirements, useRequirementsDialogOpen, useSaveRequirements } from "./fit";
 import { usePlaces } from "@/features/places/places";
+import { coverageCities } from "@shared/regions";
+import { useRegion } from "@/lib/region";
 
 export function RequirementsDialogHost() {
   const [open, setOpen] = useRequirementsDialogOpen();
@@ -20,6 +22,7 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
   const [r, setR] = useState<Requirements>(initial);
   const save = useSaveRequirements();
   const places = usePlaces();
+  const region = useRegion();
   const set = (patch: Partial<Requirements>) => setR((x) => ({ ...x, ...patch }));
   // 坪數可以有小數,其他(元、分、年)存整數
   const num = (v: string) => (v === "" ? null : Math.round(Math.max(0, Number(v))) || null);
@@ -156,7 +159,7 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
           </label>
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={r.avoid_liquefaction} onChange={(e) => set({ avoid_liquefaction: e.target.checked })} /> 避開土壤液化高潛勢
-            <span className="text-neutral-500">(只有台北市有資料)</span>
+            <span className="text-neutral-500">(只有{coverageCities("liquefaction", region.key)}有資料)</span>
           </label>
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={r.avoid_airnoise} onChange={(e) => set({ avoid_airnoise: e.target.checked })} /> 避開航空噪音區

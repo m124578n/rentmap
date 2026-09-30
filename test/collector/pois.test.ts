@@ -1,21 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, TPE_BBOX, type OsmElement } from "../../collector/pois/transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
     const q = overpassQuery("pharmacy", { s: 25, w: 121.5, n: 25.1, e: 121.6 });
     expect(q).toBe('[out:json][timeout:180];(nwr["amenity"="pharmacy"](25.0000,121.5000,25.1000,121.6000);nwr["healthcare"="pharmacy"](25.0000,121.5000,25.1000,121.6000););out center tags;');
     expect(overpassQuery("gym", { s: 25, w: 121.5, n: 25.1, e: 121.6 }).match(/nwr\[/g)).toHaveLength(3);
-    expect(() => overpassQuery("ramen", TPE_BBOX)).toThrow();
+    expect(bboxOf("north")).toEqual({ s: 24.67, w: 121.28, n: 25.3, e: 122.01 }); // 雙北,跟拆出 regions.ts 之前一樣
+    expect(() => overpassQuery("ramen", bboxOf("north"))).toThrow();
   });
 
   it("tiles 切塊涵蓋整個範圍", () => {
-    const t = tiles(TPE_BBOX, 3, 3);
+    const t = tiles(bboxOf("north"), 3, 3);
     expect(t).toHaveLength(9);
-    expect(t[0]).toMatchObject({ s: TPE_BBOX.s, w: TPE_BBOX.w });
-    expect(t[8]!.n).toBeCloseTo(TPE_BBOX.n);
-    expect(t[8]!.e).toBeCloseTo(TPE_BBOX.e);
+    expect(t[0]).toMatchObject({ s: bboxOf("north").s, w: bboxOf("north").w });
+    expect(t[8]!.n).toBeCloseTo(bboxOf("north").n);
+    expect(t[8]!.e).toBeCloseTo(bboxOf("north").e);
   });
 
   it("node 用自己的座標、way 用 center;重複的只留一筆;私人的不收", () => {

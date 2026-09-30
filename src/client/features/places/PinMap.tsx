@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { localizeBasemap, STYLE, TW_BOUNDS } from "@/features/map/basemap";
+import { localizeBasemap, STYLE } from "@/features/map/basemap";
+import { useRegion } from "@/lib/region";
 import { useTheme } from "@/lib/useTheme";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 /** 小地圖 + 可拖曳的圖釘:地址搜尋的結果常只到路段,讓使用者自己對到門口。點地圖也會把圖釘移過去。 */
 export function PinMap({ value, onChange }: Props) {
   const { theme } = useTheme();
+  const region = useRegion();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -24,7 +26,7 @@ export function PinMap({ value, onChange }: Props) {
     const map = new maplibregl.Map({
       container: ref.current,
       style: STYLE[theme],
-      ...(value ? { center: [value.lng, value.lat] as [number, number], zoom: 16.5 } : { bounds: TW_BOUNDS }),
+      ...(value ? { center: [value.lng, value.lat] as [number, number], zoom: 16.5 } : { bounds: region.view }),
       attributionControl: { compact: true },
     });
     mapRef.current = map;
