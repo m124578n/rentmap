@@ -11,7 +11,9 @@ import { FavoritePanel } from "./FavoritePanel";
 import { PriceAgeSection } from "@/features/listing/PriceAgeSection";
 import { MarketSection } from "@/features/market/MarketSection";
 import { CompareToggle } from "@/features/compare/compare";
-import { FitSection } from "@/features/fit/fit";
+import { FitSection, useRequirements } from "@/features/fit/fit";
+import { CostSection, useMonthlyCost } from "@/features/cost/cost";
+import { EMPTY_REQUIREMENTS } from "@shared/fit";
 import { NearbySection } from "@/features/nearby/NearbySection";
 import { HazardSection } from "@/features/hazard/HazardSection";
 import { garbageService } from "@shared/poi";
@@ -32,6 +34,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
   // 符合度用列表那份(同一個快取;有行情、通勤要的欄位)
   const list = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const summary = list.data?.items.find((x) => x.id === id);
+  const req = useRequirements();
+  const { costOf } = useMonthlyCost(req.data?.requirements ?? EMPTY_REQUIREMENTS);
   const del = useMutation({
     mutationFn: () => api.deleteProperty(id),
     onSuccess: () => {
@@ -85,6 +89,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
       <FitSection p={summary} />
 
       <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
+
+      {summary && <CostSection cost={costOf(summary)} />}
 
       <FavoritePanel id={id} favorite={favorite} />
 

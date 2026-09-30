@@ -46,6 +46,8 @@ properties.get("/api/properties", async (c) => {
       building_type: p.buildingType,
       kind: p.kind,
       mgmt_fee: p.mgmtFee,
+      utilities_note: p.utilitiesNote,
+      has_internet: p.hasInternet,
       rent: sql<number | null>`(SELECT rent FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       source: sql<string | null>`(SELECT source FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       source_url: sql<string | null>`(SELECT source_url FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,

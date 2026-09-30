@@ -4,6 +4,7 @@ import { EMPTY_REQUIREMENTS, FIT_DIM_LABEL, type FitDimKey, type Requirements } 
 import { KINDS } from "@shared/constants";
 import { AVOIDABLE_CATS, poiLabel } from "@shared/poi";
 import { useRequirements, useRequirementsDialogOpen, useSaveRequirements } from "./fit";
+import { usePlaces } from "@/features/places/places";
 
 export function RequirementsDialogHost() {
   const [open, setOpen] = useRequirementsDialogOpen();
@@ -18,6 +19,7 @@ const WEIGHT_KEYS: FitDimKey[] = ["price", "market", "commute", "size", "age"];
 function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClose: () => void }) {
   const [r, setR] = useState<Requirements>(initial);
   const save = useSaveRequirements();
+  const places = usePlaces();
   const set = (patch: Partial<Requirements>) => setR((x) => ({ ...x, ...patch }));
   // 坪數可以有小數,其他(元、分、年)存整數
   const num = (v: string) => (v === "" ? null : Math.round(Math.max(0, Number(v))) || null);
@@ -44,6 +46,33 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
         <Group title="租金">
           <Pair label="預算上限" suffix="元" value={r.budget_max} onChange={(v) => set({ budget_max: v })} num={num} step={1000} />
           <Pair label="理想" suffix="元以內" value={r.budget_ideal} onChange={(v) => set({ budget_ideal: v })} num={num} step={1000} />
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={r.budget_total} onChange={(e) => set({ budget_total: e.target.checked })} /> 預算比「每月總支出」
+            <span className="text-neutral-500">(房租 + 管理費 + 水電網路 + 通勤,估)</span>
+          </label>
+        </Group>
+        <Group title="每月支出怎麼估">
+          <label className="flex items-center gap-1">
+            通勤費算到
+            <select className="input !w-auto" value={r.cost_place_id ?? ""} onChange={(e) => set({ cost_place_id: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">第一個地點</option>
+              {(places.data?.items ?? []).map((pl) => (
+                <option key={pl.id} value={pl.id}>
+                  {pl.name}
+                </option>
+              ))}
+            </select>
+            ,每週
+            <select className="input !w-auto" value={r.commute_days} onChange={(e) => set({ commute_days: Number(e.target.value) })}>
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            天
+          </label>
+          <Pair label="每月用電" suffix="度(空白 = 依房型估)" value={r.kwh} onChange={(v) => set({ kwh: v != null && v >= 10 ? v : null })} num={num} step={10} />
         </Group>
         <Group title="通勤(每個地點的上班、下班取最久的一段)">
           <Pair label="上限" suffix="分" value={r.commute_max} onChange={(v) => set({ commute_max: v })} num={num} step={5} />

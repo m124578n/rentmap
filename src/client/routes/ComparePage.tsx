@@ -14,6 +14,7 @@ import { MarketBadge } from "@/features/market/MarketSection";
 import { ageOf, fmtMoney, priceOf } from "@/features/listing/age";
 import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/compare/compare";
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
+import { useMonthlyCost } from "@/features/cost/cost";
 import { FIT_DIM_LABEL } from "@shared/fit";
 import { NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
 import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
@@ -66,6 +67,7 @@ export function ComparePage() {
   const back = useCommute("back");
   const f = useFilters();
   const fit = useFit();
+  const cost = useMonthlyCost(fit.requirements);
   const hazards = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, staleTime: 60 * 60_000 });
   const nearby = useQuery({ queryKey: ["nearby-summary", 500], queryFn: () => api.nearbySummary(500), staleTime: 30 * 60_000 });
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
@@ -169,6 +171,16 @@ export function ComparePage() {
           }),
         },
         { label: "管理費", better: "low", cells: props.map((p) => ({ node: p.mgmt_fee != null ? fmtMoney(p.mgmt_fee) : dash, v: p.mgmt_fee })) },
+        {
+          label: "每月支出(估)",
+          better: "low",
+          cells: props.map((p) => {
+            const c = cost.costOf(p);
+            if (!c) return { node: dash, v: null };
+            const tip = c.lines.map((l) => `${l.label} ${fmtMoney(l.amount)}${l.note ? `(${l.note})` : ""}`).join("\n");
+            return { node: <span className="tabular-nums" title={tip}>{fmtMoney(c.total)}</span>, v: c.total };
+          }),
+        },
         {
           label: "價格變化",
           cells: props.map((p) => {

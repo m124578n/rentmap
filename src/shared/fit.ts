@@ -47,6 +47,11 @@ export const Requirements = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .nullable(),
+  /** 每月支出:預算比「總支出(估)」而不是房租;通勤費用算到哪個地點(null = 第一個)、每週幾天、每月用電度數(null = 依房型估) */
+  budget_total: z.boolean(),
+  cost_place_id: z.number().int().positive().nullable(),
+  commute_days: z.number().int().min(0).max(7),
+  kwh: z.number().int().min(10).max(2000).nullable(),
   weights: z.object({ price: weight, market: weight, commute: weight, size: weight, age: weight }),
 });
 export type Requirements = z.infer<typeof Requirements>;
@@ -72,6 +77,10 @@ export const EMPTY_REQUIREMENTS: Requirements = {
   avoid_airnoise: false,
   garbage_max_m: 300,
   garbage_after: null,
+  budget_total: false,
+  cost_place_id: null,
+  commute_days: 5,
+  kwh: null,
   weights: { price: 3, market: 2, commute: 3, size: 2, age: 1 },
 };
 
@@ -98,6 +107,8 @@ export interface FitCtx {
   nearest?: Partial<Record<PoiCat, number>>;
   /** 災害潛勢等級(/api/hazards/summary);undefined = 還在查 */
   hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction" | "airnoise", number>>;
+  /** 每月總支出(估,shared/cost.ts);需求 budget_total 時預算比這個 */
+  total?: number | null;
 }
 
 export type FitLevel = "green" | "yellow" | "red";
@@ -151,9 +162,13 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
   const unknown: string[] = [];
 
   // ---- 硬性 ----
+  // 預算比房租,或(budget_total)比每月總支出;總支出還沒算出來就先比房租
+  const useTotal = r.budget_total && ctx.total != null;
+  const spend = useTotal ? ctx.total! : p.rent;
+  const spendLabel = useTotal ? "每月支出" : "租金";
   if (r.budget_max != null) {
-    if (p.rent == null) unknown.push("租金");
-    else if (p.rent > r.budget_max) fails.push(`租金 ${money(p.rent)} 超過預算 ${money(r.budget_max)}`);
+    if (spend == null) unknown.push("租金");
+    else if (spend > r.budget_max) fails.push(`${spendLabel} ${money(spend)} 超過預算 ${money(r.budget_max)}`);
   }
   if (r.kinds.length) {
     if (!p.kind) unknown.push("房型");
@@ -196,10 +211,10 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
   // ---- 軟性 ----
   const dims: FitDim[] = [];
   const w = r.weights;
-  if (w.price > 0 && p.rent != null && (r.budget_max != null || r.budget_ideal != null)) {
+  if (w.price > 0 && spend != null && (r.budget_max != null || r.budget_ideal != null)) {
     const ideal = r.budget_ideal ?? Math.round(r.budget_max! * 0.85);
     const top = r.budget_max ?? Math.round(ideal * 1.3);
-    dims.push({ key: "price", weight: w.price, score: lowerBetter(p.rent, ideal, top), note: `${money(p.rent)}(理想 ${money(ideal)} 以內)` });
+    dims.push({ key: "price", weight: w.price, score: lowerBetter(spend, ideal, top), note: `${useTotal ? "每月 " : ""}${money(spend)}(理想 ${money(ideal)} 以內)` });
   }
   if (w.market > 0 && ctx.marketDiff != null) {
     const d = ctx.marketDiff;
