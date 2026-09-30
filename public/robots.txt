@@ -1,0 +1,6 @@
+# 介紹頁可以收錄;房源、筆記都要登入,API 不收錄
+User-agent: *
+Allow: /$
+Allow: /about
+Disallow: /api/
+Disallow: /p/

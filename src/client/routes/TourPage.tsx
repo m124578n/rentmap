@@ -36,11 +36,14 @@ export function TourPage() {
 
   const chosen = favs.filter((p) => sel.has(p.id));
   const start = places.data?.items.find((p) => p.id === startId) ?? null;
-  // 按下「排路線」當下的房源與出門時間(之後改勾選會 reset)
+  // 按下「排路線」當下的房源、出門時間與起點(之後改勾選會 reset);排好的存在這台,離線也看得到上次的
   const run = useMutation({
-    mutationFn: async (v: { props: PropertySummary[]; time: string }) => ({
+    mutationFn: async (v: { props: PropertySummary[]; time: string }): Promise<Ran> => ({
       props: v.props,
       time: v.time,
+      day,
+      startName: start?.name ?? null,
+      at: new Date().toISOString(),
       res: await api.tour({
         points: v.props.map((p) => ({ lat: p.lat!, lng: p.lng!, name: p.title.slice(0, 60) })),
         start: start ? { lat: start.lat, lng: start.lng, name: start.name } : null,
@@ -48,8 +51,11 @@ export function TourPage() {
         time: v.time,
       }),
     }),
+    onSuccess: saveLast,
   });
-  const plan = useMemo(() => (run.data ? schedule(run.data.res, run.data.props, stay, run.data.time) : undefined), [run.data, stay]);
+  const [last] = useState(loadLast);
+  const shown = run.data ?? (run.isIdle ? last : null);
+  const plan = useMemo(() => (shown ? schedule(shown.res, shown.props, stay, shown.time) : undefined), [shown, stay]);
 
   const toggle = (id: number) => {
     const s = new Set(sel);
@@ -136,18 +142,18 @@ export function TourPage() {
         <section className="card">
           <h2 className="mb-2 flex items-baseline justify-between text-xs font-medium text-neutral-500">
             <span>
-              建議順序 · 交通共約 {plan.travel} 分,{hhmm(plan.end)} 看完
+              {run.data ? "建議順序" : `上次排的(${shown!.at.slice(5, 10).replace("-", "/")})`} · 交通共約 {plan.travel} 分,{hhmm(plan.end)} 看完
             </span>
             <span>
-              {DAY_LABEL[day]} {time} 出門
+              {DAY_LABEL[shown!.day]} {shown!.time} 出門
             </span>
           </h2>
           <ol className="grid gap-1">
-            {start && (
+            {shown!.startName && (
               <li className="flex items-center gap-2">
-                <span className="w-12 shrink-0 text-right tabular-nums text-neutral-500">{time}</span>
+                <span className="w-12 shrink-0 text-right tabular-nums text-neutral-500">{shown!.time}</span>
                 <MapPin size={14} className="shrink-0 text-blue-600" />
-                <span className="font-medium">{start.name} 出發</span>
+                <span className="font-medium">{shown!.startName} 出發</span>
               </li>
             )}
             {plan.stops.map((s, i) => (
@@ -203,4 +209,29 @@ function schedule(r: TourResponse, props: PropertySummary[], stay: number, time:
     return { p: props[k]!, trip, arrive, leave: t };
   });
   return { stops, travel: best.total, end: t };
+}
+
+interface Ran {
+  props: PropertySummary[];
+  time: string;
+  day: DayType;
+  startName: string | null;
+  at: string;
+  res: TourResponse;
+}
+const LAST_KEY = "rentmap.lastTour";
+function saveLast(r: Ran) {
+  try {
+    localStorage.setItem(LAST_KEY, JSON.stringify(r));
+  } catch {
+    /* 容量滿或私密模式:不記 */
+  }
+}
+function loadLast(): Ran | null {
+  try {
+    const v = localStorage.getItem(LAST_KEY);
+    return v ? (JSON.parse(v) as Ran) : null;
+  } catch {
+    return null;
+  }
 }

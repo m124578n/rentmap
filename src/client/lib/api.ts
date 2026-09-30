@@ -33,8 +33,17 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, body);
+  // Service Worker 在網路太慢 / 斷線時會回上次的快取(public/sw.js),通知畫面顯示「離線中」
+  if (res.headers.get("x-sw-cache")) window.dispatchEvent(new Event(STALE_EVENT));
+  else if (staleShown) window.dispatchEvent(new Event(FRESH_EVENT));
   return body as T;
 }
+
+export const STALE_EVENT = "rentmap:stale";
+export const FRESH_EVENT = "rentmap:fresh";
+let staleShown = false;
+window.addEventListener(STALE_EVENT, () => (staleShown = true));
+window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
   me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean }>("/api/me"),

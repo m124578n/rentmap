@@ -1,5 +1,6 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { FRESH_EVENT, STALE_EVENT } from "@/lib/api";
 import { Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
@@ -79,6 +80,7 @@ export function Layout() {
           )}
         </nav>
       </header>
+      <OfflineBanner />
       <main className="min-h-0 flex-1 overflow-auto">
         {loginErr === "denied" && <p className="card m-4 border-red-300 text-red-700">這個 Google 帳號不在白名單裡。</p>}
         {loginErr === "failed" && <p className="card m-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
@@ -172,5 +174,33 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** 斷線或 Service Worker 回的是上次的快取時,頂欄下面一條提示 */
+function OfflineBanner() {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [stale, setStale] = useState(false);
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    const st = () => setStale(true);
+    const fr = () => setStale(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    window.addEventListener(STALE_EVENT, st);
+    window.addEventListener(FRESH_EVENT, fr);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+      window.removeEventListener(STALE_EVENT, st);
+      window.removeEventListener(FRESH_EVENT, fr);
+    };
+  }, []);
+  if (!offline && !stale) return null;
+  return (
+    <p role="status" className="bg-amber-100 px-3 py-1 text-center text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+      {offline ? "離線中" : "網路很慢"},顯示的是上次的資料;新增、收藏等變更要等連線恢復。
+    </p>
   );
 }

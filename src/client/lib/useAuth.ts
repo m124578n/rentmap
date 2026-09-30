@@ -6,7 +6,12 @@ export function useAuth() {
   const q = useQuery({ queryKey: ["me"], queryFn: api.me, staleTime: 60_000 });
   const logout = useMutation({
     mutationFn: api.logout,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    onSuccess: () => {
+      // 離線快取裡的個人資料一起清掉(public/sw.js)
+      navigator.serviceWorker?.controller?.postMessage({ type: "logout" });
+      qc.clear();
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
   });
   const returnTo = () => encodeURIComponent(window.location.pathname + window.location.search);
   const login = () => {

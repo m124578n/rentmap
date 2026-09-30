@@ -14,6 +14,12 @@ import { status } from "./routes/status";
 
 const app = new Hono<AppEnv>();
 
+// API 不給搜尋引擎收錄(介紹頁才收;robots.txt 也擋了 /api/)
+app.use("/api/*", async (c, next) => {
+  await next();
+  c.header("X-Robots-Tag", "noindex");
+});
+
 app.get("/api/health", (c) => c.json({ ok: true }));
 app.route("/", auth);
 app.route("/", properties);
