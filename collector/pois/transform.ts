@@ -20,9 +20,15 @@ export function tiles(b: Bbox, rows: number, cols: number): Bbox[] {
 }
 
 export function overpassQuery(cat: PoiCat, b: Bbox): string {
-  const sels: readonly (readonly [string, readonly string[]])[] = (POI_CATEGORIES[cat] as { osm?: [string, string[]][] }).osm ?? [];
+  const def = POI_CATEGORIES[cat] as { osm?: [string, string[]][]; line?: boolean };
+  const sels: readonly (readonly [string, readonly string[]])[] = def.osm ?? [];
   if (!sels.length) throw new Error(`${cat} 不是 OSM 類別`);
   const box = [b.s, b.w, b.n, b.e].map((x) => x.toFixed(4)).join(",");
+  if (def.line) {
+    // 線:只要 way、不要隧道(地下段沒有噪音),帶線形
+    const parts = sels.flatMap(([k, vs]) => vs.map((v) => `way["${k}"="${v}"]["tunnel"!~"^(yes|building_passage|covered)$"](${box});`)).join("");
+    return `[out:json][timeout:180];(${parts});out geom tags;`;
+  }
   // 一個值一段精確比對:Overpass 對 k=v 有索引,正規式 ~"^(a|b)$" 要掃全部、慢很多(雙北超市實測會 504)
   const parts = sels.flatMap(([k, vs]) => vs.map((v) => `nwr["${k}"="${v}"](${box});`)).join("");
   return `[out:json][timeout:180];(${parts});out center tags;`;
@@ -34,7 +40,34 @@ export interface OsmElement {
   lat?: number;
   lon?: number;
   center?: { lat: number; lon: number };
+  /** out geom:way 的每個節點 */
+  geometry?: { lat: number; lon: number }[];
   tags?: Record<string, string>;
+}
+
+const LINE_STEP_M = 40;
+const distM = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
+  const kx = 111320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot((b.lon - a.lon) * kx, (b.lat - a.lat) * 110540);
+};
+/** 線每 LINE_STEP_M 公尺取一點(含兩端) */
+export function sampleLine(g: { lat: number; lon: number }[]): { lat: number; lon: number }[] {
+  if (g.length < 2) return g.slice();
+  const out = [g[0]!];
+  let carry = 0;
+  for (let i = 1; i < g.length; i++) {
+    const a = g[i - 1]!;
+    const b = g[i]!;
+    const seg = distM(a, b);
+    let t = LINE_STEP_M - carry;
+    while (t < seg) {
+      out.push({ lat: a.lat + ((b.lat - a.lat) * t) / seg, lon: a.lon + ((b.lon - a.lon) * t) / seg });
+      t += LINE_STEP_M;
+    }
+    carry = seg - (t - LINE_STEP_M);
+  }
+  out.push(g[g.length - 1]!);
+  return out;
 }
 
 /** 名稱:name → name:zh-Hant / name:zh → brand → name:en */
@@ -44,8 +77,22 @@ export function osmName(t: Record<string, string> = {}): string | null {
 }
 
 export function fromOverpass(cat: PoiCat, elements: OsmElement[]): PoiIn[] {
-  const sels = (POI_CATEGORIES[cat] as { osm?: [string, string[]][] }).osm ?? [];
+  const def = POI_CATEGORIES[cat] as { osm?: [string, string[]][]; line?: boolean };
+  const sels = def.osm ?? [];
   const out = new Map<string, PoiIn>();
+  if (def.line) {
+    for (const el of elements) {
+      const t = el.tags ?? {};
+      if (!el.geometry?.length) continue;
+      const hit = sels.find(([k, vs]) => vs.includes(t[k] ?? ""));
+      const name = (t.name ?? t.ref ?? null)?.slice(0, 120) ?? null;
+      sampleLine(el.geometry).forEach((p, i) => {
+        const key = `w${el.id}:${i}`;
+        out.set(key, { key, category: cat, subtype: hit ? t[hit[0]]! : null, name, lat: Math.round(p.lat * 1e6) / 1e6, lng: Math.round(p.lon * 1e6) / 1e6, rating: null, url: null });
+      });
+    }
+    return [...out.values()];
+  }
   for (const el of elements) {
     const lat = el.lat ?? el.center?.lat;
     const lng = el.lon ?? el.center?.lon;
@@ -53,6 +100,8 @@ export function fromOverpass(cat: PoiCat, elements: OsmElement[]): PoiIn[] {
     const t = el.tags ?? {};
     // 私人的(社區游泳池、公司健身房)不算
     if (t.access === "private" || t.access === "no") continue;
+    // 變電所:路邊的小型配電箱、地下 / 室內的不算嫌惡
+    if (cat === "substation" && (t.substation === "minor_distribution" || /underground|indoor/.test(t.location ?? ""))) continue;
     const hit = sels.find(([k, vs]) => vs.includes(t[k] ?? ""));
     const key = `${el.type[0]}${el.id}`;
     out.set(key, {
@@ -173,6 +222,53 @@ export function fromNtpcGarbage(rows: NtpcGarbageRow[]): PoiIn[] {
       note: `${fmt(t0)} · ${daysText(days)}${recycle ? `(回收 ${daysText(recycle)})` : ""}`.slice(0, 120),
       minute: t0,
       days,
+    });
+  }
+  return [...out.values()];
+}
+
+/** 夜市:從市場裡挑名字有「夜市」的,另成一類(同一個 OSM key 可以屬於兩類) */
+export function nightMarkets(market: PoiIn[]): PoiIn[] {
+  return market.filter((x) => x.name && /夜市/.test(x.name)).map((x) => ({ ...x, category: "nightmarket" as const, subtype: "night_market" }));
+}
+
+// ---- YouBike 2.0 站點 ----
+
+export interface YoubikeRow {
+  sno?: string;
+  sna?: string;
+  sarea?: string;
+  ar?: string;
+  act?: string;
+  /** 台北:latitude / longitude / Quantity;新北:lat / lng / tot_quantity */
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
+  Quantity?: number | string;
+  tot_quantity?: number | string;
+  total?: number | string;
+}
+export function fromYoubike(rows: YoubikeRow[]): PoiIn[] {
+  const out = new Map<string, PoiIn>();
+  for (const r of rows) {
+    const lat = Number(r.latitude ?? r.lat);
+    const lng = Number(r.longitude ?? r.lng);
+    if (!r.sno || !inTpe(lat, lng)) continue;
+    const docks = Number(r.Quantity ?? r.tot_quantity ?? r.total);
+    const key = `y${r.sno}`;
+    out.set(key, {
+      key,
+      category: "youbike",
+      subtype: r.act === "0" ? "暫停營運" : null,
+      name: (r.sna ?? "").replace(/^YouBike2\.0_/, "").slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: Number.isFinite(docks) && docks > 0 ? `${docks} 格` : null,
+      minute: null,
+      days: null,
     });
   }
   return [...out.values()];

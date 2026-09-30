@@ -44,9 +44,9 @@ export const api = {
   busNames: () => req<{ bus: string[]; mrt: string[] }>("/api/bus/names"),
   busAlong: (names: string[], radius = 400) => req<AlongResponse>(`/api/bus/along?names=${encodeURIComponent(names.join(","))}&radius=${radius}`),
 
-  commute: (when: CommuteWhen, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}`),
-  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen }) =>
-    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}`),
+  commute: (when: CommuteWhen, bike = true, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
+  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen; bike: boolean }) =>
+    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}${q.bike ? "" : "&bike=0"}`),
 
   market: () => req<MarketMatrix>("/api/market"),
   propertyMarket: (id: number) => req<MarketResponse>(`/api/properties/${id}/market`),

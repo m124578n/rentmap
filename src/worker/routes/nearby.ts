@@ -15,7 +15,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { haversine, walkMin } from "@shared/bus";
-import { garbageService, PoiIn, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
+import { AVOIDABLE_CATS, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 
@@ -104,8 +104,17 @@ nearby.get("/api/nearby", async (c) => {
   });
   const body: NearbyResponse = { radius, has_data: n > 0, counts: {}, items: {} };
   for (const cat of POI_CATS) {
-    const list = found.get(cat);
+    let list = found.get(cat);
     if (!list) continue;
+    // 線狀(道路、鐵道)存的是每 40m 一點:同一條只留最近的,數量是「幾條」
+    if ((POI_CATEGORIES[cat] as { line?: boolean }).line) {
+      const byName = new Map<string, NearbyPoi>();
+      for (const p of list.sort((a, b) => a.distance_m - b.distance_m)) {
+        const k = p.name ?? `${p.subtype}`;
+        if (!byName.has(k)) byName.set(k, p);
+      }
+      list = [...byName.values()];
+    }
     body.counts[cat] = list.length;
     // 有名字的優先(沒名字的公園 / 遊戲場常是社區角落),再依距離
     body.items[cat] = list.sort((a, b) => Number(!a.name) - Number(!b.name) || a.distance_m - b.distance_m).slice(0, KEEP_BY[cat] ?? KEEP);
@@ -118,12 +127,19 @@ nearby.get("/api/nearby/summary", async (c) => {
   const { grid, n } = await loadGrid(c.env.DB);
   const { results } = await c.env.DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
   const items: NearbySummary["items"] = {};
+  const nearest: NearbySummary["nearest"] = {};
+  const avoidable = new Set<PoiCat>(AVOIDABLE_CATS);
   for (const h of results) {
     const counts: Partial<Record<PoiCat, number>> = {};
-    around(grid, h.lat, h.lng, radius, (p) => void (counts[p.category] = (counts[p.category] ?? 0) + 1));
+    const near: Partial<Record<PoiCat, number>> = {};
+    around(grid, h.lat, h.lng, radius, (p, d) => {
+      counts[p.category] = (counts[p.category] ?? 0) + 1;
+      if (avoidable.has(p.category) && (near[p.category] == null || d < near[p.category]!)) near[p.category] = Math.round(d);
+    });
     items[h.id] = counts;
+    nearest[h.id] = near;
   }
-  const body: NearbySummary = { radius, has_data: n > 0, items };
+  const body: NearbySummary = { radius, has_data: n > 0, items, nearest };
   return c.json(body);
 });
 

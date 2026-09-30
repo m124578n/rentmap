@@ -53,6 +53,13 @@ describe("computeFit", () => {
     expect(computeFit(home, r, {})!.fails).toEqual([]);
   });
 
+  it("不要太近:最近距離在範圍內就不符;沒勾的類別不管", () => {
+    const r = req({ avoid: ["fuel", "highway"], avoid_m: 100 });
+    expect(computeFit(home, r, { nearest: { fuel: 80, highway: 150, funeral: 20 } })!.fails).toEqual(["80m 有加油站(不要 100m 內)"]);
+    expect(computeFit(home, r, { nearest: {} })!.level).toBe("green");
+    expect(computeFit(home, r, {})!.fails).toEqual([]);
+  });
+
   it("屋齡:上限 ×0.4 內滿分", () => {
     const r = req({ age_max: 40, weights: { price: 0, market: 0, commute: 0, size: 0, age: 1 } });
     expect(computeFit({ ...home, building_age: 10 }, r)!.score).toBe(1);

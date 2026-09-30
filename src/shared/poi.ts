@@ -11,6 +11,10 @@ export interface PoiCategory {
   /** 面板 / 比較表上的順序與要不要預設顯示 */
   main: boolean;
   osm?: Sel[];
+  /** 嫌惡設施 / 噪音源:面板「注意」列顯示最近距離,需求可設「N 公尺內不要有」 */
+  nuisance?: boolean;
+  /** 線狀(道路、鐵道):抓 way 的線形,每 40m 取一點存,距離 ≈ 到線的距離;排除隧道 */
+  line?: boolean;
 }
 
 export const POI_CATEGORIES = {
@@ -31,10 +35,26 @@ export const POI_CATEGORIES = {
   school: { label: "學校", main: false, osm: [["amenity", ["school", "kindergarten", "university", "college"]]] },
   worship: { label: "宮廟教堂", main: false, osm: [["amenity", ["place_of_worship"]]] },
   police: { label: "警察局", main: false, osm: [["amenity", ["police"]]] },
+  // 雙北 YouBike 2.0 站點(開放資料,只存位置與總車位,不存即時車數)
+  youbike: { label: "YouBike", main: true },
+  // ---- 嫌惡設施 / 噪音源 ----
+  fuel: { label: "加油站", main: false, nuisance: true, osm: [["amenity", ["fuel"]]] },
+  substation: { label: "變電所", main: false, nuisance: true, osm: [["power", ["substation"]]] },
+  funeral: { label: "殯葬", main: false, nuisance: true, osm: [["amenity", ["funeral_hall", "crematorium"]], ["shop", ["funeral_directors"]]] },
+  waste: { label: "垃圾場焚化", main: false, nuisance: true, osm: [["amenity", ["waste_transfer_station"]], ["landuse", ["landfill"]], ["plant:source", ["waste"]]] },
+  cemetery: { label: "墓地", main: false, nuisance: true, osm: [["landuse", ["cemetery"]], ["amenity", ["grave_yard"]]] },
+  // 從市場裡名字有「夜市」的挑出來(採集時一併產生,不另外查)
+  nightmarket: { label: "夜市", main: false, nuisance: true },
+  highway: { label: "快速道路", main: false, nuisance: true, line: true, osm: [["highway", ["motorway", "trunk"]]] },
+  railway: { label: "鐵道高架", main: false, nuisance: true, line: true, osm: [["railway", ["rail", "subway", "light_rail"]]] },
 } as const satisfies Record<string, PoiCategory>;
 export type PoiCat = keyof typeof POI_CATEGORIES;
 export const POI_CATS = Object.keys(POI_CATEGORIES) as PoiCat[];
 export const poiLabel = (c: PoiCat) => POI_CATEGORIES[c].label;
+export const isNuisance = (c: PoiCat) => !!(POI_CATEGORIES[c] as PoiCategory).nuisance;
+export const NUISANCE_CATS = POI_CATS.filter(isNuisance);
+/** 需求「N 公尺內不要有」可以選的:嫌惡設施 + 宮廟(廟會、鞭炮) */
+export const AVOIDABLE_CATS: PoiCat[] = [...NUISANCE_CATS, "worship"];
 
 export const PoiIn = z.object({
   /** OSM:n123 / w456 / r789;menmap:m{ftid} */
@@ -85,11 +105,13 @@ export interface NearbyResponse {
   /** 每類最近的幾個 */
   items: Partial<Record<PoiCat, NearbyPoi[]>>;
 }
-/** GET /api/nearby/summary:每間房源半徑內每類幾個 */
+/** GET /api/nearby/summary:每間房源半徑內每類幾個 + 可避開類別的最近距離 */
 export interface NearbySummary {
   radius: number;
   has_data: boolean;
   items: Record<string, Partial<Record<PoiCat, number>>>;
+  /** nearest[propertyId][cat] = 最近幾公尺(只有 AVOIDABLE_CATS、半徑內有的才列) */
+  nearest: Record<string, Partial<Record<PoiCat, number>>>;
 }
 
 /** 在 Google Maps 搜附近(餐飲 OSM 缺小店,給個全量的出口) */
@@ -129,6 +151,22 @@ export const POI_SUBTYPE_LABEL: Record<string, string> = {
   hospital: "醫院",
   police: "警察局",
   convenience: "超商",
+  fuel: "加油站",
+  substation: "變電所",
+  funeral_hall: "殯儀館",
+  crematorium: "火葬場",
+  funeral_directors: "禮儀社",
+  waste_transfer_station: "垃圾轉運站",
+  landfill: "掩埋場",
+  waste: "焚化廠",
+  cemetery: "墓地",
+  grave_yard: "墓地",
+  night_market: "夜市",
+  motorway: "國道 / 快速道路",
+  trunk: "快速道路",
+  rail: "鐵路",
+  subway: "捷運",
+  light_rail: "輕軌",
 };
 
 /**

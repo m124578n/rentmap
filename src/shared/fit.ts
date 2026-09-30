@@ -14,6 +14,7 @@
  */
 import { z } from "zod";
 import { KINDS } from "./constants";
+import { AVOIDABLE_CATS, poiLabel, type PoiCat } from "./poi";
 
 const pos = z.number().positive().nullable();
 const posInt = z.number().int().positive().nullable();
@@ -34,6 +35,9 @@ export const Requirements = z.object({
   need_cooking: z.boolean(),
   /** 垃圾車:走多遠內(公尺)要有「幾點以後」的清運點;garbage_after 為 null = 不看 */
   garbage_max_m: z.number().int().min(50).max(1000),
+  /** 嫌惡設施:avoid_m 公尺內不要有這些(加油站、殯葬、快速道路…) */
+  avoid: z.array(z.enum(AVOIDABLE_CATS as [PoiCat, ...PoiCat[]])).max(AVOIDABLE_CATS.length),
+  avoid_m: z.number().int().min(50).max(500),
   garbage_after: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
@@ -56,6 +60,8 @@ export const EMPTY_REQUIREMENTS: Requirements = {
   need_elevator: false,
   need_pet: false,
   need_cooking: false,
+  avoid: [],
+  avoid_m: 100,
   garbage_max_m: 300,
   garbage_after: null,
   weights: { price: 3, market: 2, commute: 3, size: 2, age: 1 },
@@ -80,6 +86,8 @@ export interface FitCtx {
   marketDiff?: number | null;
   /** 垃圾車條件的結果(/api/garbage/fit);undefined = 沒查 / 還在查 */
   garbage?: { ok: boolean; service: boolean } | null;
+  /** 可避開類別的最近距離(/api/nearby/summary 的 nearest);undefined = 還在查 */
+  nearest?: Partial<Record<PoiCat, number>>;
 }
 
 export type FitLevel = "green" | "yellow" | "red";
@@ -112,7 +120,8 @@ export function hasRequirements(r: Requirements) {
     r.need_elevator ||
     r.need_pet ||
     r.need_cooking ||
-    r.garbage_after != null
+    r.garbage_after != null ||
+    r.avoid.length > 0
   );
 }
 
@@ -154,6 +163,12 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
     else if (ctx.commuteMin > r.commute_max) fails.push(`通勤最久 ${ctx.commuteMin} 分(上限 ${r.commute_max} 分)`);
   }
 
+  if (r.avoid.length && ctx.nearest) {
+    for (const c of r.avoid) {
+      const d = ctx.nearest[c];
+      if (d != null && d <= r.avoid_m) fails.push(`${d}m 有${poiLabel(c)}(不要 ${r.avoid_m}m 內)`);
+    }
+  }
   if (r.garbage_after != null && ctx.garbage) {
     if (!ctx.garbage.ok) fails.push(`走 ${r.garbage_max_m}m 內沒有 ${r.garbage_after} 以後的垃圾車(也沒寫代收)`);
   }

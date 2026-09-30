@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, overpassQuery, tiles, TPE_BBOX, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow } from "./transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromYoubike, nightMarkets, overpassQuery, tiles, TPE_BBOX, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
@@ -24,6 +24,23 @@ async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Error(`${new URL(url).host} ${res.status}`);
   return (await res.json()) as T;
+}
+
+/** YouBike 2.0 站點:台北市(交通局即時 JSON)、新北市資料開放平台 */
+const YOUBIKE_TPE = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json";
+const YOUBIKE_NTPC = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json";
+async function fetchYoubike(): Promise<PoiIn[]> {
+  const tpe = await getJson<YoubikeRow[]>(YOUBIKE_TPE);
+  const ntpc: YoubikeRow[] = [];
+  for (let page = 0; page < 20; page++) {
+    const rows = await getJson<YoubikeRow[]>(`${YOUBIKE_NTPC}?size=1000&page=${page}`);
+    ntpc.push(...rows);
+    if (rows.length < 1000) break;
+    await sleep(1000);
+  }
+  const items = fromYoubike([...tpe, ...ntpc]);
+  console.log(`    台北市 ${tpe.length} 站、新北市 ${ntpc.length} 站 → ${items.length}`);
+  return items;
 }
 
 async function fetchGarbage(): Promise<PoiIn[]> {
@@ -47,7 +64,7 @@ async function fetchGarbage(): Promise<PoiIn[]> {
   return [...a, ...b];
 }
 /** 量大的類別切塊查,避免 Overpass 逾時 */
-const TILES: Partial<Record<PoiCat, [number, number]>> = { food: [3, 3], park: [2, 2], school: [2, 2], worship: [2, 2] };
+const TILES: Partial<Record<PoiCat, [number, number]>> = { food: [3, 3], park: [2, 2], school: [2, 2], worship: [2, 2], highway: [2, 2], railway: [2, 2] };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -159,6 +176,11 @@ export async function runPois(opts: { base: string; secret: string; args: string
     try {
       if (cat === "garbage") {
         items = await fetchGarbage();
+      } else if (cat === "youbike") {
+        items = await fetchYoubike();
+      } else if (cat === "nightmarket") {
+        // 用市場的資料(快取)挑出夜市,不另外查
+        items = nightMarkets(fromOverpass("market", (await loadCategory("market", false)).elements));
       } else if (cat === "ramen") {
         const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
         if (!res.ok) throw new Error(`menmap ${res.status}`);

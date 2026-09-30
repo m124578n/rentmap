@@ -182,6 +182,9 @@ function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
           aria-label="出發時間"
         />
         <span className="text-neutral-400">出發</span>
+        <label className="ml-1 flex items-center gap-1" title="騎 YouBike 到目的地、或騎到捷運站旁再轉捷運(騎 5km / 3km 內)">
+          <input type="checkbox" checked={f.commuteBike} onChange={(e) => setFilters({ commuteBike: e.target.checked })} /> 含 YouBike
+        </label>
       </div>
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-neutral-500">通勤上限</span>

@@ -19,7 +19,7 @@ export const COMMUTE_DEFAULT: Record<CommuteSide, CommuteWhen> = {
 };
 export const whenParams = (w: CommuteWhen) => `day=${w.day}&time=${encodeURIComponent(w.time)}&dir=${w.dir}`;
 
-export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus";
+export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus" | "bike" | "bike+mrt" | "mrt+bike";
 export const TRIP_KIND_LABEL: Record<TripKind, string> = {
   walk: "步行",
   bus: "公車直達",
@@ -27,6 +27,9 @@ export const TRIP_KIND_LABEL: Record<TripKind, string> = {
   "bus+bus": "公車轉公車",
   "bus+mrt": "公車轉捷運",
   "mrt+bus": "捷運轉公車",
+  bike: "YouBike",
+  "bike+mrt": "YouBike 轉捷運",
+  "mrt+bike": "捷運轉 YouBike",
 };
 
 export type TripLeg =
@@ -63,6 +66,19 @@ export type TripLeg =
       stops: number;
       /** 經過的站 [lng, lat](畫地圖用)與每段的線色 */
       path: { lng: number; lat: number; color: string }[];
+    }
+  | {
+      mode: "bike";
+      min: number;
+      /** 租車 + 還車 */
+      wait: number;
+      /** YouBike 站名 */
+      from: string;
+      to: string;
+      from_pt: [number, number];
+      to_pt: [number, number];
+      /** 直線距離(公尺) */
+      m: number;
     };
 
 export interface Trip {

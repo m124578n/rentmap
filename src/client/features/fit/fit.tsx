@@ -45,6 +45,12 @@ export function useFit() {
     enabled: r.garbage_after != null,
     staleTime: 30 * 60_000,
   });
+  const nearby = useQuery({
+    queryKey: ["nearby-summary", 500],
+    queryFn: () => api.nearbySummary(500),
+    enabled: r.avoid.length > 0,
+    staleTime: 30 * 60_000,
+  });
   const go = useCommute("go");
   const back = useCommute("back");
   const fitOf = useCallback(
@@ -64,9 +70,11 @@ export function useFit() {
         }
       }
       const mb = market.data?.items[p.id];
-      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id] });
+      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id],
+        nearest: nearby.data ? (nearby.data.nearest[p.id] ?? {}) : undefined,
+      });
     },
-    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data],
+    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data],
   );
   return { configured, requirements: r, loaded: rq.isSuccess, fitOf };
 }

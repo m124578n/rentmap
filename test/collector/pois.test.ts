@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, osmName, overpassQuery, tiles, TPE_BBOX, type OsmElement } from "../../collector/pois/transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, TPE_BBOX, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
@@ -91,5 +91,43 @@ describe("垃圾車", () => {
     expect(garbageService("需自行追垃圾車")).toBe(false);
     expect(garbageService("近捷運、可開伙")).toBeNull();
     expect(garbageService(null)).toBeNull();
+  });
+});
+
+describe("嫌惡設施", () => {
+  it("線狀:只查 way、排除隧道,帶線形", () => {
+    const q = overpassQuery("railway", { s: 25, w: 121.5, n: 25.1, e: 121.6 });
+    expect(q).toContain('way["railway"="subway"]["tunnel"!~"^(yes|building_passage|covered)$"]');
+    expect(q).toContain("out geom tags;");
+  });
+
+  it("線每 40m 取一點,同一條線的點共用名稱", () => {
+    // 往東 0.004 度 ≈ 404m → 0、40、…、400 + 終點 = 12 點
+    const pts = sampleLine([
+      { lat: 25, lon: 121.5 },
+      { lat: 25, lon: 121.504 },
+    ]);
+    expect(pts).toHaveLength(12);
+    const out = fromOverpass("highway", [{ type: "way", id: 9, tags: { highway: "motorway", ref: "國道1號" }, geometry: [{ lat: 25, lon: 121.5 }, { lat: 25, lon: 121.504 }] }]);
+    expect(out).toHaveLength(12);
+    expect(out[0]).toMatchObject({ key: "w9:0", category: "highway", subtype: "motorway", name: "國道1號" });
+    for (const x of out) expect(PoiIn.safeParse(x).success).toBe(true);
+  });
+
+  it("變電所:配電箱、地下的不算", () => {
+    const out = fromOverpass("substation", [
+      { type: "way", id: 1, center: { lat: 25, lon: 121.5 }, tags: { power: "substation", name: "松江變電所" } },
+      { type: "node", id: 2, lat: 25, lon: 121.5, tags: { power: "substation", substation: "minor_distribution" } },
+      { type: "node", id: 3, lat: 25, lon: 121.5, tags: { power: "substation", location: "underground" } },
+    ]);
+    expect(out.map((x) => x.name)).toEqual(["松江變電所"]);
+  });
+
+  it("夜市從市場挑名字有夜市的", () => {
+    const market = fromOverpass("market", [
+      { type: "way", id: 1, center: { lat: 25, lon: 121.5 }, tags: { amenity: "marketplace", name: "寧夏夜市" } },
+      { type: "way", id: 2, center: { lat: 25, lon: 121.5 }, tags: { amenity: "marketplace", name: "南門市場" } },
+    ]);
+    expect(nightMarkets(market).map((x) => [x.key, x.category, x.name])).toEqual([["w1", "nightmarket", "寧夏夜市"]]);
   });
 });

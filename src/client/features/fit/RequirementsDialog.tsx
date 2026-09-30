@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { EMPTY_REQUIREMENTS, FIT_DIM_LABEL, type FitDimKey, type Requirements } from "@shared/fit";
 import { KINDS } from "@shared/constants";
+import { AVOIDABLE_CATS, poiLabel } from "@shared/poi";
 import { useRequirements, useRequirementsDialogOpen, useSaveRequirements } from "./fit";
 
 export function RequirementsDialogHost() {
@@ -93,6 +94,30 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
                 <input type="checkbox" checked={r[k]} onChange={(e) => set({ [k]: e.target.checked })} /> {label}
               </label>
             ))}
+          </div>
+        </Group>
+        <Group title="不要太近(嫌惡設施、噪音源)">
+          <select className="input !w-auto" value={r.avoid_m} onChange={(e) => set({ avoid_m: Number(e.target.value) })}>
+            {[50, 100, 200, 300].map((m) => (
+              <option key={m} value={m}>
+                {m}m
+              </option>
+            ))}
+          </select>
+          <span>內不要有</span>
+          <div className="flex flex-wrap gap-1">
+            {AVOIDABLE_CATS.map((c) => {
+              const on = r.avoid.includes(c);
+              return (
+                <button
+                  key={c}
+                  onClick={() => set({ avoid: on ? r.avoid.filter((x) => x !== c) : [...r.avoid, c] })}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${on ? "border-red-600 bg-red-600 text-white" : "border-neutral-300 dark:border-neutral-700"}`}
+                >
+                  {poiLabel(c)}
+                </button>
+              );
+            })}
           </div>
         </Group>
         <Group title="垃圾車(房東沒寫代收時,要追得到車)">

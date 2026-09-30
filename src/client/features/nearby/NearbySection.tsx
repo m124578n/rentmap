@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Star, Store } from "lucide-react";
-import { googleNearbyUrl, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
+import { googleNearbyUrl, isNuisance, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
 
@@ -51,7 +51,9 @@ export function NearbySection({
 
   if (!q.data) return null;
   const d = q.data;
-  const cats = POI_CATS.filter((c) => more || POI_CATEGORIES[c].main || (c === "ramen" && (d.counts.ramen ?? 0) > 0));
+  const cats = POI_CATS.filter((c) => !isNuisance(c) && (more || POI_CATEGORIES[c].main || (c === "ramen" && (d.counts.ramen ?? 0) > 0)));
+  // 嫌惡設施:半徑內有的才列,顯示最近距離
+  const nuisances = NUISANCE_CATS.map((c) => ({ c, d: d.items[c]?.[0]?.distance_m })).filter((x): x is { c: PoiCat; d: number } => x.d != null).sort((a, b) => a.d - b.d);
 
   return (
     <section className="text-sm">
@@ -100,6 +102,28 @@ export function NearbySection({
             <button onClick={() => setMore(!more)} className="px-1 text-xs text-neutral-500 underline">
               {more ? "收起" : "更多"}
             </button>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <span className="text-[11px] text-neutral-500">注意</span>
+            {nuisances.length === 0 && <span className="text-[11px] text-emerald-700 dark:text-emerald-400">{radius === 500 ? "500m" : "1km"} 內沒有加油站、變電所、殯葬、快速道路等</span>}
+            {nuisances.map(({ c, d: dist }) => (
+              <button
+                key={c}
+                onClick={() => setOpen(open === c ? null : c)}
+                title="最近的距離"
+                className={`rounded-full border px-2 py-0.5 text-xs tabular-nums ${
+                  open === c
+                    ? "border-amber-500 bg-amber-500 text-white"
+                    : dist <= 100
+                      ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                      : dist <= 300
+                        ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                        : "border-neutral-300 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+                }`}
+              >
+                {poiLabel(c)} {dist}m
+              </button>
+            ))}
           </div>
           {open === "garbage" && <GarbageList items={items} service={garbageService ?? null} />}
           {open && open !== "garbage" && (

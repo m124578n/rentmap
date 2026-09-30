@@ -93,6 +93,18 @@ describe("pois ingest + nearby", () => {
     expect((await SELF.fetch(`${ORIGIN}/api/garbage/fit?after=25:00`, authed())).status).toBe(400);
   });
 
+  it("線狀類別同一條只列一次;summary 有可避開類別的最近距離", async () => {
+    const hw = (i: number, dLat: number, name: string): PoiIn => ({ ...poi(`w1:${i}`, "highway", dLat, name), key: `w${name}:${i}` });
+    await post("pois", { version: "h1", items: [hw(0, 0.002, "國道1號"), hw(1, 0.0025, "國道1號"), hw(2, 0.003, "國道1號"), hw(0, 0.004, "環河快速道路"), poi("f1", "fuel", 0.0009)] });
+    for (const category of ["highway", "fuel"]) await post("pois/commit", { version: "h1", category });
+    const n = (await (await SELF.fetch(`${ORIGIN}/api/nearby?lat=${LAT}&lng=${LNG}`, authed())).json()) as NearbyResponse;
+    expect(n.counts.highway).toBe(2);
+    expect(n.items.highway!.map((x) => x.name)).toEqual(["國道1號", "環河快速道路"]);
+    const s = (await (await SELF.fetch(`${ORIGIN}/api/nearby/summary?radius=500`, authed())).json()) as NearbySummary;
+    expect(s.nearest[home]).toMatchObject({ fuel: 100, highway: 222 });
+    expect(s.nearest[home]!.convenience).toBeUndefined(); // 不是可避開的類別
+  });
+
   it("requires login and lat/lng", async () => {
     expect((await SELF.fetch(`${ORIGIN}/api/nearby?lat=25&lng=121`)).status).toBe(401);
     expect((await SELF.fetch(`${ORIGIN}/api/nearby`, authed())).status).toBe(400);

@@ -30,13 +30,18 @@ export function tripOverlay(trip: Trip, start: Pt, end: Pt, shapes: Map<string, 
     if (leg.mode === "walk") {
       // 走路的終點 = 下一段的起點,最後一段走到目的地
       const next = trip.legs[i + 1];
-      const to: Pt = next?.mode === "bus" ? next.from_pt : next?.mode === "mrt" ? [next.path[0]!.lng, next.path[0]!.lat] : end;
+      const to: Pt = next?.mode === "bus" || next?.mode === "bike" ? next.from_pt : next?.mode === "mrt" ? [next.path[0]!.lng, next.path[0]!.lat] : end;
       lines.push({ coords: [cur, to], kind: "walk" });
       cur = to;
       return;
     }
     const role = (idx: number): "board" | "transfer" => (rides.indexOf(leg) === 0 && idx === 0 ? "board" : "transfer");
-    if (leg.mode === "bus") {
+    if (leg.mode === "bike") {
+      lines.push({ coords: [leg.from_pt, leg.to_pt], kind: "mrt", color: "#65a30d" });
+      stops.push({ name: `YouBike ${leg.from}`, lng: leg.from_pt[0], lat: leg.from_pt[1], role: role(0) });
+      stops.push({ name: `YouBike ${leg.to}`, lng: leg.to_pt[0], lat: leg.to_pt[1], role: rides.indexOf(leg) === rides.length - 1 ? "alight" : "transfer" });
+      cur = leg.to_pt;
+    } else if (leg.mode === "bus") {
       const d = shapes.get(leg.key);
       lines.push({ coords: d ? sliceShape(d.route.shape, leg.from_pt, leg.to_pt) : [leg.from_pt, leg.to_pt], kind: "segment" });
       stops.push({ name: `${leg.from}(${leg.name})`, lng: leg.from_pt[0], lat: leg.from_pt[1], role: role(0) });
