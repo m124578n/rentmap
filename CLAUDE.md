@@ -19,7 +19,8 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是地圖(CARTO 底圖、捷運圖層、價格標記;
               PointDetail 是右鍵 / 長按任意點的面板、heat.ts + heatLayer.ts 是「區域圖層」:通勤網格、每坪租金、災害多邊形、
               priceMarkers.ts 是價格標記 + 群集:HTML 標記照舊,cluster source 決定誰被合併)
-              features/cost/ 是每月支出(估,src/shared/cost.ts)、features/crime/ 是治安區塊;routes/TourPage 看房路線、routes/StatusPage 資料狀態
+              features/cost/ 是每月支出(估,src/shared/cost.ts)、features/crime/ 是治安區塊;routes/TourPage 看房路線、routes/StatusPage 資料狀態、
+              routes/AboutPage 介紹頁(沒登入時任何網址都顯示它);每一頁在 router.tsx 用 lazyRouteComponent 各自一個 chunk
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
               features/nearby/ 是生活機能(面板區塊,含垃圾車、嫌惡設施「注意」列;資料 src/shared/poi.ts、API routes/nearby.ts)
@@ -86,4 +87,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 591 的 `window.__NUXT__` 是 JS 函式呼叫不是 JSON,要 `node:vm` 執行;Playwright 裡 stringify 會循環參照。
 - `/api/commute` 一次算所有房源 × 地點:本機實測 8 萬站、3000 間、2 個地點約 0.5 秒(首次載入公車網路約 1 秒)。**部署時要 Workers Paid**,免費方案每次請求 CPU 10ms 不夠。
 - maplibre v6 的 `map.isStyleLoaded()` 在任何 source 還在載入時也回 false:資料晚到時要等 `idle` 再畫(MapView 的 `whenReady`),直接 return 會永遠畫不上去。
+- 離線:`public/sw.js` 只在正式建置註冊(`vite preview` 才測得到,dev 沒有)。改了快取策略要把檔內 `VERSION` 加一,舊快取才會清掉。
+- 彙總 API(`/api/commute`、`/api/nearby/summary`、`/api/market`、`/api/hazards/summary`)走 `src/worker/cache.ts` 的 Cache API,key 帶資料版本(筆數 + 最大 version / id / updated_at)。**新增會影響結果的資料來源時要把它加進 key**,不然會回舊的;回應 header `x-cache: hit|miss`。`/api/properties` 用 ETag(304)。
+- 部署時把 `index.html` 的 `og:image` 改成正式網域的絕對網址(社群平台不吃相對路徑)。
 - 型別:bindings 從 `worker-configuration.d.ts`(`npm run types` 產生)的 `Cloudflare.Env` 來,機密欄位在 `src/worker/env.ts` 用 `declare global` 補。
