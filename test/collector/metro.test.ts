@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMrtTimes } from "../../collector/metro-transform";
+import { buildMrtTimes, tdxRef } from "../../collector/metro-transform";
 import { mrtPairKey, mrtRefKey } from "../../src/shared/trip";
 
 describe("TDX metro S2STravelTime", () => {
@@ -17,5 +17,13 @@ describe("TDX metro S2STravelTime", () => {
       { TrainType: 1, TravelTimes: [{ FromStationID: "A1", ToStationID: "A2", RunTime: 300, StopTime: 0 }, { FromStationID: "A3", ToStationID: "A3", RunTime: 5 }] },
     ]);
     expect(edges).toEqual({ "A1-A2": 300, "BL12-BL13": 135 });
+  });
+  it("高雄、台中的站號對上 mrt.json(不跟台北的 R10 撞)", () => {
+    expect(tdxRef("KRTC", "R10")).toBe("KR10");
+    expect(tdxRef("KLRT", "C14")).toBe("KC14");
+    expect(tdxRef("TMRT", "103a")).toBe("TG103a");
+    expect(tdxRef("TRTC", "R10")).toBe("R10");
+    const { edges } = buildMrtTimes([{ op: "KRTC", TrainType: 1, TravelTimes: [{ FromStationID: "R10", ToStationID: "R11", RunTime: 90, StopTime: 30 }] }]);
+    expect(edges).toEqual({ "KR10-KR11": 120 });
   });
 });

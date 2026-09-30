@@ -117,7 +117,7 @@ export function buildPlan(fwd: BusNet, dest: { lat: number; lng: number; name: s
   const n = net.sLat.length;
   const waits = busWaits(net, when);
   const t = toMin(when.time);
-  const mrtW = (line: string) => mrtWait(line, when.day, t);
+  const mrtW = (line: string) => mrtWait(line, when.day, t, fwd.region);
 
   // 最後一段:公車
   const alightCost = inf(n);

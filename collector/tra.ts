@@ -2,7 +2,7 @@
  * `npm run collect -- tra [--dry] [--date=YYYY-MM-DD]`
  *
  * 從 TDX 下載台鐵車站 + 某個平日(預設下週三)的每日時刻表 → public/tra.json(進 git,Worker 建軌道圖時 import;Worker 不抓外站)。
- * 只收已開放生活圈外框內的站與區間車(班距用第一個生活圈的)。時刻表改點(通常一年幾次)才要重跑。
+ * 只收已開放生活圈外框內的站與區間車;班距每個生活圈各算一組(headways)。時刻表改點(通常一年幾次)才要重跑。
  * 金鑰同公車:.env 的 TDX_CLIENT_ID / TDX_CLIENT_SECRET。原始回應快取在 data/tdx/tra-*.json。
  */
 import fs from "node:fs";
@@ -64,7 +64,9 @@ export async function runTra(args: string[]) {
   const merged = keys.map((k) => buildTra(stations, trains, regionBbox(k)));
   const out = {
     headway: merged[0]!.headway,
-    stations: merged.flatMap((m) => m.stations),
+    headways: Object.fromEntries(keys.map((k, i) => [k, merged[i]!.headway])),
+    // 相鄰生活圈外框重疊(台南 / 高雄)的站只留一份;Worker 建圖時再依縣市界分區
+    stations: [...new Map(merged.flatMap((m) => m.stations).map((x) => [x.id, x])).values()],
     edges: Object.assign({}, ...merged.map((m) => m.edges)) as Record<string, number>,
   };
   console.log(`生活圈內 ${out.stations.length} 站、站間 ${Object.keys(out.edges).length} 段,區間車班距 ${out.headway.join(" / ")} 分(尖峰 / 離峰 / 晚上)`);

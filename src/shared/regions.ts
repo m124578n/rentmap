@@ -6,6 +6,8 @@
  * 縣市表先把六都 + 基隆都列好;「開了哪些」看 REGIONS[x].cities 與 enabled。
  */
 
+import cityBounds from "./city-bounds.json";
+
 /** 各縣市有沒有某項資料(沒有的要在介面標「此區沒有這項資料」,不能當成「不在範圍內 / 0 件」) */
 export type Coverage = "liquefaction" | "theftPoints" | "crimeDistricts" | "garbage" | "youbike" | "airnoise" | "flood";
 
@@ -156,12 +158,37 @@ export function regionBbox(key: RegionKey): [number, number, number, number] {
   return [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))];
 }
 
+/** 點在不在多邊形裡(ray casting;rings[0] 外圈,其餘是洞) */
+function inPolygon(lng: number, lat: number, rings: number[][][]) {
+  let inside = false;
+  for (const ring of rings)
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i]!;
+      const [xj, yj] = ring[j]!;
+      if (yi! > lat !== yj! > lat && lng < ((xj! - xi!) * (lat - yi!)) / (yj! - yi!) + xi!) inside = !inside;
+    }
+  return inside;
+}
+
 /**
- * 座標屬於哪個生活圈(房源、我的地點依座標歸區用)。生活圈彼此離很遠,用外框判斷就夠;
- * 但「哪個縣市」不能這樣判斷(新北市包著台北市),縣市要從地址或反查地址來。
+ * 座標在哪個縣市(縣市界多邊形,src/shared/city-bounds.json,約 100m 精度;scripts/build_city_bounds.py 產生)。
+ * 新北市包著台北市、高雄市北邊伸進台南外框,都要靠多邊形才分得對。不在任何一個(海上、邊界誤差)回 null。
+ */
+export function cityAt(lat: number, lng: number): CityName | null {
+  for (const [name, polys] of Object.entries(cityBounds as Record<string, number[][][][]>)) {
+    const [w, s, e, n] = CITY_INFO[name as CityName].bbox;
+    if (lng < w - 0.05 || lng > e + 0.05 || lat < s - 0.05 || lat > n + 0.05) continue;
+    if (polys.some((p) => inPolygon(lng, lat, p))) return name as CityName;
+  }
+  return null;
+}
+
+/**
+ * 座標屬於哪個生活圈(房源、我的地點依座標歸區用):先看縣市界;落在界外(海邊、簡化誤差)再退回縣市外框。
  */
 export function regionAt(lat: number, lng: number): RegionKey | null {
-  // 已開放 + 規劃中的縣市都算(桃園還沒開,中壢的點也要歸 north)
+  const c = cityAt(lat, lng);
+  if (c) return regionOfCity(c);
   return REGION_KEYS.find((k) => [...REGIONS[k].cities, ...REGIONS[k].planned].some((c) => {
     const [w, s, e, n] = CITY_INFO[c].bbox;
     return lng >= w && lng <= e && lat >= s && lat <= n;

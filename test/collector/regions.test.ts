@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITY_INFO, regionAt, coverageCities, hasCoverage, normalizeCity, OPEN_CITIES, regionBbox, regionOfCity, REGIONS } from "../../src/shared/regions";
+import { CITY_INFO, cityAt, regionAt, coverageCities, hasCoverage, normalizeCity, OPEN_CITIES, regionBbox, regionOfCity, REGIONS } from "../../src/shared/regions";
 import { CITIES, DISTRICTS } from "../../src/shared/constants";
 
 describe("regions", () => {
@@ -29,6 +29,24 @@ describe("regions", () => {
     expect(regionAt(22.63, 120.3)).toBe("kaohsiung");
     expect(regionAt(35.68, 139.76)).toBeNull();
     expect(regionBbox("north")).toEqual([120.98, 24.58, 122.01, 25.3]);
+  });
+
+  it("縣市界:新北包著台北、高雄北邊伸進台南外框都分得對", () => {
+    const cases: [number, number, string | null][] = [
+      [25.0339, 121.5645, "台北市"], // 101
+      [25.0143, 121.4638, "新北市"], // 板橋
+      [25.0636, 121.4833, "新北市"], // 三重
+      [24.9537, 121.2254, "桃園市"], // 中壢
+      [25.1283, 121.7419, "基隆市"],
+      [24.1377, 120.6869, "台中市"],
+      [22.9971, 120.2127, "台南市"], // 台南市區
+      [22.9067, 120.1826, "高雄市"], // 茄萣(在台南外框裡)
+      [23.0833, 120.5874, "高雄市"], // 甲仙
+      [22.6273, 120.3014, "高雄市"],
+      [35.68, 139.76, null],
+    ];
+    for (const [lat, lng, city] of cases) expect(cityAt(lat, lng), `${lat},${lng}`).toBe(city);
+    expect(regionAt(22.9067, 120.1826)).toBe("kaohsiung");
   });
 
   it("data coverage replaces hard-coded Taipei checks", () => {

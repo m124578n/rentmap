@@ -280,3 +280,34 @@ export function fromYoubike(rows: YoubikeRow[]): PoiIn[] {
   }
   return [...out.values()];
 }
+
+/** TDX 公共自行車站(v2/Bike/Station/City/{City});雙北以外的縣市用這個 */
+export interface TdxBikeStation {
+  StationUID: string;
+  StationName?: { Zh_tw?: string };
+  StationPosition?: { PositionLat?: number; PositionLon?: number };
+  BikesCapacity?: number;
+}
+
+export function fromTdxBike(rows: TdxBikeStation[]): PoiIn[] {
+  const out: PoiIn[] = [];
+  for (const r of rows) {
+    const lat = r.StationPosition?.PositionLat;
+    const lng = r.StationPosition?.PositionLon;
+    if (!r.StationUID || lat == null || lng == null || !lat || !lng) continue;
+    out.push({
+      key: `t${r.StationUID}`,
+      category: "youbike",
+      subtype: null,
+      name: (r.StationName?.Zh_tw ?? "").replace(/^YouBike2\.0_/, "").slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: r.BikesCapacity ? `${r.BikesCapacity} 格` : null,
+      minute: null,
+      days: null,
+    });
+  }
+  return out;
+}

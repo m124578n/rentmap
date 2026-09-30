@@ -4,6 +4,7 @@
  *   沒有(淡海、安坑輕軌)用距離估 = 直線距離 × 1.1 ÷ 速度 + 停站,不同系統速度不同(輕軌慢、機捷快)
  *   換線 +4 分(走路 + 等車),上車先等半個班距
  * 站序從 refs 編號來(BL12、R22A…),相鄰編號相連;支線手動接。
+ * mrt.json 從 menmap 複製,含台中綠線(TG)、高雄紅橘線(KR / KO)與輕軌(KC);圖依生活圈各建一張,站依座標歸區。
  *
  * 台鐵(public/tra.json,`npm run collect -- tra`)也放進同一張圖:線代碼 TRA、站名前面加「台鐵」,
  * 站間用區間車實際時刻、班距用區間車班次算;台鐵站與 350m 內的捷運站可以互轉(+6 分)。
@@ -53,7 +54,7 @@ export interface MrtGraph {
   lineColor: Record<string, string>;
 }
 
-const SPEED_M_PER_MIN: Record<string, number> = { V: 330, K: 330, LB: 450, A: 800 };
+const SPEED_M_PER_MIN: Record<string, number> = { V: 330, K: 330, LB: 450, A: 800, KC: 300 };
 const DWELL: Record<string, number> = { A: 0.8 };
 export const MRT_TRANSFER_MIN = 4;
 /** 台鐵 ↔ 捷運出站走過去再進站 */
@@ -64,6 +65,8 @@ export const TRA_LINE = "TRA";
 export interface TraFile {
   updated: string | null;
   headway: [number, number, number];
+  /** 各生活圈的區間車班距;沒有就用 headway */
+  headways?: Partial<Record<RegionKey, [number, number, number]>>;
   stations: { id: string; name: string; lat: number; lng: number }[];
   edges: Record<string, number>;
 }
@@ -75,15 +78,21 @@ const MRT_HEADWAY: Record<string, [number, number, number]> = {
   LB: [10, 12, 15],
   A: [12, 15, 15],
   Y: [6, 10, 12],
+  // 台中、高雄(依營運公司公告的班距取中間)
+  TG: [8, 10, 12],
+  KR: [6, 8, 10],
+  KO: [6, 8, 10],
+  KC: [12, 15, 15],
   [TRA_LINE]: tra.headway,
 };
 const MRT_HEADWAY_DEFAULT: [number, number, number] = [5, 7, 12];
 
 /** 上車平均等車(半個班距);t = 出發時刻(分)。00:00–06:00 沒營運 → Infinity */
-export function mrtWait(line: string, day: DayType = "wd", t = 8 * 60) {
+export function mrtWait(line: string, day: DayType = "wd", t = 8 * 60, region: RegionKey = DEFAULT_REGION) {
   const m = ((t % 1440) + 1440) % 1440;
   if (m < 6 * 60) return Infinity;
-  const [peak, off, late] = MRT_HEADWAY[line] ?? MRT_HEADWAY_DEFAULT;
+  // 台鐵班距各生活圈不同(中南部區間車少很多)
+  const [peak, off, late] = (line === TRA_LINE ? tra.headways?.[region] : undefined) ?? MRT_HEADWAY[line] ?? MRT_HEADWAY_DEFAULT;
   const isPeak = day === "wd" && ((m >= 7 * 60 && m < 9 * 60) || (m >= 17 * 60 && m < 19 * 60 + 30));
   return Math.round((m >= 23 * 60 ? late : isPeak ? peak : off) / 2);
 }
@@ -93,6 +102,16 @@ const JOINS: [string, string][] = [
   ["G03A", "G03"],
   ["O50", "O12"],
   ["V28", "V11"],
+  // 高雄紅線草衙(R4A)、都會公園(R22A),輕軌 C21A,都是夾在中間的站;輕軌是環狀線
+  ["KR4A", "KR4"],
+  ["KR4A", "KR5"],
+  ["KR22A", "KR22"],
+  ["KR22A", "KR23"],
+  ["KC21A", "KC21"],
+  ["KC21A", "KC22"],
+  ["KC37", "KC1"],
+  // 台中綠線北屯總站在舊社外側
+  ["TG103A", "TG103"],
 ];
 
 function parseRef(ref: string) {

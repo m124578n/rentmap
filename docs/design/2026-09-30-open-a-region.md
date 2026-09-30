@@ -15,8 +15,8 @@
 | 租賃實價登錄 | `npm run collect -- rent-stats --region=taichung` | 台中代碼 b、台南 d、高雄 e |
 | 生活機能 / 嫌惡設施 | `npm run collect -- pois --region=taichung` | 垃圾車、YouBike、拉麵、治安點位是雙北專用來源，其他生活圈會跳過 |
 | 台鐵 | `npm run collect -- tra`（開區後重跑一次） | tra.json 放所有已開放生活圈的站；**要 commit** |
-| 捷運 / 輕軌 | 從 menmap 的 `fetch_mrt.py` 輸出挑台中綠線、高雄紅橘線與輕軌，併進 `public/mrt.json` | 站的 `refs` 要有編號（G0、R10…）才連得起來；`mrt-times.json` 沒有的段落用距離估 |
-| YouBike | 還沒有來源（雙北用市府 API） | TDX `Bike/Station/City/{City}` 可補；沒有時介面會標「無資料」 |
+| 捷運 / 輕軌 | 站已在 `public/mrt.json`(從 menmap 複製:台中綠線 TG、高雄紅橘線 KR / KO、輕軌 KC);官方站間時間跑 `npm run collect -- metro`(已含 KRTC、KLRT、TMRT) | 高雄、台中的 TDX 站號轉換(`collector/metro-transform.ts` 的 `tdxRef`)是推的,第一次跑完看 `mrt-times.json` 有沒有 KR / KC / TG 開頭的段 |
+| YouBike | 跟生活機能一起:`pois --region=taichung --only=youbike` | 雙北用市府 API,其他縣市走 TDX `Bike/Station`(要金鑰);抓到後把該縣市的 `coverage` 加上 `youbike` |
 | 淹水 | `scripts/build_hazards.py` 加縣市代碼 | 水利署圖資全國一致 |
 | 垃圾車、治安、液化、航空噪音 | 各市各做，沒有就維持 `coverage: []` | 介面會標「此區沒有這項資料」 |
 
@@ -29,6 +29,6 @@
 
 ## 3. 已知要先處理的
 
-- **台南與高雄的外框重疊**（高雄市北邊的茄萣、湖內、甲仙在台南外框內）：`regionAt` 目前用縣市外框判斷，開台南或高雄前要改成行政區界（內政部鄉鎮市區界 SHP）或至少把重疊區域的判斷改成「離哪個市中心近」。台中與北區沒有這個問題。
-- 台鐵班距目前全部生活圈共用第一個的值；中南部區間車班次較少，開區時改成每個生活圈各自一組。
+- ~~台南與高雄的外框重疊~~:已改用縣市界多邊形(`src/shared/city-bounds.json`,`cityAt`),茄萣、甲仙等都歸高雄。
+- 台鐵班距已經每個生活圈各算一組(`tra.json` 的 `headways`)。
 - 通勤引擎：Workers Paid 方案每次請求 CPU 上限較寬，但每個生活圈第一次請求都要載一次公車網路（約 1 秒）。

@@ -83,3 +83,22 @@ describe("台鐵併進軌道圖", () => {
     expect(mrtWait("TRA", "wd", 8 * 60)).toBeGreaterThan(0);
   });
 });
+
+describe("台中、高雄的軌道圖", () => {
+  it("高雄紅橘線在美麗島換線、輕軌環狀;台中綠線整條連通", () => {
+    const kh = buildRailGraph({ updated: null, headway: [15, 20, 30], stations: [], edges: {} }, "kaohsiung");
+    const tc = buildRailGraph({ updated: null, headway: [15, 20, 30], stations: [], edges: {} }, "taichung");
+    expect(kh.stations.every((s) => s.lat < 23.5)).toBe(true);
+    for (const gg of [kh, tc]) {
+      const L = mrtLabels(gg, [{ station: 0, cost: 0, tag: 0 }]);
+      const unreachable = gg.stations.filter((s) => gg.nodesOfStation[s.idx]!.every((n) => L.dist[n] === Infinity)).map((s) => s.name);
+      expect(unreachable).toEqual([]);
+    }
+    const idx = (name: string) => kh.stations.find((s) => s.name === name)!.idx;
+    const L = mrtLabels(kh, [{ station: idx("大東"), cost: 0, tag: 0 }]);
+    const node = kh.nodesOfStation[idx("小港")]!.reduce((a, b) => (L.dist[a]! <= L.dist[b]! ? a : b));
+    expect(mrtPath(kh, L, node).lines).toEqual(["高雄捷運紅線", "高雄捷運橘線"]);
+    // 北區的圖不會混進台中、高雄的站
+    expect(mrtGraph("north").stations.some((s) => s.lat < 24.5)).toBe(false);
+  });
+});

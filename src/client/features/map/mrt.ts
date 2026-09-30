@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type * as maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 
-/** public/mrt.json(從 menmap 複製,只留雙北路線) */
+/** public/mrt.json(從 menmap 複製:雙北、機捷、台中綠線、高雄紅橘線與輕軌;地圖只看目前生活圈的範圍) */
 export interface MrtData {
   lines: { code: string; name: string; color: string; geometry: number[][][] }[];
   stations: { id: string; name: string; en: string | null; lines: string[]; refs: string[]; lat: number; lng: number }[];

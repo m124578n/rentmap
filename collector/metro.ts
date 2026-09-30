@@ -1,7 +1,7 @@
 /**
  * `npm run collect -- metro`
  *
- * 從 TDX 下載捷運官方站間時間(Rail/Metro/S2STravelTime:台北捷運 TRTC、新北捷運 NTMC、桃園機捷 TYMC)
+ * 從 TDX 下載捷運官方站間時間(Rail/Metro/S2STravelTime:台北捷運 TRTC、新北捷運 NTMC、桃園機捷 TYMC、高雄捷運 KRTC、高雄輕軌 KLRT、台中捷運 TMRT)
  * → 寫成 public/mrt-times.json(進 git,Worker 建捷運圖時 import;Worker 不抓外站)。一年跑一兩次就夠。
  * 金鑰同公車:.env 的 TDX_CLIENT_ID / TDX_CLIENT_SECRET。
  */
@@ -13,7 +13,8 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "mrt-times.json");
 const TOKEN_URL = "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token";
 const API_BASE = "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/S2STravelTime";
-const OPERATORS = ["TRTC", "NTMC", "TYMC"];
+// 高雄捷運 KRTC、高雄輕軌 KLRT、台中捷運 TMRT:mrt.json 已有站,開那些生活圈前跑一次
+const OPERATORS = ["TRTC", "NTMC", "TYMC", "KRTC", "KLRT", "TMRT"];
 
 async function getToken() {
   const id = process.env.TDX_CLIENT_ID;
@@ -30,13 +31,13 @@ async function getToken() {
 
 export async function runMetro(args: string[]) {
   const token = await getToken();
-  const all: TdxS2S[] = [];
+  const all: (TdxS2S & { op: string })[] = [];
   for (const op of OPERATORS) {
     const res = await fetch(`${API_BASE}/${op}?%24format=JSON`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`TDX S2STravelTime/${op} ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const body = (await res.json()) as TdxS2S[];
     console.log(`  ${op}:${body.length} 條路線`);
-    all.push(...body);
+    all.push(...body.map((x) => ({ ...x, op })));
     await new Promise((r) => setTimeout(r, 5000));
   }
   const out = buildMrtTimes(all);

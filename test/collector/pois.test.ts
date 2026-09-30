@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
+import { fromMenmap, fromNtpcGarbage, fromTdxBike, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
@@ -136,5 +136,17 @@ describe("嫌惡設施", () => {
       { type: "way", id: 2, center: { lat: 25, lon: 121.5 }, tags: { amenity: "marketplace", name: "南門市場" } },
     ]);
     expect(nightMarkets(market).map((x) => [x.key, x.category, x.name])).toEqual([["w1", "nightmarket", "寧夏夜市"]]);
+  });
+});
+
+describe("TDX 公共自行車(雙北以外)", () => {
+  it("站名去掉前綴、帶格數;沒座標的不收", () => {
+    const out = fromTdxBike([
+      { StationUID: "TAO1001", StationName: { Zh_tw: "YouBike2.0_中壢火車站(前站)" }, StationPosition: { PositionLat: 24.9537, PositionLon: 121.2254 }, BikesCapacity: 40 },
+      { StationUID: "TAO1002", StationName: { Zh_tw: "壞站" }, StationPosition: { PositionLat: 0, PositionLon: 0 } },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ key: "tTAO1001", category: "youbike", name: "中壢火車站(前站)", note: "40 格" });
+    expect(PoiIn.safeParse(out[0]).success).toBe(true);
   });
 });

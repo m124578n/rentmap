@@ -9,8 +9,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CRIME_CATS, POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
-import { REGION_KEYS, type RegionKey } from "../../src/shared/regions";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type YoubikeRow } from "./transform";
+import { CITY_INFO, REGION_KEYS, REGIONS, type RegionKey } from "../../src/shared/regions";
+import { tdxGet } from "../lib/tdx";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromTdxBike, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type TdxBikeStation, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
@@ -30,7 +31,20 @@ async function getJson<T>(url: string): Promise<T> {
 /** YouBike 2.0 站點:台北市(交通局即時 JSON)、新北市資料開放平台 */
 const YOUBIKE_TPE = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json";
 const YOUBIKE_NTPC = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json";
-async function fetchYoubike(): Promise<PoiIn[]> {
+/** 雙北用市府 API(較即時);其他縣市用 TDX(要金鑰,沒有就跳過那些縣市) */
+async function fetchYoubike(region: RegionKey): Promise<PoiIn[]> {
+  const others: PoiIn[] = [];
+  for (const city of [...REGIONS[region].cities, ...REGIONS[region].planned].filter((c) => c !== "台北市" && c !== "新北市")) {
+    try {
+      const rows = (await tdxGet<TdxBikeStation[]>(`v2/Bike/Station/City/${CITY_INFO[city].tdx}`)) ?? [];
+      const items = fromTdxBike(rows);
+      console.log(`    ${city}(TDX)${items.length} 站`);
+      others.push(...items);
+    } catch (e) {
+      console.log(`    ${city}:TDX 抓不到,先跳過 — ${String(e).slice(0, 120)}`);
+    }
+  }
+  if (region !== "north") return others;
   const tpe = await getJson<YoubikeRow[]>(YOUBIKE_TPE);
   const ntpc: YoubikeRow[] = [];
   for (let page = 0; page < 20; page++) {
@@ -41,7 +55,7 @@ async function fetchYoubike(): Promise<PoiIn[]> {
   }
   const items = fromYoubike([...tpe, ...ntpc]);
   console.log(`    台北市 ${tpe.length} 站、新北市 ${ntpc.length} 站 → ${items.length}`);
-  return items;
+  return [...items, ...others];
 }
 
 async function fetchGarbage(): Promise<PoiIn[]> {
@@ -172,8 +186,8 @@ export async function runPois(opts: { base: string; secret: string; args: string
   const regionArg = args.find((a) => a.startsWith("--region="))?.slice(9) ?? "north";
   if (!(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
   const region = regionArg as RegionKey;
-  // 垃圾車、YouBike、拉麵、治安是雙北各自的來源,其他生活圈還沒有
-  const NORTH_ONLY: PoiCat[] = ["garbage", "youbike", "ramen", ...CRIME_CATS];
+  // 垃圾車、拉麵、治安是雙北各自的來源,其他生活圈還沒有(YouBike 其他縣市走 TDX)
+  const NORTH_ONLY: PoiCat[] = ["garbage", "ramen", ...CRIME_CATS];
   const cats = POI_CATS.filter((c) => (!only || only.includes(c)) && (region === "north" || !NORTH_ONLY.includes(c)));
   if (!dry && !opts.secret) throw new Error(".env 沒有 INGEST_SECRET");
   const version = new Date().toISOString();
@@ -186,7 +200,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
       if (cat === "garbage") {
         items = await fetchGarbage();
       } else if (cat === "youbike") {
-        items = await fetchYoubike();
+        items = await fetchYoubike(region);
       } else if (cat === "nightmarket") {
         // 用市場的資料(快取)挑出夜市,不另外查
         items = nightMarkets(fromOverpass("market", (await loadCategory("market", false, region)).elements));
