@@ -4,7 +4,7 @@ import { ExternalLink, Star, Store } from "lucide-react";
 import { googleNearbyUrl, isCrime, isNuisance, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
-import { hasCoverage, normalizeCity } from "@shared/regions";
+import { hasCoverage, normalizeCity, PARTIAL_GARBAGE } from "@shared/regions";
 
 /** 半徑圈(給地圖畫虛線) */
 function circle(lat: number, lng: number, r: number): [number, number][] {
@@ -141,7 +141,10 @@ export function NearbySection({
             </ul>
           )}
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-400">
-            <span>資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵、各市環保局垃圾車</span>
+            <span>
+              資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵、各市環保局垃圾車
+              {!!city && (PARTIAL_GARBAGE as readonly string[]).includes(city) && `(${city}的清運點靠門牌對位置,約一成對不到、沒列出)`}
+            </span>
             <a href={googleNearbyUrl("餐廳", lat, lng)} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-emerald-700 underline dark:text-emerald-400">
               Google Maps 看附近餐廳 <ExternalLink size={10} />
             </a>

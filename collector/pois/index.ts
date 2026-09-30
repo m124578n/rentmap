@@ -11,7 +11,7 @@ import path from "node:path";
 import { CRIME_CATS, POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
 import { CITY_INFO, REGION_KEYS, REGIONS, type RegionKey } from "../../src/shared/regions";
 import { tdxGet } from "../lib/tdx";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromTainanGarbage, fromTdxBike, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type TainanGarbageRow, type TdxBikeStation, type YoubikeRow } from "./transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromTainanGarbage, fromLocatedGarbage, fromTdxBike, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type TainanGarbageRow, type LocatedGarbageRow, type TdxBikeStation, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
@@ -23,8 +23,11 @@ const TAIPEI_GARBAGE = "https://data.taipei/api/v1/dataset/a6e90031-7ec4-4089-af
 const NTPC_GARBAGE = "https://data.ntpc.gov.tw/api/datasets/edc3ad26-8ae7-4916-a00b-bc6048d19bf8/json";
 /** 台南市垃圾清運點(data.tainan.gov.tw「臺南市垃圾清運點資料」的 API;一次回整份,約 3.5 MB) */
 const TAINAN_GARBAGE = "https://soa.tainan.gov.tw/Api/Service/Get/84df8cd6-8741-41ed-919c-5105a28ecd6d";
-/** 有垃圾車點位來源的生活圈。台中、高雄的市府資料只有地址 / 路口、沒有座標(要另外定位),桃園、基隆還沒找到 */
-const GARBAGE_REGIONS: RegionKey[] = ["north", "tainan"];
+/** 有垃圾車點位來源的生活圈(北區是雙北;桃園的資料集已下架、基隆沒找到)。台中、高雄的市府資料沒有座標,要先跑 scripts/locate_garbage.py 用 OSM 門牌定位 */
+const GARBAGE_REGIONS: RegionKey[] = ["north", "taichung", "tainan", "kaohsiung"];
+const LOCATED_GARBAGE: Partial<Record<RegionKey, string>> = { taichung: "tc", kaohsiung: "kh" };
+/** TDX 的公共自行車沒有這些縣市(基隆沒有 YouBike),不用每次問了被拒 */
+const NO_BIKE = ["基隆市"];
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -38,7 +41,7 @@ const YOUBIKE_NTPC = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b
 /** 雙北用市府 API(較即時);其他縣市用 TDX(要金鑰,沒有就跳過那些縣市) */
 async function fetchYoubike(region: RegionKey): Promise<PoiIn[]> {
   const others: PoiIn[] = [];
-  for (const city of [...REGIONS[region].cities, ...REGIONS[region].planned].filter((c) => c !== "台北市" && c !== "新北市")) {
+  for (const city of [...REGIONS[region].cities, ...REGIONS[region].planned].filter((c) => c !== "台北市" && c !== "新北市" && !NO_BIKE.includes(c))) {
     try {
       const rows = (await tdxGet<TdxBikeStation[]>(`v2/Bike/Station/City/${CITY_INFO[city].tdx}`)) ?? [];
       const items = fromTdxBike(rows);
@@ -63,6 +66,16 @@ async function fetchYoubike(region: RegionKey): Promise<PoiIn[]> {
 }
 
 async function fetchGarbage(region: RegionKey): Promise<PoiIn[]> {
+  const located = LOCATED_GARBAGE[region];
+  if (located) {
+    const file = path.join(ROOT, "data", "garbage", `${region}.json`);
+    if (!fs.existsSync(file)) throw new Error(`沒有 data/garbage/${region}.json:先跑 python scripts/locate_garbage.py --region=${region}`);
+    const age = Math.floor((Date.now() - fs.statSync(file).mtimeMs) / 86400_000);
+    const doc = JSON.parse(fs.readFileSync(file, "utf8")) as { city: string; total: number; located: number; rows: LocatedGarbageRow[] };
+    const items = fromLocatedGarbage(doc.rows, located);
+    console.log(`    ${doc.city} ${doc.total} 列 → 定位到 ${doc.located}(${((doc.located * 100) / doc.total).toFixed(1)}%)→ ${items.length} 點${age > 35 ? `(定位檔是 ${age} 天前的,要更新先跑 scripts/locate_garbage.py)` : ""}`);
+    return items;
+  }
   if (region === "tainan") {
     // 這支 API 很不穩(常等 100 秒後回 success: false):重試 3 次,抓到就存一份;都失敗就用上次存的,沒有才算失敗
     const cache = path.join(ROOT, "data", "garbage", "tainan.json");
@@ -209,15 +222,29 @@ export async function push(base: string, secret: string, version: string, cat: P
   return post(base, secret, "/commit", { version, category: cat, force, region });
 }
 
+/** 不給 --region 就把所有已開放的生活圈依序跑一遍(跟 bus / rent-stats 的預設一致) */
 export async function runPois(opts: { base: string; secret: string; args: string[] }) {
+  const regionArg = opts.args.find((a) => a.startsWith("--region="))?.slice(9);
+  if (regionArg && !(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
+  const regions = regionArg ? [regionArg as RegionKey] : REGION_KEYS.filter((k) => REGIONS[k].enabled);
+  const errors: string[] = [];
+  for (const region of regions) {
+    console.log(`== ${REGIONS[region].label}(${region})==`);
+    try {
+      await runPoisRegion(opts, region);
+    } catch (e) {
+      errors.push(`${region}:${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (errors.length) throw new Error(errors.join("\n"));
+}
+
+async function runPoisRegion(opts: { base: string; secret: string; args: string[] }, region: RegionKey) {
   const { args } = opts;
   const dry = args.includes("--dry");
   const refresh = args.includes("--refresh");
   const force = args.includes("--force");
   const only = args.find((a) => a.startsWith("--only="))?.slice(7).split(",").filter(Boolean);
-  const regionArg = args.find((a) => a.startsWith("--region="))?.slice(9) ?? "north";
-  if (!(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
-  const region = regionArg as RegionKey;
   // 治安點位只有台北市的來源;垃圾車看 GARBAGE_REGIONS(YouBike 其他縣市走 TDX;拉麵 menmap 全台都有,依生活圈的縣市收)
   const NORTH_ONLY: PoiCat[] = [...CRIME_CATS];
   const cats = POI_CATS.filter(
@@ -261,5 +288,5 @@ export async function runPois(opts: { base: string; secret: string; args: string
     if (dry) continue;
     console.log("   ", await push(opts.base, opts.secret, version, cat, items, force, region));
   }
-  if (failed.length) throw new Error(`這些類別沒抓到,稍後再跑:npm run collect -- pois --only=${failed.join(",")}`);
+  if (failed.length) throw new Error(`這些類別沒抓到,稍後再跑:npm run collect -- pois --region=${region} --only=${failed.join(",")}`);
 }

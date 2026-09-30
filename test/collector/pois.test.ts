@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromTainanGarbage, fromTdxBike, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
+import { fromMenmap, fromNtpcGarbage, fromTainanGarbage, fromLocatedGarbage, fromTdxBike, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
@@ -96,6 +96,23 @@ describe("垃圾車", () => {
     expect(out[1]).toMatchObject({ key: "tn328:15:662", note: "11:02 · 一二四六" });
     expect(daysLabel(out[1]!.days!)).toBe("一二四六");
     for (const x of out) expect(PoiIn.safeParse(x).success).toBe(true);
+  });
+
+  it("台中 / 高雄:定位後的列,d1…d7 = 週一…週日,兩市欄位名不同都吃", () => {
+    const tc = fromLocatedGarbage(
+      [
+        { area: "中區", car_licence: "312-UX", caption: "中華路一段143號", lat: 24.1421, lng: 120.6791, g_d1_time_s: "15:25", g_d1_time_e: "15:29", g_d2_time_s: "15:25", g_d7_time_s: "", r_d1_time_s: "15:25" },
+        { area: "中區", car_licence: "312-UX", caption: "只收回收", lat: 24.1421, lng: 120.6791, r_d1_time_s: "15:25" },
+        { area: "中區", car_licence: "312-UX", caption: "沒有座標", g_d1_time_s: "15:25" },
+      ],
+      "tc",
+    );
+    expect(tc).toHaveLength(1);
+    expect(tc[0]).toMatchObject({ key: "tc312-UX:925:中華路一段143號", subtype: "中區 312-UX", name: "中華路一段143號", minute: 925, note: "15:25–15:29 · 一二(回收 一)" });
+    const kh = fromLocatedGarbage([{ area: "三民區", car_licence: "KEB-6137", caption: "中原街與中都街口", lat: 22.64, lng: 120.29, g_d6_s: "21:01", g_d6_e: "21:03", g_d7_s: "21:01" }], "kh");
+    expect(kh[0]).toMatchObject({ minute: 1261, note: "21:01–21:03 · 六日" });
+    expect(daysLabel(kh[0]!.days!)).toBe("六日");
+    for (const x of [...tc, ...kh]) expect(PoiIn.safeParse(x).success).toBe(true);
   });
 
   it("hhmm / daysLabel", () => {

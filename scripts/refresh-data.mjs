@@ -55,7 +55,8 @@ const STEPS = [
     everyDays: 30,
     label: "生活機能 / 嫌惡設施 / 垃圾車 / YouBike",
     // 先從 Geofabrik 的台灣檔在本機抽出各類(寫成 collector 的快取檔),匯入時就不會打 Overpass(常限速 / 連不上)
-    cmds: ["python -m pip install -q osmium", `python scripts/build_osm_pois.py${regionArg}`, `npm run collect -- pois${regionArg}`],
+    // 台中、高雄的垃圾車清運點沒有座標:locate_garbage.py 用同一份台灣檔裡的門牌對出來(其他生活圈會直接跳過)
+    cmds: ["python -m pip install -q osmium", `python scripts/build_osm_pois.py${regionArg}`, `python scripts/locate_garbage.py${regionArg}`, `npm run collect -- pois${regionArg}`],
   },
   { id: "crime", lane: "osm", everyDays: 90, label: "治安(竊盜點位 + 各區件數)", cmds: ["npm run collect -- crime"], commit: ["public/crime-districts.json"] },
 ];

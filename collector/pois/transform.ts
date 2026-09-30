@@ -356,3 +356,51 @@ export function fromTainanGarbage(rows: TainanGarbageRow[]): PoiIn[] {
   }
   return [...out.values()];
 }
+
+/**
+ * 台中、高雄的定時定點收運地點(兩市同一套系統):市府資料沒有座標,scripts/locate_garbage.py 用 OSM 門牌對出 lat / lng 後的列。
+ * g_d1…g_d7 = 週一…週日的一般垃圾起迄時間(台中欄位名多一個 _time),r_d* 是資源回收。
+ */
+export type LocatedGarbageRow = Record<string, string | number | undefined> & { area?: string; car_licence?: string; caption?: string; lat?: number; lng?: number };
+export function fromLocatedGarbage(rows: LocatedGarbageRow[], prefix: string): PoiIn[] {
+  const at = (r: LocatedGarbageRow, kind: "g" | "r", d: number, edge: "s" | "e") => hhmm(String(r[`${kind}_d${d}_${edge}`] ?? r[`${kind}_d${d}_time_${edge}`] ?? ""));
+  const out = new Map<string, PoiIn>();
+  for (const r of rows) {
+    const lat = Number(r.lat);
+    const lng = Number(r.lng);
+    if (!(lat > 21 && lat < 26.5 && lng > 118 && lng < 123)) continue;
+    let days = 0;
+    let recycle = 0;
+    let t0: number | null = null;
+    let t1: number | null = null;
+    for (let d = 1; d <= 7; d++) {
+      const bit = 1 << (d % 7); // d7 = 週日 = bit 0
+      const s = at(r, "g", d, "s");
+      if (s != null) {
+        days |= bit;
+        if (t0 == null) {
+          t0 = s;
+          t1 = at(r, "g", d, "e");
+        }
+      }
+      if (at(r, "r", d, "s") != null) recycle |= bit;
+    }
+    if (!days || t0 == null) continue; // 只收回收的點
+    const caption = String(r.caption ?? "").trim();
+    const key = `${prefix}${r.car_licence ?? ""}:${t0}:${caption}`.slice(0, 80);
+    out.set(key, {
+      key,
+      category: "garbage",
+      subtype: `${r.area ?? ""} ${r.car_licence ?? ""}`.trim().slice(0, 40) || null,
+      name: caption.slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: `${fmt(t0)}${t1 != null && t1 > t0 ? `–${fmt(t1)}` : ""} · ${daysText(days)}${recycle ? `(回收 ${daysText(recycle)})` : ""}`.slice(0, 120),
+      minute: t0,
+      days,
+    });
+  }
+  return [...out.values()];
+}

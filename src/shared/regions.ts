@@ -70,7 +70,7 @@ export const CITY_INFO = {
       "中區", "東區", "南區", "西區", "北區", "北屯區", "西屯區", "南屯區", "太平區", "大里區", "霧峰區", "烏日區", "豐原區", "后里區", "石岡區",
       "東勢區", "和平區", "新社區", "潭子區", "大雅區", "神岡區", "大肚區", "沙鹿區", "龍井區", "梧棲區", "清水區", "大甲區", "外埔區", "大安區",
     ],
-    coverage: ["youbike", "flood"],
+    coverage: ["garbage", "youbike", "flood"],
   },
   台南市: {
     name: "台南市",
@@ -94,11 +94,13 @@ export const CITY_INFO = {
       "鳥松區", "林園區", "仁武區", "大樹區", "大社區", "岡山區", "路竹區", "橋頭區", "梓官區", "彌陀區", "永安區", "燕巢區", "田寮區",
       "阿蓮區", "茄萣區", "湖內區", "旗山區", "美濃區", "內門區", "杉林區", "甲仙區", "六龜區", "茂林區", "桃源區", "那瑪夏區",
     ],
-    coverage: ["youbike", "flood"],
+    coverage: ["garbage", "youbike", "flood"],
   },
 } as const satisfies Record<string, CityInfo>;
 
 export type CityName = keyof typeof CITY_INFO;
+/** 垃圾車清運點是用門牌對出來的、不是每一點都有座標的縣市(台中約 95%、高雄約 88%;scripts/locate_garbage.py) */
+export const PARTIAL_GARBAGE: readonly CityName[] = ["台中市", "高雄市"];
 export const ALL_CITIES = Object.keys(CITY_INFO) as CityName[];
 
 export interface RegionInfo {

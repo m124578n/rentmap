@@ -61,7 +61,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
 | `npm run collect -- bus [--region=north] [--dry] [--refresh]` | 從 TDX 下載該生活圈(預設所有已開放縣市)公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
 | `npm run collect -- rent-stats [--region=north] [--seasons=4] [--dry]` | 內政部租賃實價登錄(已開放縣市或指定生活圈,最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
-| `npm run collect -- pois [--region=north] [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 依生活圈一類一類抓(commit 只換該生活圈) + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
+| `npm run collect -- pois [--region=north] [--only=food,park] [--dry] [--force]` | 生活機能(不給 `--region` = 所有已開放的生活圈依序跑):OSM 依生活圈一類一類抓(commit 只換該生活圈;平常先跑 `scripts/build_osm_pois.py` 離線抽,就不會打 Overpass) + menmap 拉麵 + 各市環保局垃圾車清運點(`--only=garbage`;台中、高雄要先跑 `scripts/locate_garbage.py`)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
 | `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON + 雙北航空噪音防制區,依里公告對上里界 SHP)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
 | `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
@@ -106,7 +106,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 採集不要手動開兩份:覆蓋式匯入與解壓唯讀檔會互撞(2026-09-30 踩過)。一律走 `npm run data:refresh`,它有執行鎖。
 - TDX 同一天連跑公車 + 台鐵 + 捷運會 429:`collector/lib/tdx.ts` 的 `tdxGet` 會退避重試(最多約 5 分鐘),新的 TDX 採集一律用它,不要自己 fetch。
 - Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
-- 台南垃圾清運點的 API(`soa.tainan.gov.tw`)很不穩,採集會重試並用 `data/garbage/tainan.json` 後援;台中、高雄的垃圾車資料沒有座標、桃園已下架(見 `docs/design/2026-09-30-open-a-region.md` §4)。定位不要用國土測繪中心地圖的搜尋 API(要偽造 Referer 才會回資料)。
+- 垃圾車各市來源不同:雙北、台南有座標(台南的 API `soa.tainan.gov.tw` 很不穩,採集會重試並用 `data/garbage/tainan.json` 後援);台中、高雄的市府資料沒有座標,`python scripts/locate_garbage.py` 用台灣 OSM 檔裡的門牌(各市政府門牌資料匯進去的)對出來,只收對得準的(台中約 95%、高雄約 88%),`collect -- pois` 讀它產的 `data/garbage/{region}.json`;桃園已下架。定位不要用國土測繪中心地圖的搜尋 API(要偽造 Referer 才會回資料)、也不要用 Nominatim(查不到門牌)。
 - 內政部開放資料主機 `opdadm.moi.gov.tw`(警政署全國犯罪資料)晚上常連不上;`collect -- crime` 抓不到時雙北以外沿用上次的件數,不會清掉。
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。

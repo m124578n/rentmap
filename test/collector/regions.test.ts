@@ -54,8 +54,9 @@ describe("regions", () => {
     expect(hasCoverage("新北市", "liquefaction")).toBe(false);
     expect(hasCoverage("新北市", "crimeDistricts")).toBe(true);
     expect(coverageCities("theftPoints")).toBe("台北市");
-    expect(coverageCities("garbage")).toBe("台北市、新北市、台南市");
+    expect(coverageCities("garbage")).toBe("台北市、新北市、台中市、台南市、高雄市");
     expect(coverageCities("garbage", "north")).toBe("台北市、新北市");
-    expect(coverageCities("garbage", "taichung")).toBe("");
+    expect(coverageCities("garbage", "taichung")).toBe("台中市");
+    expect(coverageCities("theftPoints", "taichung")).toBe("");
   });
 });
