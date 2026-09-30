@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import {
   Bike,
   Bus,
-  CalendarClock,
   Columns3,
   Gauge,
   Kanban,
@@ -29,7 +28,7 @@ export function AboutPage() {
   const { user, enabled, dev, login, devLogin } = useAuth();
   useEffect(() => {
     const prev = document.title;
-    document.title = "租屋筆記|雙北租屋的通勤、行情、生活機能與災害,一張地圖看完";
+    document.title = "租屋筆記|輸入地址,通勤、行情、生活機能與災害一次看完";
     return () => {
       document.title = prev;
     };
@@ -55,7 +54,7 @@ export function AboutPage() {
       <section className="grid items-center gap-8 py-10 sm:py-16 md:grid-cols-[1.1fr_1fr]">
         <div>
           <p className="mb-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-            雙北租屋 · 個人找房工具
+            北北基桃 · 找房筆記
           </p>
           <h1 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
             找房要查的東西,
@@ -63,8 +62,8 @@ export function AboutPage() {
             <span className="text-emerald-600 dark:text-emerald-400">一張地圖看完。</span>
           </h1>
           <p className="mt-4 max-w-prose text-neutral-600 dark:text-neutral-400">
-            591、好房的物件每天自動收進來。每一間都幫你算好上下班怎麼搭、每月實際要花多少、比行情貴還便宜,
-            附近有什麼、會不會淹水、治安如何。看完再收藏、約看、排路線、並排比較,最後決定。
+            輸入一個地址,就幫你算好上下班怎麼搭(公車、捷運、台鐵,或騎車開車)、附近租金行情、每月實際要花多少,
+            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記(在 591 等網站用書籤一鍵帶入),再收藏、約看、排路線、並排比較。
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {cta}
@@ -89,7 +88,7 @@ export function AboutPage() {
             房租之外,管理費、台電累進或房東每度電價、水費、網路、通勤票價(TPASS 封頂)一起加,預算可以比總支出。
           </Feature>
           <Feature icon={<LineChart size={18} />} title="比行情貴還便宜">
-            內政部租賃實價登錄,同區同房型、坪數房數相近的成交價;另外列出目前刊登中的開價,看得出殺價空間。
+            內政部租賃實價登錄,同區同房型、坪數房數相近的成交價,看得出開價合不合理。
           </Feature>
           <Feature icon={<ShoppingBasket size={18} />} title="生活機能">
             超商、超市、餐飲、市場、公園、診所、運動、YouBike…走路 500m / 1km 內有幾個、最近的在哪。
@@ -120,7 +119,7 @@ export function AboutPage() {
             公司、家人住處;預算、通勤上限、要電梯寵物開伙。
           </Step>
           <Step n={2} icon={<Kanban size={16} />} title="收藏、聯絡、約看">
-            看板拖曳換狀態,寫私人備註與標籤,降價有紀錄。
+            看板拖曳換狀態,寫私人備註與標籤;筆記只有你自己看得到。
           </Step>
           <Step n={3} icon={<Route size={16} />} title="排看房路線">
             約好的幾間排出最順的順序,每間幾點到、怎麼搭。
@@ -140,14 +139,13 @@ export function AboutPage() {
           </p>
         </div>
         <ul className="grid gap-1.5 text-sm text-neutral-600 sm:grid-cols-2 dark:text-neutral-400">
-          <Source icon={<Bus size={14} />}>交通部 TDX:公車路線、班表、捷運站間時間</Source>
+          <Source icon={<Bus size={14} />}>交通部 TDX:公車路線與班表、捷運站間時間、台鐵時刻、YouBike</Source>
           <Source icon={<Bike size={14} />}>臺北市 / 新北市:YouBike 站點、垃圾車清運點</Source>
           <Source icon={<LineChart size={14} />}>內政部:不動產租賃實價登錄</Source>
           <Source icon={<ShieldAlert size={14} />}>經濟部水利署:淹水潛勢;臺北市:土壤液化潛勢</Source>
           <Source icon={<Gauge size={14} />}>雙北環保局:航空噪音防制區</Source>
           <Source icon={<Siren size={14} />}>雙北警察局:竊盜點位與案件統計</Source>
           <Source icon={<ShoppingBasket size={14} />}>OpenStreetMap:生活機能、嫌惡設施</Source>
-          <Source icon={<CalendarClock size={14} />}>591、好房:刊登中的物件(只存連結與文字)</Source>
         </ul>
       </section>
 

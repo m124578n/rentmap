@@ -104,7 +104,7 @@ export function BusSection({ lat, lng, onOverlay }: Props) {
       {q.error && <p className="text-red-600">公車資料載入失敗</p>}
       {q.data && !q.data.has_data && (
         <p className="rounded bg-neutral-100 px-2 py-1.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-          還沒有公車資料。在家裡跑 <code>npm run collect -- bus</code>(從 TDX 下載雙北路線、站牌、班表)。
+          還沒有公車資料。在家裡跑 <code>npm run collect -- bus</code>(從 TDX 下載目前生活圈的路線、站牌、班表)。
         </p>
       )}
 

@@ -1,7 +1,7 @@
 {
   "name": "租屋筆記",
   "short_name": "租屋筆記",
-  "description": "雙北租屋的通勤、行情、生活機能與災害,一張地圖看完。",
+  "description": "輸入地址,通勤、行情、生活機能與災害一次看完。",
   "lang": "zh-Hant-TW",
   "start_url": "/",
   "scope": "/",
