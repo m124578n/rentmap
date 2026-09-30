@@ -2,7 +2,7 @@
  * 災害潛勢(淹水、土壤液化)
  *
  * 查詢(需登入):
- *   GET /api/hazards?lat=&lng=&city=台北市   這個點各種災害落在哪一級(city 用來判斷液化有沒有資料:只有台北市有)
+ *   GET /api/hazards?lat=&lng=&city=台北市   這個點各種災害落在哪一級(city 用來判斷液化有沒有資料:看 regions.ts 的 coverage)
  *   GET /api/hazards/summary       每間房源各種災害的等級(比較表、需求符合度用)
  *   GET /api/hazards/zones?kind=&w=&s=&e=&n=   畫面範圍內某種災害的多邊形(GeoJSON,地圖圖層用;範圍太大回 too_big)
  *

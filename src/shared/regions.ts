@@ -82,7 +82,7 @@ export const CITY_INFO = {
       "龍崎區", "官田區", "麻豆區", "佳里區", "西港區", "七股區", "將軍區", "學甲區", "北門區", "新營區", "後壁區", "白河區", "東山區", "六甲區",
       "下營區", "柳營區", "鹽水區", "善化區", "大內區", "山上區", "新市區", "安定區",
     ],
-    coverage: ["garbage", "youbike", "flood"],
+    coverage: ["liquefaction", "garbage", "youbike", "flood"],
   },
   高雄市: {
     name: "高雄市",

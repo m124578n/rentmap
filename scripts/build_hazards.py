@@ -12,6 +12,8 @@
     新北市 TWD97 TM2、GRIDCODE 1–6 = 0–0.3 / 0.3–0.5 / …(0–0.3 幾乎整個新北都是,不收)→ 統一成 1–5 級。
   土壤液化潛勢(臺北市工務局,data.taipei):GeoJSON WGS84,class 1 高 / 2 中 / 3 低 → 存成 level 3 / 2 / 1(越大越嚴重)。
     新北市沒有可下載的開放資料(只有查詢網站),先不收。
+    台南市:地調中心的初級圖(1:25,000),市府開放平台有 SHP(Web Mercator,沒有 .prj);classify 0 低 / 1 中 / 2 高 → level 1 / 2 / 3。
+    其他縣市地調中心現在只給 WMTS 圖磚(liquid.net.tw),沒有向量檔可下載(舊的 geologycloud API 已 404)。
   航空噪音防制區(松山機場;新北林口下福里是桃園機場):環保局是「依里公告」級別,不是等噪音線,
     所以用里界多邊形(臺北市民政局、新北市民政局的里界 SHP,TWD97 TM2)對上公告的里名。
     臺北市:data.taipei CSV(Big5)行政區 / 級別 / 里;新北市:公告全文 CSV,從「(一)級別:第N級」與「N、XX區:甲里、乙里…」解析。
@@ -38,6 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR = os.path.join(ROOT, "data", "hazard")
 FLOOD = "https://opendata.wra.gov.tw/cloud/25766InundationProbabilityMaps/207-{}.7z"
 LIQ_TPE = "https://soil.taipei/Taipei2019/Main/pages/TPLiquid_84.GeoJSON"
+LIQ_TAINAN = "https://data.tainan.gov.tw/Resource/fce873b0-8408-4def-9a5f-6d81e6aded11?fileId=f56e97ab-0133-4435-9646-435f56b1a14e&importFileType=ShapeFile&handler=DLGisFile"
 NOISE_TPE = "https://data.taipei/api/dataset/23563182-fcc6-463e-8830-68be687b7f66/resource/7ec3c2bc-983b-4db6-881b-ae1e22ea8fc7/download"
 NOISE_NTPC = "https://data.ntpc.gov.tw/api/datasets/ccfa18a7-b045-49cf-8940-0e5f80a9f1a3/csv/file"
 VILLAGE_TPE = "https://data.taipei/api/dataset/6b17b31d-4e16-495e-95b1-9fd1f47c80d8/resource/145e30da-58f3-45db-a125-8adc3fde2620/download"
@@ -46,6 +49,7 @@ SIMPLIFY_M = 5
 MIN_AREA_M2 = 200
 
 twd97 = Transformer.from_crs("EPSG:3826", "EPSG:4326", always_xy=True)
+webmerc = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
 
 
 def download(url, path):
@@ -257,10 +261,25 @@ def flood(zones, only):
             print(f"{city} {kind}:{total} 個多邊形")
 
 
+def liquefaction_tainan(zones):
+    """台南市土壤液化潛勢(地調中心初級圖;zip 裡一組 .shp/.dbf/.shx,座標是 Web Mercator)"""
+    z = zipfile.ZipFile(download(LIQ_TAINAN, os.path.join(DIR, "tn_liquefaction.zip")))
+    shp = next(n for n in z.namelist() if n.lower().endswith(".shp"))
+    r = shapefile.Reader(shp=io.BytesIO(z.read(shp)), dbf=io.BytesIO(z.read(shp[:-4] + ".dbf")), shx=io.BytesIO(z.read(shp[:-4] + ".shx")), encoding="utf-8")
+    if not 1e7 < r.bbox[0] < 2e7:
+        raise SystemExit(f"台南液化圖的座標不像 Web Mercator:{r.bbox}")
+    total = 0
+    for sr in r.iterShapeRecords():
+        level = {0: 1, 1: 2, 2: 3}.get(int(sr.record["classify"]))
+        if level:
+            total += emit(zones, "liquefaction", level, "台南市", parts_to_polygons(sr.shape), webmerc.transform)
+    print(f"台南市 liquefaction:{total} 個多邊形")
+
+
 def main():
     os.makedirs(DIR, exist_ok=True)
     zones = []
-    # --cities=台中市,高雄市 只重建某些縣市的淹水(其餘照舊全部);液化、航空噪音目前只有雙北來源
+    # --cities=台中市,高雄市 只重建某些縣市的淹水(其餘照舊全部);液化有台北市、台南市,航空噪音只有雙北
     only = next((a[9:].split(",") for a in sys.argv[1:] if a.startswith("--cities=")), None)
     flood(zones, only)
     liq = json.loads(open(download(LIQ_TPE, os.path.join(DIR, "tp_liquefaction.geojson")), encoding="utf-8-sig").read())
@@ -271,6 +290,7 @@ def main():
         polys = g["coordinates"] if g["type"] == "MultiPolygon" else [g["coordinates"]]
         total += emit(zones, "liquefaction", level, "台北市", polys)
     print(f"台北市 liquefaction:{total} 個多邊形")
+    liquefaction_tainan(zones)
     airnoise(zones)
     out = os.path.join(DIR, "hazards.json")
     with open(out, "w", encoding="utf-8") as fh:
