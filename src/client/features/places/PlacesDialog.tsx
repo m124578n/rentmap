@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { MapPin, Pencil, Search, Trash2, X } from "lucide-react";
 import type { Place } from "@shared/schemas";
 import { searchAddress, type GeoHit } from "./geocode";
-import { PinMap } from "./PinMap";
+// 小地圖要載地圖引擎,打開對話框才載
+const PinMap = lazy(() => import("./PinMap").then((m) => ({ default: m.PinMap })));
 import { setCommuteTarget, usePlaceMutations, usePlaces, usePlacesDialogOpen } from "./places";
 
 /** 放在 Layout:任何地方呼叫 openPlacesDialog() 就打開 */
@@ -204,7 +205,9 @@ function PlaceForm({
 
       {(hits != null || pin != null) && (
         <div className="grid gap-1">
-          <PinMap value={pin} onChange={setPin} />
+          <Suspense fallback={<div className="h-56 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />}>
+            <PinMap value={pin} onChange={setPin} />
+          </Suspense>
           <p className="text-xs text-neutral-500">{pin ? "拖曳圖釘或點地圖,對到門口的位置" : "在地圖上點一下放圖釘"}</p>
         </div>
       )}
