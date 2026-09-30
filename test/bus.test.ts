@@ -2,7 +2,8 @@ import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
 import type { AlongResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
-import type { CommuteGrid, CommuteMatrix, Trip, TripsResponse } from "../src/shared/trip";
+import type { CommuteGrid, CommuteMatrix, TourResponse, Trip, TripsResponse } from "../src/shared/trip";
+import { bestTourOrder } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
 
 const ORIGIN = "http://localhost:5173";
@@ -239,6 +240,21 @@ describe("commute (bus + MRT, up to one transfer)", () => {
     // 和面板的行程一樣
     expect(best.total_min).toBe((await trips(LAT + 0.0003, lngAt(1), office)).trips[0]!.total_min);
     expect(body.items[near]![far]).toBeNull();
+  });
+
+  it("tour: trips between every pair of stops, from the start too", async () => {
+    const post = (body: unknown) => SELF.fetch(`${ORIGIN}/api/tour`, { method: "POST", headers: { ...authed().headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const pt = (i: number, name: string) => ({ lat: LAT + 0.0003, lng: lngAt(i), name });
+    const res = await post({ points: [pt(8, "B"), pt(1, "A")], start: pt(0, "家"), time: "10:00" });
+    expect(res.status).toBe(200);
+    const t = (await res.json()) as TourResponse;
+    expect(t.has_start).toBe(true);
+    expect(t.trips).toHaveLength(3);
+    expect(t.trips[0]![0]).toBeNull(); // 不回起點
+    expect(t.trips[1]![1]).toBeNull();
+    expect(t.trips[0]![2]!.total_min).toBeLessThan(t.trips[0]![1]!.total_min); // 家 → A 比 家 → B 近
+    expect(bestTourOrder(t.trips.map((r) => r.map((x) => x?.total_min ?? null)), true)!.order).toEqual([1, 0]);
+    expect((await post({ points: [pt(1, "A")] })).status).toBe(400);
   });
 
   it("commute grid over a viewport: one cell per step, minutes per place", async () => {

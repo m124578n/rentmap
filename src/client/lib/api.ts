@@ -4,7 +4,7 @@ import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
-import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
+import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -69,6 +69,8 @@ export const api = {
   hazards: (lat: number, lng: number, city: string) => req<HazardResponse>(`/api/hazards?lat=${lat}&lng=${lng}&city=${encodeURIComponent(city)}`),
   hazardSummary: () => req<HazardSummary>("/api/hazards/summary"),
   hazardZones: (kind: HazardKind, b: Bbox) => req<HazardZones>(`/api/hazards/zones?kind=${kind}&${bboxParams(b)}`),
+  tour: (body: { points: { lat: number; lng: number; name: string }[]; start: { lat: number; lng: number; name: string } | null; day: string; time: string }) =>
+    req<TourResponse>("/api/tour", { method: "POST", body: JSON.stringify(body) }),
   commuteGrid: (b: Bbox, when: CommuteWhen, bike: boolean) => req<CommuteGrid>(`/api/commute/grid?${bboxParams(b)}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
   nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 

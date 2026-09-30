@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Star } from "lucide-react";
+import { Route, Star } from "lucide-react";
 import { api } from "@/lib/api";
 import type { PropertySummary } from "@shared/schemas";
 import { STAGES, STAGE_LABEL, type Stage } from "@shared/constants";
@@ -62,6 +62,10 @@ export function BoardPage() {
       <p className="px-4 pt-3 text-xs text-neutral-500">
         {total} 間收藏 · {STAGES.length} 個狀態{moreRight ? ",左右捲動看全部" : ""}
         <span className="hidden sm:inline"> · 拖曳卡片換狀態</span>
+        <Link to="/tour" className="ml-2 inline-flex items-center gap-0.5 text-emerald-700 underline dark:text-emerald-400">
+          <Route size={12} />
+          排看房路線
+        </Link>
       </p>
       <div ref={scroller} onScroll={onScroll} className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto p-4 pt-2">
         {STAGES.map((stage) => {
