@@ -13,6 +13,7 @@ import { MarketSection } from "@/features/market/MarketSection";
 import { CompareToggle } from "@/features/compare/compare";
 import { FitSection } from "@/features/fit/fit";
 import { NearbySection } from "@/features/nearby/NearbySection";
+import { garbageService } from "@shared/poi";
 
 interface Props {
   id: number;
@@ -116,7 +117,13 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         </p>
       )}
 
-      {p.lat != null && p.lng != null && <NearbySection key={`n${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
+      {p.lat != null && p.lng != null && <NearbySection
+          key={`n${id}`}
+          lat={p.lat}
+          lng={p.lng}
+          onOverlay={onBusOverlay}
+          garbageService={garbageService([extra?.remark_html, ...(extra?.tags ?? [])].filter(Boolean).join(" "))}
+        />}
 
       {p.lat != null && p.lng != null && <BusSection key={`b${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
 

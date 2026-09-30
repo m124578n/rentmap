@@ -39,6 +39,12 @@ export function useFit() {
   const r = rq.data?.requirements ?? EMPTY_REQUIREMENTS;
   const configured = hasRequirements(r);
   const market = useMarket();
+  const garbage = useQuery({
+    queryKey: ["garbage-fit", r.garbage_max_m, r.garbage_after],
+    queryFn: () => api.garbageFit(r.garbage_max_m, r.garbage_after!),
+    enabled: r.garbage_after != null,
+    staleTime: 30 * 60_000,
+  });
   const go = useCommute("go");
   const back = useCommute("back");
   const fitOf = useCallback(
@@ -58,9 +64,9 @@ export function useFit() {
         }
       }
       const mb = market.data?.items[p.id];
-      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null });
+      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id] });
     },
-    [configured, r, go.places, go.matrix, back.matrix, market.data],
+    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data],
   );
   return { configured, requirements: r, loaded: rq.isSuccess, fitOf };
 }

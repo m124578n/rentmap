@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { NearbyResponse, NearbySummary, PoiIn } from "../src/shared/poi";
+import type { GarbageFit, NearbyResponse, NearbySummary, PoiIn } from "../src/shared/poi";
 
 const ORIGIN = "http://localhost:5173";
 let cookie = "";
@@ -75,6 +75,22 @@ describe("pois ingest + nearby", () => {
     const r = (await (await SELF.fetch(`${ORIGIN}/api/nearby?lat=${LAT}&lng=${LNG}`, authed())).json()) as NearbyResponse;
     expect(r.counts.convenience).toBe(1);
     expect(r.counts.park).toBe(2); // 別類不受影響
+  });
+
+  it("garbage: 帶時間與星期;/api/garbage/fit 依距離、時間、平日天數判斷", async () => {
+    const g = (key: string, dLat: number, minute: number, days = 0b1110110): PoiIn => ({ ...poi(key, "garbage", dLat), minute, days, note: `${minute}` });
+    await post("pois", { version: "g1", items: [g("early", 0.001, 17 * 60), g("late", 0.002, 20 * 60), g("far-late", 0.006, 21 * 60), g("weekend", 0.001, 22 * 60, 0b1000001)] });
+    expect((await post("pois/commit", { version: "g1", category: "garbage" })).status).toBe(200);
+    const n = (await (await SELF.fetch(`${ORIGIN}/api/nearby?lat=${LAT}&lng=${LNG}`, authed())).json()) as NearbyResponse;
+    expect(n.items.garbage![0]).toMatchObject({ name: "early", minute: 1020, note: "1020" });
+
+    const fit = async (q: string) => ((await (await SELF.fetch(`${ORIGIN}/api/garbage/fit?${q}`, authed())).json()) as GarbageFit).items[home]!;
+    // 300m 內 19:00 以後:late(222m、20:00)
+    expect(await fit("max=300&after=19:00")).toMatchObject({ ok: true, service: false, best: { name: "late", minute: 1200 } });
+    // 21:00 以後:far-late 在 667m 外;weekend 只收週六日 → 不算
+    expect((await fit("max=300&after=21:00")).ok).toBe(false);
+    expect((await fit("max=700&after=21:00")).best!.name).toBe("far-late");
+    expect((await SELF.fetch(`${ORIGIN}/api/garbage/fit?after=25:00`, authed())).status).toBe(400);
   });
 
   it("requires login and lat/lng", async () => {

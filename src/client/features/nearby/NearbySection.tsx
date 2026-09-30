@@ -19,7 +19,18 @@ function circle(lat: number, lng: number, r: number): [number, number][] {
  * 房源面板的「生活機能」:半徑內每類幾個(主要類別常駐、其他收在「更多」),
  * 點一類列出最近 5 個並畫到地圖上。資料 OSM(小店會缺)+ menmap 拉麵,餐飲給 Google Maps 出口。
  */
-export function NearbySection({ lat, lng, onOverlay }: { lat: number; lng: number; onOverlay?: (o: BusOverlay | null) => void }) {
+export function NearbySection({
+  lat,
+  lng,
+  onOverlay,
+  garbageService,
+}: {
+  lat: number;
+  lng: number;
+  onOverlay?: (o: BusOverlay | null) => void;
+  /** 房東有沒有寫垃圾代收(true 有寫、false 寫明要自己追、null 沒寫) */
+  garbageService?: boolean | null;
+}) {
   const [radius, setRadius] = useState(500);
   const [open, setOpen] = useState<PoiCat | null>(null);
   const [more, setMore] = useState(false);
@@ -90,7 +101,8 @@ export function NearbySection({ lat, lng, onOverlay }: { lat: number; lng: numbe
               {more ? "收起" : "更多"}
             </button>
           </div>
-          {open && (
+          {open === "garbage" && <GarbageList items={items} service={garbageService ?? null} />}
+          {open && open !== "garbage" && (
             <ul className="mt-1.5 grid gap-0.5 rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800/60">
               {items.map((p, i) => (
                 <PoiRow key={i} p={p} cat={open} />
@@ -99,7 +111,7 @@ export function NearbySection({ lat, lng, onOverlay }: { lat: number; lng: numbe
             </ul>
           )}
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-400">
-            <span>資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵</span>
+            <span>資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵、雙北環保局垃圾車</span>
             <a href={googleNearbyUrl("餐廳", lat, lng)} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-emerald-700 underline dark:text-emerald-400">
               Google Maps 看附近餐廳 <ExternalLink size={10} />
             </a>
@@ -107,6 +119,42 @@ export function NearbySection({ lat, lng, onOverlay }: { lat: number; lng: numbe
         </>
       )}
     </section>
+  );
+}
+
+/** 垃圾車:同一地點合併成一行(午、晚兩班),依距離;上面標房東有沒有寫代收 */
+function GarbageList({ items, service }: { items: NearbyPoi[]; service: boolean | null }) {
+  const places = new Map<string, { name: string; distance_m: number; walk_min: number; times: { minute: number; note: string }[] }>();
+  for (const p of items) {
+    const k = p.name ?? `${p.lat},${p.lng}`;
+    const cur = places.get(k) ?? places.set(k, { name: p.name ?? "(沒有名稱)", distance_m: p.distance_m, walk_min: p.walk_min, times: [] }).get(k)!;
+    if (p.minute != null && !cur.times.some((t) => t.minute === p.minute)) cur.times.push({ minute: p.minute, note: p.note ?? "" });
+  }
+  const list = [...places.values()].slice(0, 6);
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return (
+    <div className="mt-1.5 grid gap-1 rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800/60">
+      {service === true && <p className="text-emerald-700 dark:text-emerald-400">房東有寫垃圾代收 / 集中處理,不用追車</p>}
+      {service === false && <p className="text-amber-700 dark:text-amber-400">房東寫明要自己追垃圾車</p>}
+      <ul className="grid gap-0.5">
+        {list.map((p) => {
+          const days = p.times[0]?.note.split(" · ")[1];
+          return (
+            <li key={p.name} className="flex items-baseline justify-between gap-2">
+              <span className="min-w-0 truncate">
+                {p.name}
+                <span className="ml-1 font-medium tabular-nums">{p.times.sort((a, b) => a.minute - b.minute).map((t) => fmt(t.minute)).join("、")}</span>
+                {days && <span className="ml-1 text-neutral-400">{days}</span>}
+              </span>
+              <span className="shrink-0 text-neutral-500 tabular-nums">
+                走 {p.walk_min} 分 · {p.distance_m}m
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-[11px] text-neutral-400">表定時間,實際可能早晚幾分鐘;台北市週三、週日不收一般垃圾。</p>
+    </div>
   );
 }
 

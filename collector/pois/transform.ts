@@ -94,3 +94,86 @@ export function fromMenmap(shops: MenmapShop[]): PoiIn[] {
       url: s.maps_url && /^https:\/\//.test(s.maps_url) ? s.maps_url.slice(0, 500) : `https://www.google.com/maps?ftid=${encodeURIComponent(s.ftid)}`,
     }));
 }
+
+// ---- 垃圾車(雙北環保局開放資料)----
+
+/** 「1630」「16:30」→ 990 */
+export function hhmm(s: string | undefined): number | null {
+  const m = /^(\d{1,2}):?(\d{2})$/.exec((s ?? "").trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  return h < 24 && mi < 60 ? h * 60 + mi : null;
+}
+const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const WEEK = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+/** 台北市一般垃圾週三、週日不收(資料裡沒有星期,全市一致) */
+export const TAIPEI_DAYS = 0b1110110; // 一二四五六
+const W = "日一二三四五六";
+const daysText = (bits: number) => [1, 2, 3, 4, 5, 6, 0].filter((d) => bits & (1 << d)).map((d) => W[d]).join("");
+const inTpe = (lat: number, lng: number) => lat > 24.6 && lat < 25.4 && lng > 121.2 && lng < 122.1;
+
+export interface TaipeiGarbageRow {
+  局編?: string;
+  車次?: string;
+  路線?: string;
+  抵達時間?: string;
+  離開時間?: string;
+  地點?: string;
+  經度?: string;
+  緯度?: string;
+}
+export function fromTaipeiGarbage(rows: TaipeiGarbageRow[]): PoiIn[] {
+  const out = new Map<string, PoiIn>();
+  for (const r of rows) {
+    const lat = Number(r.緯度);
+    const lng = Number(r.經度);
+    const t0 = hhmm(r.抵達時間);
+    if (!inTpe(lat, lng) || t0 == null) continue;
+    const t1 = hhmm(r.離開時間);
+    const key = `t${r.局編 ?? ""}:${r.車次 ?? ""}:${t0}`.slice(0, 80);
+    out.set(key, {
+      key,
+      category: "garbage",
+      subtype: r.路線?.slice(0, 40) || null,
+      name: (r.地點 ?? "").replace(/^臺北市\S*?區/, "").slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: `${fmt(t0)}${t1 != null && t1 > t0 ? `–${fmt(t1)}` : ""} · ${daysText(TAIPEI_DAYS)}`,
+      minute: t0,
+      days: TAIPEI_DAYS,
+    });
+  }
+  return [...out.values()];
+}
+
+export type NtpcGarbageRow = Record<string, string | undefined> & { lineid?: string; linename?: string; rank?: string; name?: string; longitude?: string; latitude?: string; time?: string };
+export function fromNtpcGarbage(rows: NtpcGarbageRow[]): PoiIn[] {
+  const out = new Map<string, PoiIn>();
+  for (const r of rows) {
+    const lat = Number(r.latitude);
+    const lng = Number(r.longitude);
+    const t0 = hhmm(r.time);
+    if (!inTpe(lat, lng) || t0 == null) continue;
+    const days = WEEK.reduce((b, d, i) => (r[`garbage${d}`] === "Y" ? b | (1 << i) : b), 0);
+    if (!days) continue; // 只收回收 / 廚餘的點
+    const recycle = WEEK.reduce((b, d, i) => (r[`recycling${d}`] === "Y" ? b | (1 << i) : b), 0);
+    const key = `n${r.lineid ?? ""}:${r.rank ?? ""}`.slice(0, 80);
+    out.set(key, {
+      key,
+      category: "garbage",
+      subtype: r.linename?.slice(0, 40) || null,
+      name: r.name?.slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: `${fmt(t0)} · ${daysText(days)}${recycle ? `(回收 ${daysText(recycle)})` : ""}`.slice(0, 120),
+      minute: t0,
+      days,
+    });
+  }
+  return [...out.values()];
+}

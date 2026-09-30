@@ -95,6 +95,33 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
             ))}
           </div>
         </Group>
+        <Group title="垃圾車(房東沒寫代收時,要追得到車)">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={r.garbage_after != null}
+              onChange={(e) => set({ garbage_after: e.target.checked ? (r.garbage_after ?? "19:00") : null })}
+            />
+            走
+          </label>
+          <select className="input !w-auto" value={r.garbage_max_m} disabled={r.garbage_after == null} onChange={(e) => set({ garbage_max_m: Number(e.target.value) })}>
+            {[100, 200, 300, 500].map((m) => (
+              <option key={m} value={m}>
+                {m}m
+              </option>
+            ))}
+          </select>
+          <span>內要有</span>
+          <input
+            type="time"
+            className="input !w-auto"
+            step={900}
+            disabled={r.garbage_after == null}
+            value={r.garbage_after ?? "19:00"}
+            onChange={(e) => e.target.value && set({ garbage_after: e.target.value })}
+          />
+          <span className="text-neutral-500">以後的車(平日至少 3 天)</span>
+        </Group>
         <Group title="權重(0 = 不算,5 = 最在意)">
           <div className="grid gap-1">
             {WEIGHT_KEYS.map((k) => (

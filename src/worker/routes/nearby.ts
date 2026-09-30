@@ -4,6 +4,7 @@
  * 查詢(需登入):
  *   GET /api/nearby?lat=&lng=&radius=500      半徑內每類幾個 + 每類最近 5 個(面板用)
  *   GET /api/nearby/summary?radius=500         每間房源半徑內每類幾個(比較表、列表用)
+ *   GET /api/garbage/fit?max=300&after=19:00   每間房源:走 max 公尺內有沒有 after 以後、平日至少 3 天有收的垃圾車(房東寫了代收就算有)
  *
  * 採集機推入(bearer INGEST_SECRET),每類覆蓋式:
  *   POST /api/ingest/pois          { version, items: PoiIn[] }
@@ -14,13 +15,14 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { haversine, walkMin } from "@shared/bus";
-import { PoiIn, POI_CATS, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
+import { garbageService, PoiIn, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 
 export const nearby = new Hono<AppEnv>();
 nearby.use("/api/nearby", requireUser());
 nearby.use("/api/nearby/*", requireUser());
+nearby.use("/api/garbage/*", requireUser());
 nearby.use("/api/ingest/pois", requireIngest());
 nearby.use("/api/ingest/pois/*", requireIngest());
 
@@ -32,6 +34,9 @@ interface Poi {
   lng: number;
   rating: number | null;
   url: string | null;
+  note: string | null;
+  minute: number | null;
+  days: number | null;
 }
 const CELL = 0.005; // 約 550m
 const cellKey = (y: number, x: number) => `${y}:${x}`;
@@ -41,7 +46,7 @@ async function loadGrid(DB: D1Database) {
   const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(version) AS v FROM pois").first<{ n: number; v: string | null }>();
   const sig = `${head?.n ?? 0}#${head?.v ?? ""}`;
   if (cache?.sig === sig) return cache;
-  const { results } = await DB.prepare("SELECT category, subtype, name, lat, lng, rating, url FROM pois").all<Poi>();
+  const { results } = await DB.prepare("SELECT category, subtype, name, lat, lng, rating, url, note, minute, days FROM pois").all<Poi>();
   const grid = new Map<string, Poi[]>();
   for (const p of results) {
     const k = cellKey(Math.floor(p.lat / CELL), Math.floor(p.lng / CELL));
@@ -71,6 +76,8 @@ function around(grid: Map<string, Poi[]>, lat: number, lng: number, radius: numb
 const num = (v: string | undefined) => (v == null || v === "" ? NaN : Number(v));
 const radiusOf = (v: string | undefined) => Math.min(1500, Math.max(100, num(v) || 500));
 const KEEP = 5;
+/** 垃圾車列多一點:不同時間的點都要看得到 */
+const KEEP_BY: Partial<Record<PoiCat, number>> = { garbage: 30 }; // 同一地點常有午、晚兩班,前端再依地點合併
 
 nearby.get("/api/nearby", async (c) => {
   const lat = num(c.req.query("lat"));
@@ -81,7 +88,19 @@ nearby.get("/api/nearby", async (c) => {
   const found = new Map<PoiCat, NearbyPoi[]>();
   around(grid, lat, lng, radius, (p, d) => {
     const list = found.get(p.category) ?? found.set(p.category, []).get(p.category)!;
-    list.push({ name: p.name, subtype: p.subtype, lat: p.lat, lng: p.lng, distance_m: Math.round(d), walk_min: walkMin(d), rating: p.rating, url: p.url });
+    list.push({
+      name: p.name,
+      subtype: p.subtype,
+      lat: p.lat,
+      lng: p.lng,
+      distance_m: Math.round(d),
+      walk_min: walkMin(d),
+      rating: p.rating,
+      url: p.url,
+      note: p.note,
+      minute: p.minute,
+      days: p.days,
+    });
   });
   const body: NearbyResponse = { radius, has_data: n > 0, counts: {}, items: {} };
   for (const cat of POI_CATS) {
@@ -89,7 +108,7 @@ nearby.get("/api/nearby", async (c) => {
     if (!list) continue;
     body.counts[cat] = list.length;
     // 有名字的優先(沒名字的公園 / 遊戲場常是社區角落),再依距離
-    body.items[cat] = list.sort((a, b) => Number(!a.name) - Number(!b.name) || a.distance_m - b.distance_m).slice(0, KEEP);
+    body.items[cat] = list.sort((a, b) => Number(!a.name) - Number(!b.name) || a.distance_m - b.distance_m).slice(0, KEEP_BY[cat] ?? KEEP);
   }
   return c.json(body);
 });
@@ -108,6 +127,34 @@ nearby.get("/api/nearby/summary", async (c) => {
   return c.json(body);
 });
 
+const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+nearby.get("/api/garbage/fit", async (c) => {
+  const max = Math.min(1000, Math.max(50, num(c.req.query("max")) || 300));
+  const after = c.req.query("after") ?? "00:00";
+  const m = HHMM.exec(after);
+  if (!m) return c.json({ error: "after must be HH:MM" }, 400);
+  const afterMin = Number(m[1]) * 60 + Number(m[2]);
+  const { grid } = await loadGrid(c.env.DB);
+  // 房東有沒有寫代收:看最新一筆刊登的 raw_json(屋況介紹、標籤)
+  const { results } = await c.env.DB.prepare(
+    `SELECT p.id, p.lat, p.lng, (SELECT raw_json FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS raw
+       FROM properties p WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL`,
+  ).all<{ id: number; lat: number; lng: number; raw: string | null }>();
+  const items: GarbageFit["items"] = {};
+  for (const h of results) {
+    let best: { distance_m: number; minute: number; name: string | null } | null = null;
+    around(grid, h.lat, h.lng, max, (p, d) => {
+      if (p.category !== "garbage" || p.minute == null || p.minute < afterMin) return;
+      if (p.days != null && weekdayCount(p.days) < 3) return;
+      if (!best || d < best.distance_m) best = { distance_m: Math.round(d), minute: p.minute, name: p.name };
+    });
+    const service = garbageService(h.raw) === true;
+    items[h.id] = { ok: service || best != null, service, best };
+  }
+  const body: GarbageFit = { max_m: max, after, items };
+  return c.json(body);
+});
+
 // ---- 採集機推入 ----
 
 const Version = z.string().min(1).max(40);
@@ -117,9 +164,9 @@ nearby.post("/api/ingest/pois", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues.slice(0, 20) }, 400);
   const { version, items } = parsed.data;
   await c.env.DB.prepare(
-    `INSERT OR REPLACE INTO pois (category, key, subtype, name, lat, lng, rating, url, version)
+    `INSERT OR REPLACE INTO pois (category, key, subtype, name, lat, lng, rating, url, note, minute, days, version)
      SELECT j.value ->> 'category', j.value ->> 'key', j.value ->> 'subtype', j.value ->> 'name', j.value ->> 'lat', j.value ->> 'lng',
-            j.value ->> 'rating', j.value ->> 'url', ?1
+            j.value ->> 'rating', j.value ->> 'url', j.value ->> 'note', j.value ->> 'minute', j.value ->> 'days', ?1
        FROM json_each(?2) AS j`,
   )
     .bind(version, JSON.stringify(items))

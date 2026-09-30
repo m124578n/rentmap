@@ -255,6 +255,9 @@ export const pois = sqliteTable(
     lng: real("lng").notNull(),
     rating: real("rating"),
     url: text("url"),
+    note: text("note"), // 垃圾車:「19:30–19:40 · 一二四五六」
+    minute: integer("minute"), // 垃圾車抵達時間(一天第幾分鐘)
+    days: integer("days"), // 垃圾車收一般垃圾的星期(bit0 = 週日)
     version: text("version").notNull(),
   },
   (t) => [primaryKey({ columns: [t.category, t.key] }), index("pois_latlng_idx").on(t.lat, t.lng)],

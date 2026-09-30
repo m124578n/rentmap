@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromOverpass, osmName, overpassQuery, tiles, TPE_BBOX, type OsmElement } from "../../collector/pois/transform";
+import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, hhmm, osmName, overpassQuery, tiles, TPE_BBOX, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
@@ -55,5 +55,41 @@ describe("menmap 拉麵", () => {
       ["m0x3:0x4", null, "https://www.google.com/maps?ftid=0x3%3A0x4"],
     ]);
     for (const x of out) expect(PoiIn.safeParse(x).success).toBe(true);
+  });
+});
+
+describe("垃圾車", () => {
+  it("台北市:抵達 / 離開時間、週一二四五六;座標不對的不收", () => {
+    const out = fromTaipeiGarbage([
+      { 局編: "103-074", 車次: "第1車", 路線: "天母-1", 抵達時間: "1630", 離開時間: "1640", 地點: "臺北市士林區天母西路48號", 經度: "121.525", 緯度: "25.11836" },
+      { 局編: "103-074", 車次: "第1車", 抵達時間: "1650", 地點: "壞座標", 經度: "0", 緯度: "0" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ category: "garbage", name: "天母西路48號", subtype: "天母-1", note: "16:30–16:40 · 一二四五六", minute: 990 });
+    expect(daysLabel(out[0]!.days!)).toBe("一二四五六");
+    expect(PoiIn.safeParse(out[0]).success).toBe(true);
+  });
+
+  it("新北市:依每日旗標算星期;只收回收 / 廚餘的點不算", () => {
+    const base = { lineid: "207001", linename: "A路線下午", name: "獅頭路15-1號", longitude: "121.6945", latitude: "25.1795", time: "12:40" };
+    const out = fromNtpcGarbage([
+      { ...base, rank: "1", garbagemonday: "Y", garbagewednesday: "Y", garbagefriday: "Y", recyclingmonday: "Y" },
+      { ...base, rank: "2", recyclingtuesday: "Y" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ key: "n207001:1", minute: 760, note: "12:40 · 一三五(回收 一)" });
+  });
+
+  it("hhmm / daysLabel", () => {
+    expect([hhmm("1630"), hhmm("7:05"), hhmm("2500"), hhmm("")]).toEqual([990, 425, null, null]);
+    expect(daysLabel(127)).toBe("每天");
+  });
+
+  it("房東有沒有寫垃圾代收", () => {
+    expect(garbageService("大樓有垃圾子母車,每日清運")).toBe(true);
+    expect(garbageService("垃圾代收、有管理員")).toBe(true);
+    expect(garbageService("需自行追垃圾車")).toBe(false);
+    expect(garbageService("近捷運、可開伙")).toBeNull();
+    expect(garbageService(null)).toBeNull();
   });
 });

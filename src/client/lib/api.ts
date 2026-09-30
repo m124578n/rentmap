@@ -2,7 +2,7 @@ import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, Prop
 import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
-import type { NearbyResponse, NearbySummary } from "@shared/poi";
+import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
 import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
@@ -55,6 +55,7 @@ export const api = {
   putRequirements: (r: Requirements) => req<{ requirements: Requirements }>("/api/requirements", { method: "PUT", body: JSON.stringify(r) }),
 
   nearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyResponse>(`/api/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
+  garbageFit: (maxM: number, after: string) => req<GarbageFit>(`/api/garbage/fit?max=${maxM}&after=${encodeURIComponent(after)}`),
   nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),

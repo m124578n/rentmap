@@ -1,7 +1,7 @@
 /**
  * `npm run collect -- pois [--only=convenience,food] [--dry] [--refresh]`
  *
- * 生活機能:OpenStreetMap(Overpass)雙北一類一類抓 + menmap 拉麵店 → 推 /api/ingest/pois(每類覆蓋式:推完該類再 commit,舊版刪掉)。
+ * 生活機能:OpenStreetMap(Overpass)雙北一類一類抓 + menmap 拉麵店 + 雙北環保局垃圾車清運點 → 推 /api/ingest/pois(每類覆蓋式:推完該類再 commit,舊版刪掉)。
  * Overpass 公用伺服器連續查會 429 / 504:每次查詢之間歇 10 秒、失敗退避重試;餐飲量大切 3×3 塊查。
  * 原始回應快取在 data/osm/{類別}[-{塊}].json(30 天內不重抓,中斷後重跑會從沒抓完的那塊繼續;--refresh 全部重抓)。
  * 一個月跑一次就夠。
@@ -9,13 +9,43 @@
 import fs from "node:fs";
 import path from "node:path";
 import { POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromOverpass, overpassQuery, tiles, TPE_BBOX, type MenmapShop, type OsmElement } from "./transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, overpassQuery, tiles, TPE_BBOX, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
 const CACHE_DAYS = 30;
 const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 const MENMAP_URL = "https://menmap.shunzz.com/shops.json";
+/** 垃圾車清運點:臺北市資料大平臺、新北市政府資料開放平台(每日更新) */
+const TAIPEI_GARBAGE = "https://data.taipei/api/v1/dataset/a6e90031-7ec4-4089-afb5-361a4efe7202?scope=resourceAquire";
+const NTPC_GARBAGE = "https://data.ntpc.gov.tw/api/datasets/edc3ad26-8ae7-4916-a00b-bc6048d19bf8/json";
+
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  if (!res.ok) throw new Error(`${new URL(url).host} ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function fetchGarbage(): Promise<PoiIn[]> {
+  const tpe: TaipeiGarbageRow[] = [];
+  for (let offset = 0; offset < 100_000; offset += 1000) {
+    const page = await getJson<{ result: { count: number; results: TaipeiGarbageRow[] } }>(`${TAIPEI_GARBAGE}&limit=1000&offset=${offset}`);
+    tpe.push(...page.result.results);
+    if (tpe.length >= page.result.count || !page.result.results.length) break;
+    await sleep(1000);
+  }
+  const ntpc: NtpcGarbageRow[] = [];
+  for (let page = 0; page < 100; page++) {
+    const rows = await getJson<NtpcGarbageRow[]>(`${NTPC_GARBAGE}?size=5000&page=${page}`);
+    ntpc.push(...rows);
+    if (rows.length < 5000) break;
+    await sleep(1000);
+  }
+  const a = fromTaipeiGarbage(tpe);
+  const b = fromNtpcGarbage(ntpc);
+  console.log(`    台北市 ${tpe.length} 列 → ${a.length} 點;新北市 ${ntpc.length} 列 → ${b.length} 點(只收一般垃圾的點)`);
+  return [...a, ...b];
+}
 /** 量大的類別切塊查,避免 Overpass 逾時 */
 const TILES: Partial<Record<PoiCat, [number, number]>> = { food: [3, 3], park: [2, 2], school: [2, 2], worship: [2, 2] };
 
@@ -127,7 +157,9 @@ export async function runPois(opts: { base: string; secret: string; args: string
   for (const cat of cats) {
     let items: PoiIn[];
     try {
-      if (cat === "ramen") {
+      if (cat === "garbage") {
+        items = await fetchGarbage();
+      } else if (cat === "ramen") {
         const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
         if (!res.ok) throw new Error(`menmap ${res.status}`);
         items = fromMenmap(((await res.json()) as { shops: MenmapShop[] }).shops);
