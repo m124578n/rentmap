@@ -35,6 +35,8 @@ export interface ReverseHit {
   /** 台北市 / 新北市 …(臺 統一成 台);查不到是 "" */
   city: string;
   district: string;
+  /** 路名 + 門牌(存成筆記用);查不到是 "" */
+  road: string;
 }
 
 /** 座標 → 地址(地圖「看附近」用);同樣 1 秒最多一次 */
@@ -50,5 +52,5 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseH
   const city = (a.city ?? a.state ?? a.county ?? "").replace("臺", "台");
   const district = a.suburb ?? a.city_district ?? a.town ?? "";
   const road = [a.road, a.house_number ? `${a.house_number}號` : ""].join("");
-  return { label: `${city}${district}${road}` || (j.display_name ? shortLabel(j.display_name) : ""), city, district };
+  return { label: `${city}${district}${road}` || (j.display_name ? shortLabel(j.display_name) : ""), city, district, road };
 }

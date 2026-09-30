@@ -6,6 +6,7 @@ import { PropertyInput } from "@shared/schemas";
 import { useRegion } from "@/lib/region";
 import { usePrivatePool } from "@/lib/useAuth";
 import { BUILDING_TYPES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
+import { invalidateProperties } from "@/lib/invalidate";
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
 export function NewPage() {
@@ -20,7 +21,7 @@ export function NewPage() {
   const create = useMutation({
     mutationFn: api.createProperty,
     onSuccess: ({ id }) => {
-      qc.invalidateQueries({ queryKey: ["properties"] });
+      invalidateProperties(qc);
       nav({ to: "/p/$id", params: { id: String(id) } });
     },
     onError: (e) => {
@@ -51,7 +52,13 @@ export function NewPage() {
     <form onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4 p-4">
       <h1 className="text-xl font-semibold">新增房源</h1>
       <p className="-mt-2 text-sm text-neutral-500">
-        591、好房的物件用採集比較快:<code className="text-xs">npm run collect -- add &lt;網址&gt;</code>。這裡是手動記錄(朋友介紹、社團、仲介)。
+        {pool ? (
+          <>
+            591、好房的物件用採集比較快:<code className="text-xs">npm run collect -- add &lt;網址&gt;</code>。這裡是手動記錄(朋友介紹、社團、仲介)。
+          </>
+        ) : (
+          "只記事實(租金、坪數、樓層、設備…)與你自己的筆記;照片、屋況介紹、房東聯絡方式請看原始頁面。也可以在地圖上輸入地址,看完報告再存。"
+        )}
       </p>
 
       <section className="card grid gap-3">

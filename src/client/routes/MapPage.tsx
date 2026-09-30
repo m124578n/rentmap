@@ -14,6 +14,7 @@ import { MapView } from "@/features/map/MapView";
 import { useMrt } from "@/features/map/mrt";
 import { PropertyDetail } from "@/features/property/PropertyDetail";
 import { PointDetail, type MapPoint } from "@/features/map/PointDetail";
+import { AddressSearch } from "@/features/report/AddressSearch";
 import type { BusOverlay } from "@/features/map/busLayer";
 import type { PropertySummary } from "@shared/schemas";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
@@ -172,13 +173,17 @@ export function MapPage() {
             onViewport={setView}
           />
 
-          {q.isSuccess && all.length === 0 && (
-            <div className="card absolute top-3 left-1/2 -translate-x-1/2 text-sm text-neutral-600 dark:text-neutral-300">
-              還沒有房源。
+          {q.isSuccess && all.length === 0 && !panelOpen && (
+            <div className="card absolute bottom-16 left-1/2 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 text-sm text-neutral-600 dark:text-neutral-300">
+              還沒有筆記。左上輸入地址、或{narrow ? "長按" : "右鍵"}地圖任一點,先看那裡的通勤、行情、機能、災害;覺得可以再「存成筆記」。
               <Link to="/new" className="ml-1 text-emerald-600 underline">
-                手動新增
+                也可以手動新增
               </Link>
-              ,或在終端機 <code>npm run collect -- add &lt;591網址&gt;</code>
+              {pool && (
+                <>
+                  ,或在終端機 <code>npm run collect -- add &lt;591網址&gt;</code>
+                </>
+              )}
             </div>
           )}
           {!panelOpen && (
@@ -186,7 +191,12 @@ export function MapPage() {
               {narrow ? "長按" : "右鍵"}地圖任一點:看那裡的通勤、生活機能、災害
             </div>
           )}
-          <div className="absolute top-3 left-3 z-[5] grid max-w-[min(20rem,calc(100%-4.5rem))] justify-items-start gap-1 text-xs">
+          {/* 桌機開著左側面板時,控制列往右移,搜尋框才不會被面板蓋住 */}
+          <div
+            className="absolute top-3 left-3 z-[5] grid max-w-[min(20rem,calc(100%-4.5rem))] justify-items-start gap-1 text-xs"
+            style={panelOpen && !narrow ? { left: PANEL_W + 12 } : undefined}
+          >
+            <AddressSearch onPick={pickPoint} />
             {noCoords > 0 && (
               <div className="rounded bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                 {noCoords} 間沒有座標,只在

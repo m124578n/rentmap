@@ -92,6 +92,17 @@ describe("rent stats ingest + market", () => {
     expect(all.items[noKind]).toBeNull();
   });
 
+  it("any address (not saved yet): /api/market/at", async () => {
+    const at = (q: string) => SELF.fetch(`${ORIGIN}/api/market/at?${q}`, authed());
+    const r = (await (await at(`city=${encodeURIComponent("台北市")}&district=${encodeURIComponent("大安區")}&kind=${encodeURIComponent("整層住家")}&size_ping=30&rooms=2&rent=36000`)).json()) as MarketResponse;
+    expect(r.market).toMatchObject({ scope: "district", count: 5, median: 34000, diff_pct: 6 });
+    expect(r.asking).toBeNull();
+    // 沒給租金:只有行情,沒有高低
+    const noRent = (await (await at(`city=${encodeURIComponent("臺北市")}&district=${encodeURIComponent("大安區")}&kind=${encodeURIComponent("整層住家")}`)).json()) as MarketResponse;
+    expect(noRent.market).toMatchObject({ median: 34000, diff_pct: null });
+    expect((await at("city=x")).status).toBe(400);
+  });
+
   it("asking prices: other active listings of the same district and kind, not itself", async () => {
     const mk = (id: string, rent: number, district = "大安區") => ({
       source: "591",

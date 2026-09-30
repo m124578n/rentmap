@@ -19,6 +19,7 @@ import { NearbySection } from "@/features/nearby/NearbySection";
 import { HazardSection } from "@/features/hazard/HazardSection";
 import { CrimeSection } from "@/features/crime/CrimeSection";
 import { garbageService } from "@shared/poi";
+import { invalidateProperties } from "@/lib/invalidate";
 
 interface Props {
   id: number;
@@ -43,7 +44,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
   const del = useMutation({
     mutationFn: () => api.deleteProperty(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["properties"] });
+      invalidateProperties(qc);
       if (onClose) onClose();
       else nav({ to: "/" });
     },

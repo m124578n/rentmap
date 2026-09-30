@@ -3,6 +3,7 @@
  *
  * 查詢(需登入):
  *   GET /api/market                  所有房源的行情摘要(中位數、比行情高低幾 %),列表 / 卡片用
+ *   GET /api/market/at?city&district&kind&size_ping&rooms&rent   任一地址的行情(地址即報告;還沒存成房源)
  *   GET /api/properties/:id/market   一間的行情:四分位、每坪、用了哪些條件、最像的幾筆;
  *                                    另附「目前開價」:系統裡還在刊登(active)的同區同房型房源,同一套相似條件(不含自己)
  *
@@ -15,6 +16,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { briefOf, cleanPool, computeMarket, RentStatIn, type MarketMatrix, type MarketResponse, type MarketTarget, type RentStat } from "@shared/market";
+import { KINDS } from "@shared/constants";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { isPrivatePool, ownerOf, ownerSql } from "../pool";
@@ -22,6 +24,7 @@ import { cachedJson, propertiesSig, tableSig } from "../cache";
 
 export const market = new Hono<AppEnv>();
 market.use("/api/market", requireUser());
+market.use("/api/market/*", requireUser());
 market.use("/api/properties/:id/market", requireUser());
 market.use("/api/ingest/rent-stats", requireIngest());
 market.use("/api/ingest/rent-stats/*", requireIngest());
@@ -90,6 +93,26 @@ market.get("/api/market", async (c) => {
     for (const p of results) items[p.id] = briefOf(marketOf(pools, p));
     return { has_data: pools.size > 0, items };
   });
+});
+
+const AtQuery = z.object({
+  city: z.string().min(1),
+  district: z.string().min(1),
+  kind: z.enum(KINDS),
+  size_ping: z.coerce.number().positive().optional(),
+  rooms: z.coerce.number().int().nonnegative().optional(),
+  rent: z.coerce.number().int().positive().optional(),
+});
+
+market.get("/api/market/at", async (c) => {
+  const parsed = AtQuery.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: "city, district, kind required" }, 400);
+  const v = parsed.data;
+  const pools = await loadPools(c.env.DB);
+  const t: MarketTarget = { kind: v.kind, size_ping: v.size_ping ?? null, rooms: v.rooms ?? null, building_age: null, has_elevator: null, rent: v.rent ?? null };
+  const m = computeMarket(t, pools.get(poolKey(v.city, v.district, v.kind)) ?? [], pools.get(poolKey(v.city, "*", v.kind)) ?? [], { cleaned: true });
+  const body: MarketResponse = { has_data: pools.size > 0, market: m, asking: null };
+  return c.json(body);
 });
 
 /** 還在刊登的同縣市同房型房源 → 行情計算用的列(date = 最後看到的日期) */

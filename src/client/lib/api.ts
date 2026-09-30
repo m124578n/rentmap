@@ -70,6 +70,9 @@ export const api = {
 
   market: () => req<MarketMatrix>("/api/market"),
   propertyMarket: (id: number) => req<MarketResponse>(`/api/properties/${id}/market`),
+  /** 任一地址的行情(還沒存成房源) */
+  marketAt: (q: { city: string; district: string; kind: string; size_ping?: number; rent?: number }) =>
+    req<MarketResponse>(`/api/market/at?${new URLSearchParams(Object.entries(q).flatMap(([k, v]) => (v == null ? [] : [[k, String(v)]])))}`),
 
   getRequirements: () => req<{ requirements: Requirements }>("/api/requirements"),
   putRequirements: (r: Requirements) => req<{ requirements: Requirements }>("/api/requirements", { method: "PUT", body: JSON.stringify(r) }),

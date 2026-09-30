@@ -30,6 +30,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
               features/nearby/ 是生活機能(面板區塊,含垃圾車、嫌惡設施「注意」列;資料 src/shared/poi.ts、API routes/nearby.ts)
               features/hazard/ 是災害風險(淹水 / 液化;src/shared/hazard.ts、API routes/hazards.ts)
+              features/report/ 是「地址即報告」:AddressSearch 搜地址 → PointDetail 出報告(含 /api/market/at 行情)→ SaveNote 存成筆記;房源增刪後用 lib/invalidate.ts 一起刷彙總
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
