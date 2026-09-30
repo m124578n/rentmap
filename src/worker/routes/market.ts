@@ -17,6 +17,7 @@ import { z } from "zod";
 import { briefOf, cleanPool, computeMarket, RentStatIn, type MarketMatrix, type MarketResponse, type MarketTarget, type RentStat } from "@shared/market";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { cachedJson, propertiesSig, tableSig } from "../cache";
 
 export const market = new Hono<AppEnv>();
 market.use("/api/market", requireUser());
@@ -77,12 +78,16 @@ function marketOf(pools: Map<string, RentStat[]>, p: PropRow) {
 }
 
 market.get("/api/market", async (c) => {
-  const pools = await loadPools(c.env.DB);
-  const { results } = await c.env.DB.prepare(PROP_SQL).all<PropRow>();
-  const items: MarketMatrix["items"] = {};
-  for (const p of results) items[p.id] = briefOf(marketOf(pools, p));
-  const body: MarketMatrix = { has_data: pools.size > 0, items };
-  return c.json(body);
+  const DB = c.env.DB;
+  // 租金變動會寫價格紀錄,所以房源 + 價格紀錄 + 實價登錄三個一起當版本
+  const key = ["market", await tableSig(DB, "rent_stats", "id"), await propertiesSig(DB), await tableSig(DB, "listing_price_history", "id")];
+  return cachedJson(c, key, async (): Promise<MarketMatrix> => {
+    const pools = await loadPools(DB);
+    const { results } = await DB.prepare(PROP_SQL).all<PropRow>();
+    const items: MarketMatrix["items"] = {};
+    for (const p of results) items[p.id] = briefOf(marketOf(pools, p));
+    return { has_data: pools.size > 0, items };
+  });
 });
 
 /** 還在刊登的同縣市同房型房源 → 行情計算用的列(date = 最後看到的日期) */

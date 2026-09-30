@@ -22,6 +22,7 @@ import { DAY_TYPES } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
+import { cachedJson, propertiesSig, tableSig } from "../cache";
 import { db, schema } from "../db";
 import { loadBusNet } from "../transit/network";
 import { EMPTY_BIKES, loadBikes } from "../transit/bike";
@@ -56,22 +57,38 @@ commute.get("/api/commute", async (c) => {
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
     .orderBy(asc(schema.myPlaces.id));
-  const props = (await d.select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng }).from(schema.properties)).filter(
-    (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
-  );
-  const net = await loadBusNet(c.env.DB);
-  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
-  const items: CommuteMatrix["items"] = {};
-  for (const p of props) items[p.id] = {};
-  for (const place of places) {
-    const plan = buildPlan(net, place, when, bikes);
-    for (const p of props) {
-      const t = bestTrip(plan, p.lat, p.lng, radius);
-      items[p.id]![place.id] = t ? { kind: t.kind, total_min: t.total_min, transfers: t.transfers, summary: t.summary } : null;
+  const bike = c.req.query("bike") !== "0";
+  const DB = c.env.DB;
+  // 我的地點是個人資料:放進 key(只存在伺服器端快取);公車、YouBike、房源任何一個更新 key 就變
+  const key = [
+    "commute",
+    places.map((p) => `${p.id}@${p.lat},${p.lng}`).join(";"),
+    radius,
+    when.day,
+    when.time,
+    when.dir,
+    bike ? 1 : 0,
+    await tableSig(DB, "bus_routes", "version"),
+    bike ? await tableSig(DB, "pois", "version", "WHERE category = 'youbike'") : "-",
+    await propertiesSig(DB),
+  ];
+  return cachedJson(c, key, async (): Promise<CommuteMatrix> => {
+    const props = (await d.select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng }).from(schema.properties)).filter(
+      (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
+    );
+    const net = await loadBusNet(DB);
+    const bikes = bike ? await loadBikes(DB) : EMPTY_BIKES;
+    const items: CommuteMatrix["items"] = {};
+    for (const p of props) items[p.id] = {};
+    for (const place of places) {
+      const plan = buildPlan(net, place, when, bikes);
+      for (const p of props) {
+        const t = bestTrip(plan, p.lat, p.lng, radius);
+        items[p.id]![place.id] = t ? { kind: t.kind, total_min: t.total_min, transfers: t.transfers, summary: t.summary } : null;
+      }
     }
-  }
-  const body: CommuteMatrix = { radius, when, has_bus: net.version != null, items };
-  return c.json(body);
+    return { radius, when, has_bus: net.version != null, items };
+  });
 });
 
 commute.get("/api/commute/trips", async (c) => {

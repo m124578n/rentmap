@@ -63,6 +63,20 @@ describe("hazards", () => {
     expect(s.items[hole]).toEqual({ liquefaction: 3 });
   });
 
+  it("summary is cached until listings or zones change", async () => {
+    const get = () => SELF.fetch(`${ORIGIN}/api/hazards/summary`, authed());
+    await get();
+    const hit = await get();
+    expect(hit.headers.get("x-cache")).toBe("hit");
+    expect(hit.headers.get("cache-control")).toContain("no-store");
+    // 新房源 → 版本變了,重算且算得到新的那間
+    const listing = { source: "591", source_listing_id: "new", source_url: "https://rent.591.com.tw/new", title: "new", city: "台北市", district: "中山區", rent: 20000, lat: LAT, lng: LNG };
+    const { ids } = (await (await post("listings", { items: [listing] })).json()) as { ids: number[] };
+    const miss = await get();
+    expect(miss.headers.get("x-cache")).toBe("miss");
+    expect(((await miss.json()) as HazardSummary).items[ids[0]!]).toEqual({ liquefaction: 3 });
+  });
+
   it("zones in a viewport as GeoJSON; too big a viewport returns nothing", async () => {
     const zones = async (q: string) => (await (await SELF.fetch(`${ORIGIN}/api/hazards/zones?${q}`, authed())).json()) as HazardZones;
     const near = await zones(`kind=flood24&w=${LNG - 0.01}&s=${LAT - 0.01}&e=${LNG + 0.01}&n=${LAT + 0.01}`);

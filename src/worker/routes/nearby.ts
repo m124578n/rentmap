@@ -18,6 +18,7 @@ import { haversine, walkMin } from "@shared/bus";
 import { AVOIDABLE_CATS, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { cachedJson, propertiesSig, tableSig } from "../cache";
 
 export const nearby = new Hono<AppEnv>();
 nearby.use("/api/nearby", requireUser());
@@ -124,8 +125,14 @@ nearby.get("/api/nearby", async (c) => {
 
 nearby.get("/api/nearby/summary", async (c) => {
   const radius = radiusOf(c.req.query("radius"));
-  const { grid, n } = await loadGrid(c.env.DB);
-  const { results } = await c.env.DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+  const DB = c.env.DB;
+  const key = ["nearby-summary", radius, await tableSig(DB, "pois", "version"), await propertiesSig(DB)];
+  return cachedJson(c, key, () => nearbySummary(DB, radius));
+});
+
+async function nearbySummary(DB: D1Database, radius: number): Promise<NearbySummary> {
+  const { grid, n } = await loadGrid(DB);
+  const { results } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
   const items: NearbySummary["items"] = {};
   const nearest: NearbySummary["nearest"] = {};
   const avoidable = new Set<PoiCat>(AVOIDABLE_CATS);
@@ -139,9 +146,8 @@ nearby.get("/api/nearby/summary", async (c) => {
     items[h.id] = counts;
     nearest[h.id] = near;
   }
-  const body: NearbySummary = { radius, has_data: n > 0, items, nearest };
-  return c.json(body);
-});
+  return { radius, has_data: n > 0, items, nearest };
+}
 
 const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 nearby.get("/api/garbage/fit", async (c) => {

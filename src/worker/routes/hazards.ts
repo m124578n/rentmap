@@ -17,6 +17,7 @@ import { z } from "zod";
 import { HAZARD_KINDS, HazardZoneIn, type HazardKind, type HazardLevels, type HazardResponse, type HazardSummary } from "@shared/hazard";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { cachedJson, propertiesSig, tableSig } from "../cache";
 
 export const hazards = new Hono<AppEnv>();
 hazards.use("/api/hazards", requireUser());
@@ -122,12 +123,15 @@ hazards.get("/api/hazards", async (c) => {
 });
 
 hazards.get("/api/hazards/summary", async (c) => {
-  const z = await loadZones(c.env.DB);
-  const { results } = await c.env.DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
-  const items: HazardSummary["items"] = {};
-  for (const h of results) items[h.id] = levelsAt(z, h.lat, h.lng);
-  const body: HazardSummary = { has_data: z.zones.length > 0, items };
-  return c.json(body);
+  const DB = c.env.DB;
+  const key = ["hazard-summary", await tableSig(DB, "hazard_zones", "version"), await propertiesSig(DB)];
+  return cachedJson(c, key, async (): Promise<HazardSummary> => {
+    const z = await loadZones(DB);
+    const { results } = await DB.prepare("SELECT id, lat, lng FROM properties WHERE lat IS NOT NULL AND lng IS NOT NULL").all<{ id: number; lat: number; lng: number }>();
+    const items: HazardSummary["items"] = {};
+    for (const h of results) items[h.id] = levelsAt(z, h.lat, h.lng);
+    return { has_data: z.zones.length > 0, items };
+  });
 });
 
 /** 畫面範圍最大(度²):約 0.15° × 0.15°,再大就要使用者放大 */
