@@ -19,10 +19,11 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是地圖(CARTO 底圖、捷運圖層、價格標記)
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
-              features/nearby/ 是生活機能(面板區塊;資料 src/shared/poi.ts、API routes/nearby.ts)
+              features/nearby/ 是生活機能(面板區塊,含垃圾車、嫌惡設施「注意」列;資料 src/shared/poi.ts、API routes/nearby.ts)
+              features/hazard/ 是災害風險(淹水 / 液化;src/shared/hazard.ts、API routes/hazards.ts)
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
-              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算
+              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段
 src/shared/   Zod schema 與常數,前後端共用
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
@@ -44,7 +45,8 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
 | `npm run collect -- bus [--dry] [--refresh]` | 從 TDX 下載雙北公車路線 / 站 / 線形 / 班表 → 覆蓋式推入(一個月一次,每次約 8 次請求;`.env` 的 `TDX_CLIENT_ID/SECRET` **必填**,不帶金鑰 API 一律 401;原始檔快取 `data/tdx/`) |
 | `npm run collect -- rent-stats [--seasons=4] [--dry]` | 內政部租賃實價登錄(雙北最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
-| `npm run collect -- pois [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 一類一類抓 + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
+| `npm run collect -- pois [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 一類一類抓 + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
+| `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(20:00 台北、21:00 新北含重抓 80 筆;housefun / recheck 組不排程);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 

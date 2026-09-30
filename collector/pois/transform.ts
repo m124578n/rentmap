@@ -84,6 +84,8 @@ export function fromOverpass(cat: PoiCat, elements: OsmElement[]): PoiIn[] {
     for (const el of elements) {
       const t = el.tags ?? {};
       if (!el.geometry?.length) continue;
+      // 渡線、側線、機廠線(service=*)都貼在主線旁邊、沒名字,只會多一筆「?」
+      if (t.railway && t.service) continue;
       const hit = sels.find(([k, vs]) => vs.includes(t[k] ?? ""));
       const name = (t.name ?? t.ref ?? null)?.slice(0, 120) ?? null;
       sampleLine(el.geometry).forEach((p, i) => {

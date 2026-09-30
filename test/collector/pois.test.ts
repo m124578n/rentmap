@@ -112,6 +112,12 @@ describe("嫌惡設施", () => {
     expect(out).toHaveLength(12);
     expect(out[0]).toMatchObject({ key: "w9:0", category: "highway", subtype: "motorway", name: "國道1號" });
     for (const x of out) expect(PoiIn.safeParse(x).success).toBe(true);
+    const g = [{ lat: 25, lon: 121.5 }, { lat: 25, lon: 121.5004 }];
+    const rail = fromOverpass("railway", [
+      { type: "way", id: 1, tags: { railway: "subway", name: "捷運文湖線", bridge: "viaduct" }, geometry: g },
+      { type: "way", id: 2, tags: { railway: "subway", service: "crossover", bridge: "viaduct" }, geometry: g },
+    ]);
+    expect(new Set(rail.map((x) => x.name))).toEqual(new Set(["捷運文湖線"]));
   });
 
   it("變電所:配電箱、地下的不算", () => {
