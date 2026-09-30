@@ -63,7 +63,7 @@ export function AboutPage() {
           </h1>
           <p className="mt-4 max-w-prose text-neutral-600 dark:text-neutral-400">
             輸入一個地址,就幫你算好上下班怎麼搭(公車、捷運、台鐵,或騎車開車)、附近租金行情、每月實際要花多少,
-            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記(在 591 等網站用書籤一鍵帶入),再收藏、約看、排路線、並排比較。
+            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記(在租屋網站的物件頁用書籤一鍵帶入),再收藏、約看、排路線、並排比較。
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {cta}

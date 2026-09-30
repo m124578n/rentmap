@@ -278,11 +278,11 @@ function BookmarkletCard() {
   }, []);
   return (
     <div className="hidden rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 sm:block dark:border-neutral-700 dark:text-neutral-300">
-      <b className="font-medium">從 591 帶入:</b>把
+      <b className="font-medium">從租屋網頁帶入:</b>把
       <a ref={ref} onClick={(e) => e.preventDefault()} className="mx-1 inline-block cursor-grab rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white" title="拖到書籤列">
         存到租屋筆記
       </a>
-      拖到瀏覽器的書籤列。之後在 591 物件頁按那個書籤,會開新分頁到這裡並帶好租金、坪數、樓層、地址等欄位(由你的瀏覽器讀取,伺服器不會去抓 591)。
+      拖到瀏覽器的書籤列。之後在租屋網站的物件頁按那個書籤,會開新分頁到這裡並帶好租金、坪數、樓層、地址等欄位(由你的瀏覽器讀取,本站伺服器不會去抓那個網站;目前認得 591,其他網站只帶標題與網址)。
     </div>
   );
 }
