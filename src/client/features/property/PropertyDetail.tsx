@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ExternalLink, Maximize2, Trash2, X } from "lucide-react";
+import { ExternalLink, Heart, Maximize2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { SOURCE_LABEL, type Source } from "@shared/constants";
 import { BusSection } from "@/features/bus/BusSection";
@@ -55,7 +55,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
 
   return (
     <div className="grid gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
+      {/* 頂端固定:往下滑也看得到價格、收藏、比較 */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-start justify-between gap-2 border-b border-neutral-100 bg-white/95 px-4 pt-4 pb-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95">
         <div className="min-w-0">
           <div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{main ? `$${main.rent.toLocaleString()}` : "—"}</div>
           <h1 className="font-semibold leading-snug">{p.title}</h1>
@@ -66,6 +67,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
               {p.road ? ` ${p.road}` : ""}
             </span>
             <CompareToggle id={id} />
+            <QuickFavorite id={id} saved={!!favorite} />
           </p>
         </div>
         {onClose && (
@@ -93,7 +95,9 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
 
       {summary && <CostSection cost={costOf(summary)} />}
 
-      <FavoritePanel id={id} favorite={favorite} />
+      <div id={`fav-${id}`} className="scroll-mt-24">
+        <FavoritePanel id={id} favorite={favorite} />
+      </div>
 
       {main && <PriceAgeSection history={price_history} postedAt={main.postedAt} firstSeenAt={main.firstSeenAt} lastSeenAt={main.lastSeenAt} status={main.status} />}
 
@@ -282,4 +286,27 @@ function yn(v: boolean | null) {
 function fmtLayout(r: number | null, l: number | null, b: number | null) {
   const parts = [r != null && `${r} 房`, l != null && `${l} 廳`, b != null && `${b} 衛`].filter(Boolean);
   return parts.length ? parts.join(" ") : null;
+}
+
+/** 標題列的收藏鈕:還沒收藏 → 直接收藏;已收藏 → 捲到收藏區(改狀態 / 備註,取消收藏會清掉備註所以不放這裡) */
+function QuickFavorite({ id, saved }: { id: number; saved: boolean }) {
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: () => api.setFavorite(id, { stage: "saved" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property", id] });
+      qc.invalidateQueries({ queryKey: ["properties"] });
+    },
+  });
+  return (
+    <button
+      onClick={() => (saved ? document.getElementById(`fav-${id}`)?.scrollIntoView({ behavior: "smooth" }) : save.mutate())}
+      disabled={save.isPending}
+      className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-xs ${saved ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "border-neutral-300 dark:border-neutral-700"}`}
+      title={saved ? "已收藏:看狀態與備註" : "收藏這間"}
+    >
+      <Heart size={12} className={saved ? "fill-current" : ""} />
+      {saved ? "已收藏" : "收藏"}
+    </button>
+  );
 }

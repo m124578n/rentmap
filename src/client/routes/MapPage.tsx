@@ -85,6 +85,53 @@ export function MapPage() {
       <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={onOverlay} />
     ) : null;
 
+  const [layersOpen, setLayersOpen] = useState(false);
+  const colorControls = modes.length > 1 && (
+    <div className={BOX}>
+      <div className="flex flex-wrap gap-1">
+        <span className="self-center text-neutral-500">標記顏色</span>
+        {modes.map((m) => (
+          <button key={m} onClick={() => setColorMode(m)} className={chip(colorMode === m)}>
+            {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
+          </button>
+        ))}
+      </div>
+      {byFit && (
+        <Legend
+          items={[
+            ["符合", FIT_COLOR.green],
+            ["普通", FIT_COLOR.yellow],
+            ["不符", FIT_COLOR.red],
+          ]}
+        />
+      )}
+      {byCommute && <Legend items={COMMUTE_LEGEND} />}
+    </div>
+  );
+  const heatControls = (
+  <div className={BOX}>
+    <label className="flex items-center gap-1">
+      <Layers size={13} className="text-neutral-500" />
+      <span className="text-neutral-500">區域圖層</span>
+      <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-transparent px-1 py-0.5 dark:border-neutral-700">
+        {HEAT_MODES.map((m) => (
+          <option key={m} value={m}>
+            {HEAT_LABEL[m]}
+          </option>
+        ))}
+      </select>
+      {heat.loading && <span className="text-neutral-400">計算中…</span>}
+    </label>
+    {heatMode !== "none" && (
+      <label className="mt-1 flex items-center gap-1 text-neutral-600 dark:text-neutral-400">
+        <input type="checkbox" checked={hideMarkers} onChange={(e) => setHideMarkers(e.target.checked)} /> 隱藏房源標記
+      </label>
+    )}
+    {heat.legend.length > 0 && <Legend items={heat.legend} square />}
+    {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500">{heat.note}</p>}
+  </div>
+  );
+
   return (
     <div className="flex h-full flex-col">
       <FilterBar shown={items.length} total={all.length} />
@@ -142,49 +189,50 @@ export function MapPage() {
                 看得到
               </div>
             )}
-            {modes.length > 1 && (
-              <div className={BOX}>
-                <div className="flex flex-wrap gap-1">
-                  <span className="self-center text-neutral-500">標記顏色</span>
-                  {modes.map((m) => (
-                    <button key={m} onClick={() => setColorMode(m)} className={chip(colorMode === m)}>
-                      {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
-                    </button>
-                  ))}
-                </div>
-                {byFit && (
-                  <Legend
-                    items={[
-                      ["符合", FIT_COLOR.green],
-                      ["普通", FIT_COLOR.yellow],
-                      ["不符", FIT_COLOR.red],
-                    ]}
-                  />
+            {narrow ? (
+              <>
+                <button
+                  onClick={() => setLayersOpen(true)}
+                  className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white/95 px-2.5 py-2 text-xs font-medium shadow-sm dark:border-neutral-800 dark:bg-neutral-900/95"
+                  aria-haspopup="dialog"
+                >
+                  <Layers size={15} /> 圖層
+                  {(heatMode !== "none" || colorMode !== "stage") && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                </button>
+                {/* 手機:開著的圖層只留圖例 */}
+                {!layersOpen && (heat.legend.length > 0 || byCommute || byFit) && (
+                  <div className={`${BOX} !py-1 text-[11px]`}>
+                    {heat.legend.length > 0 ? (
+                      <Legend items={heat.legend} square />
+                    ) : (
+                      <Legend items={byFit ? [["符合", FIT_COLOR.green], ["普通", FIT_COLOR.yellow], ["不符", FIT_COLOR.red]] : COMMUTE_LEGEND} />
+                    )}
+                  </div>
                 )}
-                {byCommute && <Legend items={COMMUTE_LEGEND} />}
-              </div>
+                {layersOpen && (
+                  <div className="fixed inset-0 z-50 flex items-end bg-black/30" onClick={() => setLayersOpen(false)}>
+                    <div
+                      role="dialog"
+                      aria-label="圖層"
+                      className="grid w-full gap-2 rounded-t-2xl bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-sm shadow-xl dark:bg-neutral-900 [&>div]:border-0 [&>div]:p-0 [&>div]:shadow-none"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="mx-auto h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+                      {colorControls}
+                      {heatControls}
+                      <button onClick={() => setLayersOpen(false)} className="btn-primary justify-center">
+                        完成
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {colorControls}
+                {heatControls}
+              </>
             )}
-            <div className={BOX}>
-              <label className="flex items-center gap-1">
-                <Layers size={13} className="text-neutral-500" />
-                <span className="text-neutral-500">區域圖層</span>
-                <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-transparent px-1 py-0.5 dark:border-neutral-700">
-                  {HEAT_MODES.map((m) => (
-                    <option key={m} value={m}>
-                      {HEAT_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
-                {heat.loading && <span className="text-neutral-400">計算中…</span>}
-              </label>
-              {heatMode !== "none" && (
-                <label className="mt-1 flex items-center gap-1 text-neutral-600 dark:text-neutral-400">
-                  <input type="checkbox" checked={hideMarkers} onChange={(e) => setHideMarkers(e.target.checked)} /> 隱藏房源標記
-                </label>
-              )}
-              {heat.legend.length > 0 && <Legend items={heat.legend} square />}
-              {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500">{heat.note}</p>}
-            </div>
           </div>
         </div>
       </div>

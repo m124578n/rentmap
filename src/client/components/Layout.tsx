@@ -1,5 +1,6 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Database, Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, SlidersHorizontal, Sun } from "lucide-react";
+import { useState } from "react";
+import { Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -7,6 +8,7 @@ import { PlacesDialogHost } from "@/features/places/PlacesDialog";
 import { CompareBar } from "@/features/compare/compare";
 import { openRequirementsDialog } from "@/features/fit/fit";
 import { RequirementsDialogHost } from "@/features/fit/RequirementsDialog";
+import { AboutPage } from "@/routes/AboutPage";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
@@ -45,14 +47,19 @@ export function Layout() {
               </Link>
             </div>
           )}
+          {/* .btn-ghost 不在 Tailwind 的 layer 裡,會蓋過 hidden,所以手機隱藏要包一層 */}
           {user && (
-            <Link to="/status" className="btn-ghost hidden sm:inline-flex" title="資料狀態(各份資料何時更新、要不要重跑)" activeProps={{ className: "btn-ghost hidden sm:inline-flex bg-neutral-100 dark:bg-neutral-800" }}>
-              <Database size={16} />
-            </Link>
+            <span className="hidden sm:contents">
+              <Link to="/status" className="btn-ghost" title="資料狀態(各份資料何時更新、要不要重跑)" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
+                <Database size={16} />
+              </Link>
+            </span>
           )}
-          <button onClick={toggle} className="btn-ghost" aria-label="切換主題">
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+          <span className={user ? "hidden sm:contents" : "contents"}>
+            <button onClick={toggle} className="btn-ghost" aria-label="切換主題">
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </span>
           {user ? (
             <button onClick={logout} className="btn-ghost" title={user.name ?? ""}>
               {user.avatar && <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />}
@@ -85,18 +92,8 @@ export function Layout() {
             <CompareBar />
           </>
         ) : (
-          <div className="card m-4 text-center">
-            <p className="mb-3">先登入才看得到你的房源。</p>
-            {dev ? (
-              <button onClick={devLogin} className="btn-primary">
-                本機登入
-              </button>
-            ) : (
-              <button onClick={login} className="btn-primary" disabled={!enabled}>
-                Google 登入
-              </button>
-            )}
-          </div>
+          // 沒登入:任何網址都看介紹頁(也是搜尋引擎看到的那頁)
+          <AboutPage />
         )}
       </main>
       {user && <TabBar />}
@@ -104,27 +101,76 @@ export function Layout() {
   );
 }
 
-/** 手機底部分頁列(sm 以上隱藏,導覽在頂欄) */
+/** 手機底部分頁列(sm 以上隱藏,導覽在頂欄):常用四個 + 「更多」 */
 function TabBar() {
+  const [more, setMore] = useState(false);
   const tab = "flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] text-neutral-500";
   const active = { className: `${tab} text-emerald-700 dark:text-emerald-400` };
   return (
-    <nav className="flex border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-neutral-800 dark:bg-neutral-900">
-      <Link to="/" className={tab} activeProps={active} activeOptions={{ exact: true }}>
-        <Map size={20} /> 地圖
-      </Link>
-      <Link to="/list" className={tab} activeProps={active}>
-        <List size={20} /> 列表
-      </Link>
-      <Link to="/board" className={tab} activeProps={active}>
-        <Kanban size={20} /> 看板
-      </Link>
-      <button onClick={openPlacesDialog} className={tab}>
-        <MapPin size={20} /> 我的地點
-      </button>
-      <Link to="/new" className={tab} activeProps={active}>
-        <Plus size={20} /> 新增
-      </Link>
-    </nav>
+    <>
+      <nav className="flex border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-neutral-800 dark:bg-neutral-900">
+        <Link to="/" className={tab} activeProps={active} activeOptions={{ exact: true }}>
+          <Map size={20} /> 地圖
+        </Link>
+        <Link to="/list" className={tab} activeProps={active}>
+          <List size={20} /> 列表
+        </Link>
+        <Link to="/board" className={tab} activeProps={active}>
+          <Kanban size={20} /> 看板
+        </Link>
+        <Link to="/new" className={tab} activeProps={active}>
+          <Plus size={20} /> 新增
+        </Link>
+        <button onClick={() => setMore(true)} className={tab} aria-haspopup="dialog">
+          <Menu size={20} /> 更多
+        </button>
+      </nav>
+      {more && <MoreSheet onClose={() => setMore(false)} />}
+    </>
+  );
+}
+
+/** 手機「更多」:不常用但要找得到的入口 */
+function MoreSheet({ onClose }: { onClose: () => void }) {
+  const { theme, toggle } = useTheme();
+  const row = "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-neutral-100 active:bg-neutral-100 dark:hover:bg-neutral-800 dark:active:bg-neutral-800";
+  const go = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:hidden" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="更多"
+        className="w-full rounded-t-2xl bg-white p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-xl dark:bg-neutral-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+        <button className={row} onClick={go(openPlacesDialog)}>
+          <MapPin size={18} /> 我的地點
+          <span className="ml-auto text-xs text-neutral-400">公司、家人住處</span>
+        </button>
+        <button className={row} onClick={go(openRequirementsDialog)}>
+          <SlidersHorizontal size={18} /> 我的需求
+          <span className="ml-auto text-xs text-neutral-400">預算、通勤、設備</span>
+        </button>
+        <Link to="/tour" className={row} onClick={onClose}>
+          <Route size={18} /> 看房路線
+        </Link>
+        <Link to="/compare" className={row} onClick={onClose}>
+          <Columns3 size={18} /> 比較表
+        </Link>
+        <Link to="/status" className={row} onClick={onClose}>
+          <Database size={18} /> 資料狀態
+        </Link>
+        <Link to="/about" className={row} onClick={onClose}>
+          <Info size={18} /> 介紹
+        </Link>
+        <button className={row} onClick={toggle}>
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />} {theme === "dark" ? "淺色模式" : "深色模式"}
+        </button>
+      </div>
+    </div>
   );
 }
