@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
+import { OPEN_REGIONS } from "@/lib/region";
 import { LegalLinks } from "@/features/legal/LegalLinks";
 
 /**
@@ -54,7 +55,7 @@ export function AboutPage() {
       <section className="grid items-center gap-8 py-10 sm:py-16 md:grid-cols-[1.1fr_1fr]">
         <div>
           <p className="mb-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-            北北基桃 · 找房筆記
+            {OPEN_REGIONS.map((r) => r.label).join("、")} · 找房筆記
           </p>
           <h1 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
             找房要查的東西,
@@ -140,9 +141,9 @@ export function AboutPage() {
         </div>
         <ul className="grid gap-1.5 text-sm text-neutral-600 sm:grid-cols-2 dark:text-neutral-400">
           <Source icon={<Bus size={14} />}>交通部 TDX:公車路線與班表、捷運站間時間、台鐵時刻、YouBike</Source>
-          <Source icon={<Bike size={14} />}>臺北市 / 新北市:YouBike 站點、垃圾車清運點</Source>
+          <Source icon={<Bike size={14} />}>各市政府:YouBike 站點、垃圾車清運點</Source>
           <Source icon={<LineChart size={14} />}>內政部:不動產租賃實價登錄</Source>
-          <Source icon={<ShieldAlert size={14} />}>經濟部水利署:淹水潛勢;臺北市:土壤液化潛勢</Source>
+          <Source icon={<ShieldAlert size={14} />}>經濟部水利署:淹水潛勢;臺北市、臺南市:土壤液化潛勢</Source>
           <Source icon={<Gauge size={14} />}>雙北環保局:航空噪音防制區</Source>
           <Source icon={<Siren size={14} />}>雙北警察局:竊盜點位與案件統計</Source>
           <Source icon={<ShoppingBasket size={14} />}>OpenStreetMap:生活機能、嫌惡設施</Source>

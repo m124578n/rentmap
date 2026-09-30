@@ -26,7 +26,7 @@
 
 1. `src/shared/regions.ts`：`REGIONS.taichung` 的 `cities` 放 `["台中市"]`、`planned` 清空、`enabled: true`；有資料的項目加進 `CITY_INFO.台中市.coverage`。
 2. `npm run check`、`npm test`（`test/collector/regions.test.ts` 的開放清單要跟著改）。
-3. 本機開 dev，地圖左上會出現「找哪裡」切換；切到台中確認：地圖範圍、行政區選單、地址搜尋、通勤（公車 + 機車估）、行情、生活機能。
+3. 本機開 dev，先跑 `node scripts/verify-regions.mjs taichung`（切到該生活圈、右鍵市中心出報告、截圖到 `data/verify-*.png`、列出頁面錯誤與面板文字）；再自己看一遍：地圖左上會出現「找哪裡」切換；切到台中確認：地圖範圍、行政區選單、地址搜尋、通勤（公車 + 機車估）、行情、生活機能。
 4. 機車時速：`src/shared/drive.ts` 的 `SPEED.taichung` 是估的，有實測再調。
 
 ## 3. 已知要先處理的
