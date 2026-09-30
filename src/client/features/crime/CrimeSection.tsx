@@ -12,6 +12,8 @@ export interface CrimeDistricts {
   to: string;
   items: Record<string, Partial<Record<"house" | "moto" | "car" | "bike", number>>>;
   ntpc_unknown: number;
+  /** 雙北以外的縣市(警政署全國資料)各自的統計期間 */
+  periods?: Record<string, { from: string; to: string }>;
 }
 
 export function useCrimeDistricts() {
@@ -43,6 +45,7 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
   if (dist.isLoading) return null;
   const key = `${city.replace("臺", "台")}|${district}`;
   const row = d?.items[key];
+  const period = d?.periods?.[city.replace("臺", "台")] ?? d;
   const rank = (k: "house" | "moto") => {
     if (!d || !row?.[k]) return null;
     // 排名只跟同一個生活圈的區比
@@ -106,7 +109,7 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
             )}
           </div>
           <p className="text-[11px] text-neutral-400">
-            警察局開放資料 {d.from.slice(0, 7)}~{d.to.slice(0, 7)}。{tp ? "點位是巷或路段的中點(門牌查不到),只能看大概;" : `${city}只到行政區、沒有點位;`}區的件數不是每人比率,人多的區自然多。
+            警察局開放資料 {period!.from.slice(0, 7)}~{period!.to.slice(0, 7)}。{tp ? "點位是巷或路段的中點(門牌查不到),只能看大概;" : `${city}只到行政區、沒有點位;`}區的件數不是每人比率,人多的區自然多。
           </p>
         </div>
       )}

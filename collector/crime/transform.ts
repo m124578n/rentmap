@@ -5,7 +5,10 @@
  *   沒有座標 → 用「巷」去 Nominatim 查(collector/lib/geocode.ts 有快取),查不到退到「路段」;只到區中心的丟掉
  *   (不然全部堆在區中心,附近的房源會被灌爆)。門牌 OSM 幾乎沒有,不查。位置是巷 / 路段的中點,只能看大概。
  * 新北市警察局:「犯罪資料」只有案類、年、日期(季)、行政區 → 只能給區的件數,不畫點。
+ * 警政署:全國「犯罪資料」(每季一檔,格式跟新北市那份一樣但縣市、區分兩欄)→ 雙北以外的縣市用它算各區件數。
  */
+import { CITY_INFO, type CityName } from "../../src/shared/regions";
+
 export const THEFT_KINDS = ["house", "moto", "car"] as const;
 export type TheftKind = (typeof THEFT_KINDS)[number];
 export const THEFT_LABEL: Record<TheftKind | "bike", string> = { house: "住宅竊盜", moto: "機車竊盜", car: "汽車竊盜", bike: "自行車竊盜" };
@@ -81,6 +84,34 @@ export function parseNtpcCrime(csv: string): NtpcCrimeRow[] {
   return out;
 }
 
+export interface NpaCrimeRow {
+  kind: TheftKind | "bike" | "other";
+  date: string;
+  city: CityName;
+  /** 不在 regions.ts 那個縣市的區清單裡(沒寫、寫錯)→ null */
+  district: string | null;
+}
+
+const NPA_KIND: Record<string, NpaCrimeRow["kind"]> = { 住宅竊盜: "house", 機車竊盜: "moto", 汽車竊盜: "car", 自行車竊盜: "bike" };
+
+/**
+ * 警政署「犯罪資料」CSV:type,oc_year,oc_data,oc_county,oc_region(全國;只留 regions.ts 有列的縣市)。
+ * 縣市用「臺」、區有時連縣市一起寫(「臺中市西屯區」),都整理成 regions.ts 的寫法。
+ */
+export function parseNpaCrime(csv: string): NpaCrimeRow[] {
+  const out: NpaCrimeRow[] = [];
+  for (const line of csv.replace(/^\uFEFF/, "").split(/\r?\n/).slice(1)) {
+    const [type, , date, county, region] = cells(line).map((x) => x.replace(/^"|"$/g, ""));
+    const d = rocDate(date ?? "");
+    const city = (county ?? "").replace(/臺/g, "台");
+    if (!type || !d || !(city in CITY_INFO)) continue;
+    const info = CITY_INFO[city as CityName];
+    const dist = (region ?? "").replace(/臺/g, "台").replace(city, "").trim();
+    out.push({ kind: NPA_KIND[type] ?? "other", date: d, city: city as CityName, district: (info.districts as readonly string[]).includes(dist) ? dist : null });
+  }
+  return out;
+}
+
 export interface CrimeDistricts {
   /** 統計期間(資料最新日往前一年) */
   from: string;
@@ -89,10 +120,12 @@ export interface CrimeDistricts {
   items: Record<string, Partial<Record<TheftKind | "bike", number>>>;
   /** 新北市沒寫到區的件數(只寫「新北市」) */
   ntpc_unknown: number;
+  /** 雙北以外的縣市(警政署全國資料)各自的統計期間;沒列的縣市用上面的 from / to */
+  periods?: Record<string, { from: string; to: string }>;
 }
 
-/** 近一年各區件數:臺北市用點位資料(依地址的區),新北市用犯罪資料(依 location 的區) */
-export function districtStats(tp: Pick<TaipeiTheftRow, "kind" | "date" | "district">[], ntpc: NtpcCrimeRow[]): CrimeDistricts {
+/** 近一年各區件數:臺北市用點位資料(依地址的區),新北市用犯罪資料(依 location 的區),其他縣市用警政署全國資料 */
+export function districtStats(tp: Pick<TaipeiTheftRow, "kind" | "date" | "district">[], ntpc: NtpcCrimeRow[], npa: NpaCrimeRow[] = []): CrimeDistricts {
   const lastOf = (xs: { date: string }[]) => xs.reduce((m, x) => (x.date > m ? x.date : m), "");
   const yearBefore = (d: string) => `${Number(d.slice(0, 4)) - 1}${d.slice(4)}`;
   const items: CrimeDistricts["items"] = {};
@@ -110,5 +143,14 @@ export function districtStats(tp: Pick<TaipeiTheftRow, "kind" | "date" | "distri
     else add(`新北市|${r.district}`, r.kind);
   }
   const to = [tpTo, ntTo].sort()[1] ?? tpTo;
-  return { from: yearBefore(to), to, items, ntpc_unknown: unknown };
+  // 警政署的檔是整季整季出的:最新一天往前一年 = 最近四季。雙北已有各自的來源,不重複算
+  const others = npa.filter((r) => r.city !== "台北市" && r.city !== "新北市");
+  const npaTo = lastOf(others);
+  const periods: NonNullable<CrimeDistricts["periods"]> = {};
+  for (const r of others) {
+    if (r.date <= yearBefore(npaTo)) continue;
+    periods[r.city] ??= { from: yearBefore(npaTo), to: npaTo };
+    if (r.kind !== "other" && r.district) add(`${r.city}|${r.district}`, r.kind);
+  }
+  return { from: yearBefore(to), to, items, ntpc_unknown: unknown, ...(others.length ? { periods } : {}) };
 }

@@ -24,7 +24,7 @@ export const POI_CATEGORIES = {
   supermarket: { label: "超市量販", main: true, osm: [["shop", ["supermarket", "greengrocer", "department_store", "mall", "wholesale"]]] },
   food: { label: "餐飲", main: true, osm: [["amenity", ["restaurant", "fast_food", "cafe", "food_court"]]] },
   ramen: { label: "拉麵", main: false },
-  // 雙北環保局開放資料(表定清運點與時間),不是 OSM
+  // 雙北、台南環保局開放資料(表定清運點與時間),不是 OSM
   garbage: { label: "垃圾車", main: true },
   market: { label: "市場", main: true, osm: [["amenity", ["marketplace"]]] },
   park: { label: "公園", main: true, osm: [["leisure", ["park", "playground"]]] },

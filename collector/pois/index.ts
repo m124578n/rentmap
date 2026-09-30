@@ -11,7 +11,7 @@ import path from "node:path";
 import { CRIME_CATS, POI_CATEGORIES, POI_CATS, type PoiCat, type PoiIn } from "../../src/shared/poi";
 import { CITY_INFO, REGION_KEYS, REGIONS, type RegionKey } from "../../src/shared/regions";
 import { tdxGet } from "../lib/tdx";
-import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromTdxBike, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type TdxBikeStation, type YoubikeRow } from "./transform";
+import { fromMenmap, fromNtpcGarbage, fromOverpass, fromTaipeiGarbage, fromTainanGarbage, fromTdxBike, fromYoubike, nightMarkets, overpassQuery, tiles, bboxOf, type MenmapShop, type NtpcGarbageRow, type OsmElement, type TaipeiGarbageRow, type TainanGarbageRow, type TdxBikeStation, type YoubikeRow } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "osm");
@@ -21,6 +21,10 @@ const MENMAP_URL = "https://menmap.shunzz.com/shops.json";
 /** 垃圾車清運點:臺北市資料大平臺、新北市政府資料開放平台(每日更新) */
 const TAIPEI_GARBAGE = "https://data.taipei/api/v1/dataset/a6e90031-7ec4-4089-afb5-361a4efe7202?scope=resourceAquire";
 const NTPC_GARBAGE = "https://data.ntpc.gov.tw/api/datasets/edc3ad26-8ae7-4916-a00b-bc6048d19bf8/json";
+/** 台南市垃圾清運點(data.tainan.gov.tw「臺南市垃圾清運點資料」的 API;一次回整份,約 3.5 MB) */
+const TAINAN_GARBAGE = "https://soa.tainan.gov.tw/Api/Service/Get/84df8cd6-8741-41ed-919c-5105a28ecd6d";
+/** 有垃圾車點位來源的生活圈。台中、高雄的市府資料只有地址 / 路口、沒有座標(要另外定位),桃園、基隆還沒找到 */
+const GARBAGE_REGIONS: RegionKey[] = ["north", "tainan"];
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -58,7 +62,35 @@ async function fetchYoubike(region: RegionKey): Promise<PoiIn[]> {
   return [...items, ...others];
 }
 
-async function fetchGarbage(): Promise<PoiIn[]> {
+async function fetchGarbage(region: RegionKey): Promise<PoiIn[]> {
+  if (region === "tainan") {
+    // 這支 API 很不穩(常等 100 秒後回 success: false):重試 3 次,抓到就存一份;都失敗就用上次存的,沒有才算失敗
+    const cache = path.join(ROOT, "data", "garbage", "tainan.json");
+    let rows: TainanGarbageRow[] = [];
+    for (let i = 0; i < 3 && !rows.length; i++) {
+      if (i) await sleep(20_000);
+      try {
+        const res = await fetch(TAINAN_GARBAGE, { signal: AbortSignal.timeout(300_000) });
+        const body = (await res.json()) as { success?: boolean; message?: string; data?: TainanGarbageRow[] | null };
+        if (Array.isArray(body.data) && body.data.length) rows = body.data;
+        else console.log(`    台南市:API 沒給資料(${body.message ?? res.status}),第 ${i + 1} 次`);
+      } catch (e) {
+        console.log(`    台南市:${String(e).slice(0, 100)},第 ${i + 1} 次`);
+      }
+    }
+    if (rows.length) {
+      fs.mkdirSync(path.dirname(cache), { recursive: true });
+      fs.writeFileSync(cache, JSON.stringify(rows));
+    } else if (fs.existsSync(cache)) {
+      rows = JSON.parse(fs.readFileSync(cache, "utf8")) as TainanGarbageRow[];
+      console.log(`    台南市:API 抓不到,用 ${Math.floor((Date.now() - fs.statSync(cache).mtimeMs) / 86400_000)} 天前存的那份`);
+    } else {
+      throw new Error("台南市垃圾清運點 API 抓不到,也沒有存檔");
+    }
+    const items = fromTainanGarbage(rows);
+    console.log(`    台南市 ${rows.length} 列 → ${items.length} 點`);
+    return items;
+  }
   const tpe: TaipeiGarbageRow[] = [];
   for (let offset = 0; offset < 100_000; offset += 1000) {
     const page = await getJson<{ result: { count: number; results: TaipeiGarbageRow[] } }>(`${TAIPEI_GARBAGE}&limit=1000&offset=${offset}`);
@@ -186,9 +218,11 @@ export async function runPois(opts: { base: string; secret: string; args: string
   const regionArg = args.find((a) => a.startsWith("--region="))?.slice(9) ?? "north";
   if (!(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
   const region = regionArg as RegionKey;
-  // 垃圾車、拉麵、治安是雙北各自的來源,其他生活圈還沒有(YouBike 其他縣市走 TDX)
-  const NORTH_ONLY: PoiCat[] = ["garbage", "ramen", ...CRIME_CATS];
-  const cats = POI_CATS.filter((c) => (!only || only.includes(c)) && (region === "north" || !NORTH_ONLY.includes(c)));
+  // 拉麵、治安是雙北各自的來源,其他生活圈還沒有;垃圾車看 GARBAGE_REGIONS(YouBike 其他縣市走 TDX)
+  const NORTH_ONLY: PoiCat[] = ["ramen", ...CRIME_CATS];
+  const cats = POI_CATS.filter(
+    (c) => (!only || only.includes(c)) && (region === "north" || !NORTH_ONLY.includes(c)) && (c !== "garbage" || GARBAGE_REGIONS.includes(region)),
+  );
   if (!dry && !opts.secret) throw new Error(".env 沒有 INGEST_SECRET");
   const version = new Date().toISOString();
   let waited = false;
@@ -198,7 +232,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
     let items: PoiIn[];
     try {
       if (cat === "garbage") {
-        items = await fetchGarbage();
+        items = await fetchGarbage(region);
       } else if (cat === "youbike") {
         items = await fetchYoubike(region);
       } else if (cat === "nightmarket") {

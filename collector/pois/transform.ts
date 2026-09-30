@@ -311,3 +311,47 @@ export function fromTdxBike(rows: TdxBikeStation[]): PoiIn[] {
   }
   return out;
 }
+
+/** 台南市垃圾清運點(市府開放資料;一點一個時間,收運日是「一、二、四、六」這種字串) */
+export interface TainanGarbageRow {
+  AREA?: string;
+  ROUTEID?: string;
+  ROUTEORDER?: number | string;
+  VILLAGE?: string;
+  POINTNAME?: string;
+  TIME?: string;
+  LONGITUDE?: number | string;
+  LATITUDE?: number | string;
+  WORKDAY?: string;
+  RECYCLEDAY?: string;
+}
+const daysBits = (s: string | undefined) => [...(s ?? "")].reduce((b, ch) => (W.includes(ch) ? b | (1 << W.indexOf(ch)) : b), 0);
+const inTainan = (lat: number, lng: number) => lat > 22.8 && lat < 23.5 && lng > 120.0 && lng < 120.7;
+export function fromTainanGarbage(rows: TainanGarbageRow[]): PoiIn[] {
+  const out = new Map<string, PoiIn>();
+  for (const r of rows) {
+    const lat = Number(r.LATITUDE);
+    const lng = Number(r.LONGITUDE);
+    const t0 = hhmm(r.TIME);
+    if (!inTainan(lat, lng) || t0 == null) continue;
+    const days = daysBits(r.WORKDAY);
+    if (!days) continue;
+    const recycle = daysBits(r.RECYCLEDAY); // 「無清運」→ 0
+    // 同一路線、同一順序偶爾有兩筆(不同里),加時間才不會互蓋
+    const key = `tn${r.ROUTEID ?? ""}:${r.ROUTEORDER ?? ""}:${t0}`.slice(0, 80);
+    out.set(key, {
+      key,
+      category: "garbage",
+      subtype: `${r.AREA ?? ""}${r.ROUTEID ? ` 路線 ${r.ROUTEID}` : ""}`.trim().slice(0, 40) || null,
+      name: r.POINTNAME?.trim().slice(0, 120) || null,
+      lat,
+      lng,
+      rating: null,
+      url: null,
+      note: `${fmt(t0)} · ${daysText(days)}${recycle ? `(回收 ${daysText(recycle)})` : ""}`.slice(0, 120),
+      minute: t0,
+      days,
+    });
+  }
+  return [...out.values()];
+}

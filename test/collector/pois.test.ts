@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysLabel, garbageService, PoiIn } from "../../src/shared/poi";
-import { fromMenmap, fromNtpcGarbage, fromTdxBike, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
+import { fromMenmap, fromNtpcGarbage, fromTainanGarbage, fromTdxBike, fromOverpass, fromTaipeiGarbage, hhmm, nightMarkets, sampleLine, osmName, overpassQuery, tiles, bboxOf, type OsmElement } from "../../collector/pois/transform";
 
 describe("OSM / Overpass", () => {
   it("query:每條選擇器一段 nwr,out center", () => {
@@ -79,6 +79,21 @@ describe("垃圾車", () => {
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ key: "n207001:1", minute: 760, note: "12:40 · 一三五(回收 一)" });
+  });
+
+  it("台南市:收運日字串轉星期;「無清運」不寫回收;同路線同順序的兩筆不互蓋", () => {
+    const base = { AREA: "安南區", ROUTEID: "328", ROUTEORDER: 15, LONGITUDE: 120.1612, LATITUDE: 23.0682, RECYCLEDAY: "五" };
+    const out = fromTainanGarbage([
+      { ...base, VILLAGE: "公塭里", POINTNAME: "安興街182號", TIME: "10:35", WORKDAY: "一、二、三、四、五、六" },
+      { ...base, VILLAGE: "公親里", POINTNAME: "公學路一段228號(大廟前)", TIME: "11:02", WORKDAY: "一、二、四、六", RECYCLEDAY: "無清運" },
+      { ...base, POINTNAME: "座標跑到別的縣市", TIME: "12:00", WORKDAY: "一", LATITUDE: 25.03, LONGITUDE: 121.56 },
+      { ...base, POINTNAME: "沒有收運日", TIME: "12:00", WORKDAY: "" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ key: "tn328:15:635", subtype: "安南區 路線 328", name: "安興街182號", minute: 635, note: "10:35 · 一二三四五六(回收 五)" });
+    expect(out[1]).toMatchObject({ key: "tn328:15:662", note: "11:02 · 一二四六" });
+    expect(daysLabel(out[1]!.days!)).toBe("一二四六");
+    for (const x of out) expect(PoiIn.safeParse(x).success).toBe(true);
   });
 
   it("hhmm / daysLabel", () => {

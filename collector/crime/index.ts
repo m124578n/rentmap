@@ -11,7 +11,7 @@ import path from "node:path";
 import type { PoiCat, PoiIn } from "../../src/shared/poi";
 import { geocode } from "../lib/geocode";
 import { push } from "../pois/index";
-import { districtStats, parseNtpcCrime, parseTaipeiTheft, THEFT_KINDS, type TaipeiTheftRow, type TheftKind } from "./transform";
+import { districtStats, parseNpaCrime, parseNtpcCrime, parseTaipeiTheft, THEFT_KINDS, type CrimeDistricts, type NpaCrimeRow, type TaipeiTheftRow, type TheftKind } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const DIR = path.join(ROOT, "data", "crime");
@@ -21,10 +21,12 @@ const TP_URL: Record<TheftKind, string> = {
   moto: "https://data.taipei/api/dataset/3a0e2289-a605-4eac-af30-f4af613f456d/resource/ac508aeb-9f26-409c-9fb0-20c65a973498/download",
 };
 const NTPC_URL = "https://data.ntpc.gov.tw/api/datasets/8a32c6b5-46fc-4fac-b3a4-317b9998bfd7/csv/file";
+/** 警政署全國「犯罪資料」(data.gov.tw 14200):每季一個 CSV,從資料集的中繼資料找最近幾季的下載網址 */
+const NPA_META = "https://data.gov.tw/api/v2/rest/dataset/14200";
 export const CRIME_CAT: Record<TheftKind, PoiCat> = { house: "theft_house", moto: "theft_moto", car: "theft_car" };
 
 /** 下載(30 天內用快取);臺北市是 Big5 */
-async function fetchText(url: string, file: string, encoding: "big5" | "utf-8"): Promise<string> {
+async function fetchText(url: string, file: string, encoding: "big5" | "utf-8" | "auto"): Promise<string> {
   const p = path.join(DIR, file);
   if (!fs.existsSync(p) || Date.now() - fs.statSync(p).mtimeMs > 30 * 86400_000) {
     const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -32,7 +34,30 @@ async function fetchText(url: string, file: string, encoding: "big5" | "utf-8"):
     fs.mkdirSync(DIR, { recursive: true });
     fs.writeFileSync(p, Buffer.from(await res.arrayBuffer()));
   }
-  return new TextDecoder(encoding).decode(fs.readFileSync(p));
+  const buf = fs.readFileSync(p);
+  if (encoding !== "auto") return new TextDecoder(encoding).decode(buf);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder("big5").decode(buf);
+  }
+}
+
+/** 警政署全國資料最近 quarters 季(雙北以外的縣市算各區件數用) */
+async function fetchNpa(quarters = 4): Promise<NpaCrimeRow[]> {
+  const res = await fetch(NPA_META, { signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new Error(`data.gov.tw ${res.status}`);
+  const meta = (await res.json()) as { result?: { distribution?: { resourceDescription?: string; resourceDownloadUrl?: string }[] } };
+  const files = (meta.result?.distribution ?? [])
+    .map((d) => ({ range: /^\d{5}-\d{5}/.exec(d.resourceDescription ?? "")?.[0], url: d.resourceDownloadUrl }))
+    .filter((x): x is { range: string; url: string } => !!x.range && !!x.url)
+    .sort((a, b) => a.range.localeCompare(b.range))
+    .slice(-quarters);
+  if (!files.length) throw new Error("資料集裡找不到每季的檔");
+  const rows: NpaCrimeRow[] = [];
+  for (const f of files) rows.push(...parseNpaCrime(await fetchText(f.url, `npa_${f.range}.csv`, "auto")));
+  console.log(`警政署全國犯罪資料 ${files[0]!.range.slice(0, 5)}~${files.at(-1)!.range.slice(6)}:${rows.length} 列(regions.ts 有列的縣市)`);
+  return rows;
 }
 
 async function locate(r: TaipeiTheftRow) {
@@ -56,8 +81,19 @@ export async function runCrime(opts: { base: string; secret: string; args: strin
   const ntpc = parseNtpcCrime(await fetchText(NTPC_URL, "ntpc.csv", "utf-8"));
 
   // 各區近一年 → public/crime-districts.json
-  const stats = districtStats(tp, ntpc);
   const out = path.join(ROOT, "public", "crime-districts.json");
+  let npa: NpaCrimeRow[] = [];
+  try {
+    npa = await fetchNpa();
+  } catch (e) {
+    console.log(`警政署全國犯罪資料抓不到,雙北以外沿用上次的件數 — ${String(e).slice(0, 120)}`);
+  }
+  const stats = districtStats(tp, ntpc, npa);
+  if (!npa.length && fs.existsSync(out)) {
+    const prev = JSON.parse(fs.readFileSync(out, "utf8")) as CrimeDistricts;
+    for (const [k, v] of Object.entries(prev.items)) if (!/^(台北市|新北市)\|/.test(k)) stats.items[k] = v;
+    if (prev.periods) stats.periods = prev.periods;
+  }
   fs.writeFileSync(out, JSON.stringify(stats) + "\n");
   console.log(`各區近一年(${stats.from}~${stats.to}):${Object.keys(stats.items).length} 區 → ${path.relative(ROOT, out)}(新北市沒寫區的 ${stats.ntpc_unknown} 件不算)`);
 

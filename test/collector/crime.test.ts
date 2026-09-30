@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { districtStats, parseNtpcCrime, parseTaipeiTheft, rocDate } from "../../collector/crime/transform";
+import { districtStats, parseNpaCrime, parseNtpcCrime, parseTaipeiTheft, rocDate } from "../../collector/crime/transform";
 
 const TP = `編號,案類,發生日期,發生時段,發生地點
 1,住宅竊盜,1150729,17~19,臺北市士林區延平北路五段151~180號
@@ -44,5 +44,29 @@ describe("crime open data", () => {
     expect(s.to).toBe("2026-08-29");
     expect(s.items).toEqual({ "台北市|大安區": { house: 2 }, "新北市|淡水區": { house: 1 } });
     expect(s.ntpc_unknown).toBe(1);
+    expect(s.periods).toBeUndefined();
+  });
+
+  it("警政署全國資料:雙北以外的縣市各區件數,期間分開記", () => {
+    const npa = parseNpaCrime(
+      [
+        "\uFEFFtype,oc_year,oc_data,oc_county,oc_region",
+        "住宅竊盜,115,1150630,臺中市,西屯區",
+        "機車竊盜,115,1150401,臺中市,臺中市西屯區",
+        "住宅竊盜,114,1140701,高雄市,鳳山區",
+        "住宅竊盜,114,1140630,高雄市,鳳山區", // 超過一年
+        "毒品,115,1150401,臺中市,西屯區", // 不是竊盜
+        "住宅竊盜,115,1150401,臺中市,不存在區",
+        "住宅竊盜,115,1150401,臺北市,大安區", // 雙北用各自的來源
+        "住宅竊盜,115,1150401,花蓮縣,花蓮市", // regions.ts 沒列
+      ].join("\n"),
+    );
+    expect(npa).toHaveLength(7);
+    expect(npa[1]).toEqual({ kind: "moto", date: "2026-04-01", city: "台中市", district: "西屯區" });
+    expect(npa[5]!.district).toBeNull();
+    const s = districtStats([{ kind: "house", date: "2026-08-29", district: "大安區" }], [], npa);
+    expect(s.items).toEqual({ "台北市|大安區": { house: 1 }, "台中市|西屯區": { house: 1, moto: 1 }, "高雄市|鳳山區": { house: 1 } });
+    expect(s.periods).toEqual({ 台中市: { from: "2025-06-30", to: "2026-06-30" }, 高雄市: { from: "2025-06-30", to: "2026-06-30" } });
+    expect(s.to).toBe("2026-08-29");
   });
 });

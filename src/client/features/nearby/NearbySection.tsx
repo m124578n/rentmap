@@ -141,7 +141,7 @@ export function NearbySection({
             </ul>
           )}
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-400">
-            <span>資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵、雙北環保局垃圾車</span>
+            <span>資料:OpenStreetMap(小店可能缺)、麵咩撲拉麵、各市環保局垃圾車</span>
             <a href={googleNearbyUrl("餐廳", lat, lng)} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-emerald-700 underline dark:text-emerald-400">
               Google Maps 看附近餐廳 <ExternalLink size={10} />
             </a>

@@ -106,6 +106,8 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 採集不要手動開兩份:覆蓋式匯入與解壓唯讀檔會互撞(2026-09-30 踩過)。一律走 `npm run data:refresh`,它有執行鎖。
 - TDX 同一天連跑公車 + 台鐵 + 捷運會 429:`collector/lib/tdx.ts` 的 `tdxGet` 會退避重試(最多約 5 分鐘),新的 TDX 採集一律用它,不要自己 fetch。
 - Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
+- 台南垃圾清運點的 API(`soa.tainan.gov.tw`)很不穩,採集會重試並用 `data/garbage/tainan.json` 後援;台中、高雄的垃圾車資料沒有座標、桃園已下架(見 `docs/design/2026-09-30-open-a-region.md` §4)。
+- 內政部開放資料主機 `opdadm.moi.gov.tw`(警政署全國犯罪資料)晚上常連不上;`collect -- crime` 抓不到時雙北以外沿用上次的件數,不會清掉。
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。
 - 591 的 `window.__NUXT__` 是 JS 函式呼叫不是 JSON,要 `node:vm` 執行;Playwright 裡 stringify 會循環參照。
