@@ -33,6 +33,8 @@ export function useAuth() {
     dev: q.data?.dev ?? false,
     /** 私人模式(本機):共用房源池、照片、聯絡人、刊登天數、開價圖層;公開版沒有(src/worker/pool.ts) */
     privatePool: q.data?.private_pool ?? false,
+    /** 還沒同意的條款(非空就先擋同意畫面) */
+    consentNeeded: q.data?.consent_needed ?? [],
     loading: q.isLoading,
     login,
     devLogin,

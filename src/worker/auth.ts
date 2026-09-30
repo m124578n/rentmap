@@ -17,6 +17,7 @@ import type { SessionUser } from "@shared/schemas";
 import type { AppEnv, Env } from "./env";
 import { db, nowIso, schema } from "./db";
 import { isPrivatePool } from "./pool";
+import { neededFor } from "./consent";
 
 export const SESSION_COOKIE = "rent_session";
 const STATE_COOKIE = "rent_oauth_state";
@@ -133,7 +134,7 @@ auth.get("/api/auth/dev", async (c) => {
 
 auth.post("/api/auth/logout", (c) => {
   if (!sameOrigin(c)) return c.json({ error: "forbidden" }, 403);
-  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  clearSession(c);
   return c.json({ ok: true });
 });
 
@@ -142,10 +143,16 @@ auth.get("/api/me", async (c) => {
   const user = await readSession(c);
   const dev = !!c.env.DEV_USER_EMAIL && /^https?:\/\/localhost(:\d+)?$/.test(c.env.APP_ORIGIN);
   // private_pool:前端依此決定要不要顯示照片、聯絡人、開價圖層、刊登天數等(見 pool.ts)
-  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env) });
+  // consent_needed:還沒同意(或條款改版)的文件;非空時前端先擋同意畫面(routes/legal.ts)
+  const consent_needed = user ? await neededFor(c.env.DB, user.id) : [];
+  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env), consent_needed });
 });
 
 // ---- 給其他路由用 ----
+
+export function clearSession(c: Context<AppEnv>) {
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+}
 
 export async function readSession(c: Context<AppEnv>): Promise<SessionUser | null> {
   const raw = getCookie(c, SESSION_COOKIE);

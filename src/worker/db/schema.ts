@@ -209,6 +209,26 @@ export const userRequirements = sqliteTable("user_requirements", {
 });
 
 /**
+ * 條款同意紀錄(服務條款、隱私權政策…每次同意一列,不覆蓋):退款或個資爭議時要查「誰在什麼時候、從哪個 IP 同意了哪一版」。
+ * 目前版本見 src/shared/legal.ts。
+ */
+export const consents = sqliteTable(
+  "consents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    doc: text("doc").notNull(), // terms | privacy
+    version: text("version").notNull(),
+    acceptedAt: text("accepted_at").notNull(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+  },
+  (t) => [index("consents_user_doc_idx").on(t.userId, t.doc)],
+);
+
+/**
  * 內政部租賃實價登錄(雙北,參考資料)。採集機 `collect -- rent-stats` 匯入,serial = 實價登錄編號(重匯同一筆覆蓋)。
  * 行情計算見 src/shared/market.ts;social(社宅包租代管)與 has_parking(含車位)預設不列入。
  */

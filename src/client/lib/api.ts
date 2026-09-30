@@ -6,6 +6,7 @@ import type { StatusResponse } from "@shared/status";
 import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
 import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
+import type { ConsentNeed } from "@shared/legal";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -46,7 +47,9 @@ window.addEventListener(STALE_EVENT, () => (staleShown = true));
 window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
-  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean }>("/api/me"),
+  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[] }>("/api/me"),
+  deleteAccount: () => req<{ ok: true }>("/api/account", { method: "DELETE", body: JSON.stringify({ confirm: "刪除" }) }),
+  consent: (docs: { doc: string; version: string }[]) => req<{ consent_needed: ConsentNeed[] }>("/api/consent", { method: "POST", body: JSON.stringify({ docs }) }),
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
   listProperties: () => req<{ items: PropertySummary[] }>("/api/properties"),

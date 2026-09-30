@@ -1,7 +1,8 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { ConsentGate } from "@/features/legal/ConsentGate";
 import { useEffect, useState } from "react";
 import { FRESH_EVENT, STALE_EVENT } from "@/lib/api";
-import { Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
+import { UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -10,10 +11,13 @@ import { CompareBar } from "@/features/compare/compare";
 import { openRequirementsDialog } from "@/features/fit/fit";
 import { RequirementsDialogHost } from "@/features/fit/RequirementsDialog";
 import { AboutPage } from "@/routes/AboutPage";
+import { LegalLinks } from "@/features/legal/LegalLinks";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
-  const { user, enabled, dev, loading, login, devLogin, logout } = useAuth();
+  const { user, enabled, dev, loading, login, devLogin, logout, consentNeeded } = useAuth();
+  // 條款頁沒登入也要看得到(同意畫面的連結、搜尋引擎)
+  const legal = useRouterState({ select: (s) => s.location.pathname.startsWith("/legal/") });
   const { theme, toggle } = useTheme();
   const params = new URLSearchParams(window.location.search);
   const loginErr = params.get("login");
@@ -61,6 +65,13 @@ export function Layout() {
               {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </span>
+          {user && (
+            <span className="hidden sm:contents">
+              <Link to="/account" className="btn-ghost" aria-label="帳號" title="帳號(匯出 / 刪除)">
+                <UserCog size={16} />
+              </Link>
+            </span>
+          )}
           {user ? (
             <button onClick={logout} className="btn-ghost" title={user.name ?? ""}>
               {user.avatar && <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />}
@@ -86,6 +97,10 @@ export function Layout() {
         {loginErr === "failed" && <p className="card m-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
         {loading ? (
           <p className="p-4 text-neutral-500">載入中…</p>
+        ) : legal ? (
+          <Outlet />
+        ) : user && consentNeeded.length > 0 ? (
+          <ConsentGate needed={consentNeeded} onLogout={logout} />
         ) : user ? (
           <>
             <Outlet />
@@ -169,9 +184,13 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
         <Link to="/about" className={row} onClick={onClose}>
           <Info size={18} /> 介紹
         </Link>
+        <Link to="/account" className={row} onClick={onClose}>
+          <UserCog size={18} /> 帳號(匯出 / 刪除)
+        </Link>
         <button className={row} onClick={toggle}>
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />} {theme === "dark" ? "淺色模式" : "深色模式"}
         </button>
+        <LegalLinks className="px-3 pt-2" />
       </div>
     </div>
   );

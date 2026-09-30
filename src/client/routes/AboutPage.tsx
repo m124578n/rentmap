@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
+import { LegalLinks } from "@/features/legal/LegalLinks";
 
 /**
  * 介紹頁:沒登入的人在任何網址都看到這頁(也是搜尋引擎看到的那頁);登入後從「更多 → 介紹」或 /about 進來。
@@ -157,6 +158,7 @@ export function AboutPage() {
       </section>
 
       <p className="mt-8 text-center text-xs text-neutral-400">地圖 © CARTO © OpenStreetMap contributors</p>
+      <LegalLinks className="mt-2 justify-center" />
     </div>
   );
 }

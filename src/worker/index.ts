@@ -11,6 +11,8 @@ import { requirements } from "./routes/requirements";
 import { nearby } from "./routes/nearby";
 import { hazards } from "./routes/hazards";
 import { status } from "./routes/status";
+import { legal } from "./routes/legal";
+import { account } from "./routes/account";
 
 const app = new Hono<AppEnv>();
 
@@ -40,6 +42,10 @@ app.route("/", nearby);
 app.route("/", hazards);
 // 資料狀態頁 /api/status
 app.route("/", status);
+// 條款同意 /api/consent
+app.route("/", legal);
+// 帳號:匯出 / 刪除 /api/account
+app.route("/", account);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
