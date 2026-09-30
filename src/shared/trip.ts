@@ -182,7 +182,8 @@ export function railLines(lines: string[]) {
   let prevMrt = false;
   for (const l of lines) {
     const tra = l === "台鐵";
-    out += (out ? "→" : "") + (tra || prevMrt ? l : `捷運${l}`);
+    // 線名本身就帶「捷運 / 輕軌」的(機場捷運、高雄捷運紅線、淡海輕軌)不再加前綴
+    out += (out ? "→" : "") + (tra || prevMrt || /捷運|輕軌/.test(l) ? l : `捷運${l}`);
     prevMrt = !tra;
   }
   return out;

@@ -79,6 +79,9 @@ describe("台鐵併進軌道圖", () => {
   it("摘要與站名", () => {
     expect(railLines(["板南線", "文湖線"])).toBe("捷運板南線→文湖線");
     expect(railLines(["台鐵"])).toBe("台鐵");
+    expect(railLines(["高雄捷運橘線", "高雄捷運紅線"])).toBe("高雄捷運橘線→高雄捷運紅線");
+    expect(railLines(["台鐵", "台中捷運綠線"])).toBe("台鐵→台中捷運綠線");
+    expect(railLines(["淡海輕軌", "淡水信義線"])).toBe("淡海輕軌→淡水信義線");
     expect(railLines(["板南線", "台鐵", "淡水信義線"])).toBe("捷運板南線→台鐵→捷運淡水信義線");
     expect(railStop("台鐵板橋")).toBe("台鐵板橋站");
     expect(railStop("公館")).toBe("捷運公館站");
