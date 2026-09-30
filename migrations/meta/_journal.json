@@ -57,6 +57,13 @@
       "when": 1790666411593,
       "tag": "0007_careless_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790675101013,
+      "tag": "0008_conscious_legion",
+      "breakpoints": true
     }
   ]
 }

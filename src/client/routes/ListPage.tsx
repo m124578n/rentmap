@@ -7,6 +7,8 @@ import { useCommute } from "@/features/commute/useCommute";
 import { useAlong } from "@/features/bus/useAlong";
 import { useMarket } from "@/features/market/useMarket";
 import { MarketBadge } from "@/features/market/MarketSection";
+import { CompareToggle } from "@/features/compare/compare";
+import { FitBadge, useFit } from "@/features/fit/fit";
 import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
@@ -19,9 +21,11 @@ export function ListPage() {
   const commute = useCommute();
   const along = useAlong();
   const market = useMarket();
+  const fit = useFit();
+  const fitOf = fit.configured ? fit.fitOf : undefined;
   const items = useMemo(
-    () => sortItems(applyFilters(all, filters, commute.ctx, along.ids), filters, commute.ctx, market.data),
-    [all, filters, commute.ctx, along.ids, market.data],
+    () => sortItems(applyFilters(all, filters, commute.ctx, along.ids, fitOf), filters, commute.ctx, market.data, fitOf),
+    [all, filters, commute.ctx, along.ids, market.data, fitOf],
   );
 
   return (
@@ -37,6 +41,9 @@ export function ListPage() {
               <option value="newest">剛刊登的在前</option>
               <option value="drop">降價最多的在前</option>
               <option value="market">比行情便宜的在前</option>
+              <option value="fit" disabled={!fit.configured}>
+                符合需求的在前
+              </option>
               <option value="commute" disabled={commute.places.length === 0}>
                 通勤短 → 長{commute.places.length > 1 ? "(取最久的地點)" : ""}
               </option>
@@ -68,6 +75,7 @@ export function ListPage() {
                         {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}
                       </span>
                       <MarketBadge b={market.data?.items[p.id]} />
+                      <FitBadge f={fitOf?.(p)} />
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-neutral-500">
@@ -92,7 +100,8 @@ export function ListPage() {
                   <div className="mt-1.5">
                     <ListingBadges p={p} />
                   </div>
-                  <p className="mt-2 flex gap-2 text-xs">
+                  <p className="mt-2 flex items-center gap-2 text-xs">
+                    <CompareToggle id={p.id} className="mr-auto" />
                     {p.stage && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">{STAGE_LABEL[p.stage as Stage] ?? p.stage}</span>}
                     {p.source && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{SOURCE_LABEL[p.source as Source] ?? p.source}</span>}
                   </p>

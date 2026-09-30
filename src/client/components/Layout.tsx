@@ -1,9 +1,12 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, Sun } from "lucide-react";
+import { Home, Kanban, List, LogOut, Map, MapPin, Moon, Plus, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
 import { PlacesDialogHost } from "@/features/places/PlacesDialog";
+import { CompareBar } from "@/features/compare/compare";
+import { openRequirementsDialog } from "@/features/fit/fit";
+import { RequirementsDialogHost } from "@/features/fit/RequirementsDialog";
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
@@ -33,6 +36,9 @@ export function Layout() {
               </Link>
               <button onClick={openPlacesDialog} className="btn-ghost" title="我的地點(公司…)">
                 <MapPin size={16} /> <span className="hidden sm:inline">我的地點</span>
+              </button>
+              <button onClick={openRequirementsDialog} className="btn-ghost" title="預算、坪數、通勤上限、必要設備…">
+                <SlidersHorizontal size={16} /> <span className="hidden sm:inline">我的需求</span>
               </button>
               <Link to="/new" className="btn-primary">
                 <Plus size={16} /> <span className="hidden sm:inline">新增</span>
@@ -70,6 +76,8 @@ export function Layout() {
           <>
             <Outlet />
             <PlacesDialogHost />
+            <RequirementsDialogHost />
+            <CompareBar />
           </>
         ) : (
           <div className="card m-4 text-center">

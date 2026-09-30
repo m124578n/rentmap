@@ -3,6 +3,7 @@ import type { PropertySummary } from "@shared/schemas";
 import type { DayType } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
 import type { MarketMatrix } from "@shared/market";
+import type { FitResult } from "@shared/fit";
 import { ageOf, priceOf } from "@/features/listing/age";
 
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
@@ -30,11 +31,14 @@ export interface Filters {
   commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
   /** 經過這些路線(任一條):公車主路線名(307)或捷運線名(板南線);走得到才留 */
   alongRoutes: string[];
+  /** 隱藏不符需求(紅)的房源;沒設需求時無效 */
+  fitOnly: boolean;
   /** 列表排序 */
   sort: SortKey;
 }
 
-export type SortKey = "updated" | "rent" | "commute" | "newest" | "drop" | "market";
+export type SortKey = "updated" | "rent" | "commute" | "newest" | "drop" | "market" | "fit";
+export type FitOf = (p: PropertySummary) => FitResult | null;
 
 export const EMPTY: Filters = {
   kinds: [],
@@ -54,6 +58,7 @@ export const EMPTY: Filters = {
   commuteMax: null,
   commutePlaces: [],
   alongRoutes: [],
+  fitOnly: false,
   commuteSide: "go",
   commuteTimes: {
     go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
@@ -124,6 +129,7 @@ export function activeCount(f: Filters): number {
   if (f.newOnly) n++;
   if (f.commuteMax != null) n++;
   if (f.alongRoutes.length) n++;
+  if (f.fitOnly) n++;
   return n;
 }
 
@@ -150,8 +156,9 @@ export function worstCommute(p: PropertySummary, f: Filters, ctx: CommuteCtx | u
 }
 
 /** along = 走得到 alongRoutes 的房源 id(useAlong);undefined = 還沒查到,先不濾 */
-export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, along?: Set<number>): PropertySummary[] {
+export function applyFilters(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, along?: Set<number>, fitOf?: FitOf): PropertySummary[] {
   return items.filter((p) => {
+    if (f.fitOnly && fitOf?.(p)?.level === "red") return false;
     if (f.alongRoutes.length && along && !along.has(p.id)) return false;
     if (f.commuteMax != null) {
       const w = worstCommute(p, f, ctx);
@@ -176,7 +183,16 @@ export function applyFilters(items: PropertySummary[], f: Filters, ctx?: Commute
   });
 }
 
-export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, market?: MarketMatrix): PropertySummary[] {
+export function sortItems(items: PropertySummary[], f: Filters, ctx?: CommuteCtx, market?: MarketMatrix, fitOf?: FitOf): PropertySummary[] {
+  if (f.sort === "fit" && fitOf) {
+    // 符合度高的在前:不符(紅)排後面,紅的裡面再比分數;沒分數(只有硬性條件、都過)當滿分
+    const key = (p: PropertySummary) => {
+      const r = fitOf(p);
+      if (!r) return 0;
+      return (r.fails.length ? 10 : 0) + (1 - (r.score ?? 1));
+    };
+    return [...items].sort((a, b) => key(a) - key(b));
+  }
   if (f.sort === "market") {
     // 比行情便宜最多的在前;樣本不足的排在有把握的後面,算不出的最後
     const key = (p: PropertySummary) => {

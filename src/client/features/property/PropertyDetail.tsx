@@ -10,6 +10,8 @@ import type { BusOverlay } from "@/features/map/busLayer";
 import { FavoritePanel } from "./FavoritePanel";
 import { PriceAgeSection } from "@/features/listing/PriceAgeSection";
 import { MarketSection } from "@/features/market/MarketSection";
+import { CompareToggle } from "@/features/compare/compare";
+import { FitSection } from "@/features/fit/fit";
 
 interface Props {
   id: number;
@@ -24,6 +26,9 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["property", id], queryFn: () => api.getProperty(id), enabled: Number.isInteger(id) });
+  // 符合度用列表那份(同一個快取;有行情、通勤要的欄位)
+  const list = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
+  const summary = list.data?.items.find((x) => x.id === id);
   const del = useMutation({
     mutationFn: () => api.deleteProperty(id),
     onSuccess: () => {
@@ -46,10 +51,13 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         <div className="min-w-0">
           <div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{main ? `$${main.rent.toLocaleString()}` : "—"}</div>
           <h1 className="font-semibold leading-snug">{p.title}</h1>
-          <p className="text-sm text-neutral-500">
-            {p.city}
-            {p.district}
-            {p.road ? ` ${p.road}` : ""}
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-neutral-500">
+            <span>
+              {p.city}
+              {p.district}
+              {p.road ? ` ${p.road}` : ""}
+            </span>
+            <CompareToggle id={id} />
           </p>
         </div>
         {onClose && (
@@ -70,6 +78,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
       {photos.length > 0 && <PhotoStrip photos={photos} />}
 
       {extra?.market_hint && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">591:{extra.market_hint}</p>}
+
+      <FitSection p={summary} />
 
       <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
 
