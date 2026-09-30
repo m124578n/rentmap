@@ -101,6 +101,8 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - `import * as maplibregl from "maplibre-gl"`(v6 沒有 default export);GeoJSON 型別從 `geojson` 套件 import。
 - 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
 - `.ps1` 一定要存成 **UTF-8 with BOM**:PowerShell 5.1 沒 BOM 會用 ANSI 讀,中文字串直接讓腳本語法錯誤(register_task.ps1 踩過)。
+- Overpass 常常連不上:生活機能預設走離線抽取,`python scripts/build_osm_pois.py`(`data:refresh` 的 pois 步驟會先跑)從 Geofabrik 的台灣 `.osm.pbf` 產 `data/osm/` 的快取檔,`collect -- pois` 就不會打 Overpass。類別 / 分塊 / 檔名由 `scripts/osm-spec.ts` 依 collector 的定義產生,不要兩邊各寫一份。
+- 災害多邊形是一個生活圈載一份(`loadZones(DB, region)`);新增讀 hazard_zones 的程式不要整張表載進記憶體。
 - 採集不要手動開兩份:覆蓋式匯入與解壓唯讀檔會互撞(2026-09-30 踩過)。一律走 `npm run data:refresh`,它有執行鎖。
 - TDX 同一天連跑公車 + 台鐵 + 捷運會 429:`collector/lib/tdx.ts` 的 `tdxGet` 會退避重試(最多約 5 分鐘),新的 TDX 採集一律用它,不要自己 fetch。
 - Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
