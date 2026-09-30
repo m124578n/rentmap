@@ -55,6 +55,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm test` | Workers 環境的整合測試 |
 | `npm run db:generate` | 改 `src/worker/db/schema.ts` 後產 migration |
 | `npm run db:migrate:local` | 套 migration 到本地 D1(`vite dev` 開著時不要跑,會撞 SQLite) |
+| `npm run data:refresh [-- --due] [--region=…] [--only=bus,pois] [--plan]` | **開放資料更新的入口**:公車、台鐵、捷運、實價登錄、災害、生活機能、治安一次跑(依來源分三條線平行,全部約 1 小時)。`--due` 只跑到期的(每項的週期寫在 `scripts/refresh-data.mjs`);有執行鎖,不會兩份同時跑;dev server 沒開會自己起;log 在 `data/logs/refresh-{日期}-{項目}.log`,上次成功時間在 `data/refresh-state.json`。下面各個 `collect -- <資料集>` 是它呼叫的單項指令 |
 | `npm run collect -- add <591網址> --dry` | 抓一筆並印 JSON;不加 `--dry` 就推到 `.env` 的 `RENTMAP_API` |
 | `npm run collect -- list <591列表網址> --pages=1-5` | 抓多頁列表,每頁推一次。591 的 `kind` 只吃單一值(1 整層、2 獨立套房、3 分租套房) |
 | `bash scripts/collect-city.sh <1 台北\|3 新北> [pages]` | 一個城市三種房型批次(約 25 分鐘);要用 `( … & )` 脫離式跑,工具的背景任務 10 分鐘會被砍 |
@@ -100,6 +101,8 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - `import * as maplibregl from "maplibre-gl"`(v6 沒有 default export);GeoJSON 型別從 `geojson` 套件 import。
 - 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
 - `.ps1` 一定要存成 **UTF-8 with BOM**:PowerShell 5.1 沒 BOM 會用 ANSI 讀,中文字串直接讓腳本語法錯誤(register_task.ps1 踩過)。
+- 採集不要手動開兩份:覆蓋式匯入與解壓唯讀檔會互撞(2026-09-30 踩過)。一律走 `npm run data:refresh`,它有執行鎖。
+- TDX 同一天連跑公車 + 台鐵 + 捷運會 429:`collector/lib/tdx.ts` 的 `tdxGet` 會退避重試(最多約 5 分鐘),新的 TDX 採集一律用它,不要自己 fetch。
 - Vite 的 watcher 會掃整個 repo:`data/` 底下放瀏覽器 profile 之類的鎖檔會讓 dev server 直接崩掉(已在 vite.config.ts 忽略 data/、.wrangler/、dist/)。
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。

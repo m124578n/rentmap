@@ -20,14 +20,17 @@ export async function tdxToken(): Promise<string> {
 
 /** path 例:v2/Bike/Station/City/Taoyuan;404 回 null(該縣市沒有這項資料) */
 export async function tdxGet<T>(path: string): Promise<T | null> {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const res = await fetch(`${TDX_API}/${path}${path.includes("?") ? "&" : "?"}%24format=JSON`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${await tdxToken()}` },
       signal: AbortSignal.timeout(300_000),
     });
     if (res.status === 404) return null;
     if (res.status === 429 || res.status >= 500) {
-      await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+      // 429 = 短時間打太多次(同一天連跑公車 + 台鐵 + 捷運很容易碰到):15、30、45… 秒退避,最多等約 5 分鐘
+      const wait = 15 * (i + 1);
+      console.log(`  TDX ${path.split("?")[0]} HTTP ${res.status},${wait} 秒後重試`);
+      await new Promise((r) => setTimeout(r, wait * 1000));
       continue;
     }
     if (!res.ok) throw new Error(`TDX ${path} ${res.status}: ${(await res.text()).slice(0, 300)}`);

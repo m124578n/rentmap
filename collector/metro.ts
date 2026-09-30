@@ -8,34 +8,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildMrtTimes, type TdxS2S } from "./metro-transform";
+import { tdxGet } from "./lib/tdx";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "mrt-times.json");
-const TOKEN_URL = "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token";
-const API_BASE = "https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/S2STravelTime";
+const DATASET = "v2/Rail/Metro/S2STravelTime";
 // 高雄捷運 KRTC、高雄輕軌 KLRT、台中捷運 TMRT:mrt.json 已有站,開那些生活圈前跑一次
 const OPERATORS = ["TRTC", "NTMC", "TYMC", "KRTC", "KLRT", "TMRT"];
 
-async function getToken() {
-  const id = process.env.TDX_CLIENT_ID;
-  const secret = process.env.TDX_CLIENT_SECRET;
-  if (!id || !secret) throw new Error(".env 沒有 TDX_CLIENT_ID / TDX_CLIENT_SECRET");
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }),
-  });
-  if (!res.ok) throw new Error(`TDX token ${res.status}: ${await res.text()}`);
-  return ((await res.json()) as { access_token: string }).access_token;
-}
-
 export async function runMetro(args: string[]) {
-  const token = await getToken();
   const all: (TdxS2S & { op: string })[] = [];
   for (const op of OPERATORS) {
-    const res = await fetch(`${API_BASE}/${op}?%24format=JSON`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error(`TDX S2STravelTime/${op} ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const body = (await res.json()) as TdxS2S[];
+    const body = (await tdxGet<TdxS2S[]>(`${DATASET}/${op}`)) ?? [];
     console.log(`  ${op}:${body.length} 條路線`);
     all.push(...body.map((x) => ({ ...x, op })));
     await new Promise((r) => setTimeout(r, 5000));

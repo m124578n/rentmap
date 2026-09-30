@@ -9,6 +9,8 @@
 
 ## 1. 資料（都可以在 `enabled: false` 時先抓）
 
+一次抓齊:`npm run data:refresh -- --region=taichung`(下表各項的集合,有執行鎖與摘要;單項失敗可用 `--only=<項目>` 重跑)。
+
 | 項目 | 指令 | 備註 |
 |---|---|---|
 | 公車 | `npm run collect -- bus --region=taichung` | 只換台中的公車；TDX 金鑰必填 |

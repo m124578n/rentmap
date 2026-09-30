@@ -201,6 +201,12 @@ def main():
         with py7zr.SevenZipFile(arc) as z:
             names = z.getnames()
             want = [n for n in names if re.search(r"(06h_r150|24h_r500|6h150r|24h500r)(_polygon_class_1)?\.(shp|dbf|shx|prj)$", n)]
+            # 壓縮檔裡的檔案帶唯讀屬性:重跑時覆寫會 PermissionError,先把舊的解除唯讀並刪掉
+            for n in want:
+                old = os.path.join(DIR, "x", n)
+                if os.path.exists(old):
+                    os.chmod(old, 0o666)
+                    os.remove(old)
             z.extract(path=os.path.join(DIR, "x"), targets=want)
         for kind, keys in scenarios.items():
             shp = next(os.path.join(DIR, "x", n) for n in want if n.endswith(".shp") and any(k in n for k in keys))

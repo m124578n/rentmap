@@ -19,6 +19,8 @@ npm run collect -- add https://rent.591.com.tw/<id>   # 抓一筆 591 推進本�
 
 驗證:`npm run check`(型別)、`npm test`(Workers 環境整合測試)。
 
+開放資料(公車、台鐵、捷運、實價登錄、災害、生活機能、治安)要在本機抓:`npm run data:refresh`,之後定期跑 `npm run data:refresh -- --due` 只更新到期的。TDX 金鑰放 `.env`。
+
 ## 目前進度
 
 - [x] M1 骨架:Vite + React + Hono + D1(Drizzle)、Google 登入、手動新增房源、列表、詳細頁、狀態切換
