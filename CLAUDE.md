@@ -62,6 +62,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON + 雙北航空噪音防制區,依里公告對上里界 SHP)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
 | `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
+| `npm run collect -- tra [--dry] [--date=YYYY-MM-DD]` | 從 TDX 下載台鐵車站 + 某平日(預設下週三)的區間車時刻 → `public/tra.json`(**要 commit**;Worker 把台鐵併進捷運圖,站名前綴「台鐵」、350m 內可轉捷運)。台鐵改點才要重跑,原始檔快取 `data/tdx/tra-*.json`(要重抓先刪) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(20:00 台北、21:00 新北含重抓 80 筆;housefun / recheck 組不排程);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)

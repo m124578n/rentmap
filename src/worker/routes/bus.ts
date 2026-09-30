@@ -20,7 +20,7 @@ import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type Along
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { ownerOf, ownerSql } from "../pool";
-import { mrtGraph } from "../transit/mrt";
+import { mrtGraph, TRA_LINE } from "../transit/mrt";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
@@ -108,7 +108,8 @@ bus.get("/api/bus/names", async (c) => {
   const g = mrtGraph();
   const body = {
     bus: results.map((r) => r.name).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true })),
-    mrt: Object.values(g.lineName),
+    // 台鐵還沒匯入(tra.json 沒有站)就不列
+    mrt: Object.entries(g.lineName).flatMap(([code, name]) => (code !== TRA_LINE || g.stations.some((x) => x.rail === "tra") ? [name] : [])),
   };
   c.header("Cache-Control", "private, max-age=3600");
   return c.json(body);
@@ -154,7 +155,7 @@ bus.get("/api/bus/along", async (c) => {
     if (line) {
       const sts = g.stations.filter((s) => s.lines.includes(line.code));
       for (const s of sts) pts.push({ lat: s.lat, lng: s.lng, r: Math.max(radius, ALONG_MRT_R) });
-      return { q, kind: "mrt", label: `捷運${line.name}`, dirs: sts.length ? 1 : 0 };
+      return { q, kind: "mrt", label: line.code === TRA_LINE ? line.name : `捷運${line.name}`, dirs: sts.length ? 1 : 0 };
     }
     const names = [...(matched.get(q.toUpperCase()) ?? [])].sort((a, b) => a.length - b.length || a.localeCompare(b, "zh-Hant"));
     const n = dirCount.get(q.toUpperCase()) ?? 0;

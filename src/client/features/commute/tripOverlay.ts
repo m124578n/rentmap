@@ -62,8 +62,8 @@ export function tripOverlay(trip: Trip, start: Pt, end: Pt, shapes: Map<string, 
       if (seg.length >= 2) lines.push({ coords: seg, kind: "mrt", color });
       const first = leg.path[0]!;
       const last = leg.path[leg.path.length - 1]!;
-      stops.push({ name: `捷運${leg.from}`, lng: first.lng, lat: first.lat, role: role(0) });
-      stops.push({ name: `捷運${leg.to}`, lng: last.lng, lat: last.lat, role: rides.indexOf(leg) === rides.length - 1 ? "alight" : "transfer" });
+      stops.push({ name: leg.from.startsWith("台鐵") ? leg.from : `捷運${leg.from}`, lng: first.lng, lat: first.lat, role: role(0) });
+      stops.push({ name: leg.to.startsWith("台鐵") ? leg.to : `捷運${leg.to}`, lng: last.lng, lat: last.lat, role: rides.indexOf(leg) === rides.length - 1 ? "alight" : "transfer" });
       cur = [last.lng, last.lat];
     }
   });

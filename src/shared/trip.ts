@@ -167,3 +167,18 @@ export function bestTourOrder(minutes: (number | null)[][], hasStart: boolean): 
   walk([], new Array(n).fill(false), 0);
   return best;
 }
+
+/** 軌道站名(台鐵站在圖裡已經帶「台鐵」前綴):「捷運公館站」「台鐵板橋站」 */
+export const railStop = (name: string) => (name.startsWith("台鐵") ? `${name}站` : `捷運${name}站`);
+
+/** 摘要用的線名:「捷運板南線→文湖線」「台鐵」「捷運板南線→台鐵」 */
+export function railLines(lines: string[]) {
+  let out = "";
+  let prevMrt = false;
+  for (const l of lines) {
+    const tra = l === "台鐵";
+    out += (out ? "→" : "") + (tra || prevMrt ? l : `捷運${l}`);
+    prevMrt = !tra;
+  }
+  return out;
+}

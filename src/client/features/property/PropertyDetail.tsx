@@ -137,6 +137,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
           key={`n${id}`}
           lat={p.lat}
           lng={p.lng}
+          city={p.city}
           onOverlay={onBusOverlay}
           garbageService={garbageService([extra?.remark_html, ...(extra?.tags ?? [])].filter(Boolean).join(" "))}
         />}

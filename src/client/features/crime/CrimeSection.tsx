@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Siren } from "lucide-react";
 import { CRIME_CATS, poiLabel } from "@shared/poi";
-import { hasCoverage } from "@shared/regions";
+import { coverageCities, hasCoverage } from "@shared/regions";
 import { useRegion } from "@/lib/region";
 import { api } from "@/lib/api";
 
@@ -60,7 +60,9 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
       <h2 className="mb-1.5 flex items-center gap-1 text-xs font-medium text-neutral-500">
         <Siren size={14} /> 治安(竊盜)
       </h2>
-      {!d ? (
+      {!hasCoverage(city, "crimeDistricts") ? (
+        <p className="text-xs text-neutral-500">{city}還沒有治安資料(目前只有{coverageCities("crimeDistricts", region.key)})。</p>
+      ) : !d ? (
         <p className="text-xs text-neutral-500">還沒匯入治安資料(家裡跑 npm run collect -- crime)。</p>
       ) : (
         <div className="grid gap-1 text-xs">

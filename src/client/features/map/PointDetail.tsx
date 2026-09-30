@@ -110,7 +110,7 @@ export function PointDetail({
       )}
 
       <CommuteSection key={`c${key}`} lat={lat} lng={lng} onOverlay={onBusOverlay} />
-      <NearbySection key={`n${key}`} lat={lat} lng={lng} onOverlay={onBusOverlay} />
+      <NearbySection key={`n${key}`} lat={lat} lng={lng} onOverlay={onBusOverlay} city={city || undefined} />
       {/* 等地址查完才知道城市(液化只有台北市有資料);查不到就當「沒有資料」,不要誤報「不在潛勢區」 */}
       {!addr.isLoading && <HazardSection key={`h${key}`} lat={lat} lng={lng} city={addr.data?.city || "?"} />}
       {addr.data?.city && <CrimeSection key={`cr${key}`} lat={lat} lng={lng} city={addr.data.city} district={addr.data.district} />}

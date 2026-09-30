@@ -4,6 +4,7 @@ import { ExternalLink, Star, Store } from "lucide-react";
 import { googleNearbyUrl, isCrime, isNuisance, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
+import { hasCoverage, normalizeCity } from "@shared/regions";
 
 /** 半徑圈(給地圖畫虛線) */
 function circle(lat: number, lng: number, r: number): [number, number][] {
@@ -24,12 +25,15 @@ export function NearbySection({
   lng,
   onOverlay,
   garbageService,
+  city,
 }: {
   lat: number;
   lng: number;
   onOverlay?: (o: BusOverlay | null) => void;
   /** 房東有沒有寫垃圾代收(true 有寫、false 寫明要自己追、null 沒寫) */
   garbageService?: boolean | null;
+  /** 縣市:垃圾車、YouBike 各縣市各自的資料,沒有的顯示「無資料」而不是 0 */
+  city?: string;
 }) {
   const [radius, setRadius] = useState(500);
   const [open, setOpen] = useState<PoiCat | null>(null);
@@ -82,8 +86,10 @@ export function NearbySection({
           <div className="flex flex-wrap gap-1">
             {cats.map((c) => {
               const n = d.counts[c] ?? 0;
+              const noData = !!city && (c === "garbage" || c === "youbike") && !hasCoverage(city, c);
               return (
                 <button
+                  title={noData ? `${city}還沒有這項資料` : undefined}
                   key={c}
                   onClick={() => setOpen(open === c ? null : c)}
                   disabled={n === 0}
@@ -95,7 +101,7 @@ export function NearbySection({
                         : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
                   }`}
                 >
-                  {poiLabel(c)} {n}
+                  {poiLabel(c)} {noData ? "無資料" : n}
                 </button>
               );
             })}
@@ -125,7 +131,7 @@ export function NearbySection({
               </button>
             ))}
           </div>
-          {open === "garbage" && <GarbageList items={items} service={garbageService ?? null} />}
+          {open === "garbage" && <GarbageList items={items} service={garbageService ?? null} city={city} />}
           {open && open !== "garbage" && (
             <ul className="mt-1.5 grid gap-0.5 rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800/60">
               {items.map((p, i) => (
@@ -147,7 +153,7 @@ export function NearbySection({
 }
 
 /** 垃圾車:同一地點合併成一行(午、晚兩班),依距離;上面標房東有沒有寫代收 */
-function GarbageList({ items, service }: { items: NearbyPoi[]; service: boolean | null }) {
+function GarbageList({ items, service, city }: { items: NearbyPoi[]; service: boolean | null; city?: string }) {
   const places = new Map<string, { name: string; distance_m: number; walk_min: number; times: { minute: number; note: string }[] }>();
   for (const p of items) {
     const k = p.name ?? `${p.lat},${p.lng}`;
@@ -177,7 +183,7 @@ function GarbageList({ items, service }: { items: NearbyPoi[]; service: boolean 
           );
         })}
       </ul>
-      <p className="text-[11px] text-neutral-400">表定時間,實際可能早晚幾分鐘;台北市週三、週日不收一般垃圾。</p>
+      <p className="text-[11px] text-neutral-400">表定時間,實際可能早晚幾分鐘{normalizeCity(city) === "台北市" ? ";台北市週三、週日不收一般垃圾" : ""}。</p>
     </div>
   );
 }

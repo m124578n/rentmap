@@ -8,6 +8,7 @@ import { NUISANCE_CATS, POI_CATEGORIES, type PoiCat } from "@shared/poi";
 import type { StatusItem, StatusResponse } from "@shared/status";
 import { coverageCities } from "@shared/regions";
 import mrtTimes from "../../../public/mrt-times.json";
+import traJson from "../../../public/tra.json";
 import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
 import { isPrivatePool } from "../pool";
@@ -36,6 +37,21 @@ status.get("/api/status", async (c) => {
   items.push(
     item(
       { key: "metro", group: "交通", label: "捷運站間時間(TDX)", count: Object.keys(mrtTimes.edges).length, updated: mrtTimes.updated, every: "路網有變才要", command: "npm run collect -- metro(改完要 commit)" },
+      null,
+    ),
+  );
+  items.push(
+    item(
+      {
+        key: "tra",
+        group: "交通",
+        label: "台鐵區間車時刻(TDX)",
+        count: traJson.stations.length,
+        updated: traJson.updated,
+        every: "台鐵改點才要(一年幾次)",
+        command: "npm run collect -- tra(改完要 commit)",
+        note: traJson.stations.length ? `班距約 ${traJson.headway.join(" / ")} 分(尖峰 / 離峰 / 晚上)` : "還沒下載:通勤只算捷運與公車",
+      },
       null,
     ),
   );

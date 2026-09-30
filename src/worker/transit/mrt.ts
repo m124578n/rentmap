@@ -4,9 +4,13 @@
  *   沒有(淡海、安坑輕軌)用距離估 = 直線距離 × 1.1 ÷ 速度 + 停站,不同系統速度不同(輕軌慢、機捷快)
  *   換線 +4 分(走路 + 等車),上車先等半個班距
  * 站序從 refs 編號來(BL12、R22A…),相鄰編號相連;支線手動接。
+ *
+ * 台鐵(public/tra.json,`npm run collect -- tra`)也放進同一張圖:線代碼 TRA、站名前面加「台鐵」,
+ * 站間用區間車實際時刻、班距用區間車班次算;台鐵站與 350m 內的捷運站可以互轉(+6 分)。
  */
 import mrtJson from "../../../public/mrt.json";
 import mrtTimes from "../../../public/mrt-times.json";
+import traJson from "../../../public/tra.json";
 import { haversine, type DayType } from "@shared/bus";
 import { mrtPairKey } from "@shared/trip";
 
@@ -31,6 +35,8 @@ export interface MrtStation {
   lat: number;
   lng: number;
   lines: string[];
+  /** 捷運(含輕軌、機捷)或台鐵 */
+  rail: "mrt" | "tra";
 }
 export interface MrtEdge {
   to: number; // node index
@@ -49,6 +55,18 @@ export interface MrtGraph {
 const SPEED_M_PER_MIN: Record<string, number> = { V: 330, K: 330, LB: 450, A: 800 };
 const DWELL: Record<string, number> = { A: 0.8 };
 export const MRT_TRANSFER_MIN = 4;
+/** 台鐵 ↔ 捷運出站走過去再進站 */
+export const TRA_TRANSFER_MIN = 6;
+const TRA_TRANSFER_R = 350;
+export const TRA_LINE = "TRA";
+
+export interface TraFile {
+  updated: string | null;
+  headway: [number, number, number];
+  stations: { id: string; name: string; lat: number; lng: number }[];
+  edges: Record<string, number>;
+}
+const tra = traJson as unknown as TraFile;
 /** 班距(分):[平日尖峰, 離峰 / 假日, 23 點後];大約值,依北捷公告的班距區間取中間 */
 const MRT_HEADWAY: Record<string, [number, number, number]> = {
   V: [15, 15, 20],
@@ -56,6 +74,7 @@ const MRT_HEADWAY: Record<string, [number, number, number]> = {
   LB: [10, 12, 15],
   A: [12, 15, 15],
   Y: [6, 10, 12],
+  [TRA_LINE]: tra.headway,
 };
 const MRT_HEADWAY_DEFAULT: [number, number, number] = [5, 7, 12];
 
@@ -83,9 +102,14 @@ function parseRef(ref: string) {
 let cached: MrtGraph | null = null;
 
 export function mrtGraph(): MrtGraph {
-  if (cached) return cached;
+  cached ??= buildRailGraph(tra);
+  return cached;
+}
+
+/** 捷運 + 台鐵的圖;traData 可換(測試用) */
+export function buildRailGraph(traData: TraFile): MrtGraph {
   const raw = mrtJson as unknown as { lines: RawLine[]; stations: RawStation[] };
-  const stations: MrtStation[] = raw.stations.map((s, idx) => ({ idx, id: s.id, name: s.name, lat: s.lat, lng: s.lng, lines: s.lines }));
+  const stations: MrtStation[] = raw.stations.map((s, idx) => ({ idx, id: s.id, name: s.name, lat: s.lat, lng: s.lng, lines: s.lines, rail: "mrt" }));
   const nodes: MrtGraph["nodes"] = [];
   const nodeIdx = new Map<string, number>();
   const nodesOfStation: number[][] = stations.map(() => []);
@@ -138,15 +162,49 @@ export function mrtGraph(): MrtGraph {
   for (const ns of nodesOfStation)
     for (const a of ns) for (const b of ns) if (a !== b) adj[a]!.push({ to: b, min: MRT_TRANSFER_MIN });
 
-  const lineName: Record<string, string> = {};
-  const lineColor: Record<string, string> = {};
+  // 台鐵:每站一個節點(線 TRA),邊用時刻表的站間秒數;附近的捷運站可以轉
+  const mrtCount = stations.length;
+  const traNode = new Map<string, number>();
+  for (const t of traData.stations) {
+    const idx = stations.length;
+    stations.push({ idx, id: `TRA${t.id}`, name: `台鐵${t.name}`, lat: t.lat, lng: t.lng, lines: [TRA_LINE], rail: "tra" });
+    traNode.set(t.id, nodes.length);
+    nodesOfStation.push([nodes.length]);
+    nodes.push({ station: idx, line: TRA_LINE });
+    adj.push([]);
+  }
+  for (const [k, sec] of Object.entries(traData.edges)) {
+    const [a, b] = k.split("-");
+    const na = traNode.get(a!);
+    const nb = traNode.get(b!);
+    if (na == null || nb == null) continue;
+    adj[na]!.push({ to: nb, min: sec / 60 });
+    adj[nb]!.push({ to: na, min: sec / 60 });
+  }
+  for (let i = mrtCount; i < stations.length; i++) {
+    const t = stations[i]!;
+    for (let j = 0; j < mrtCount; j++) {
+      const m = stations[j]!;
+      if (Math.abs(m.lat - t.lat) > 0.005 || haversine(t.lat, t.lng, m.lat, m.lng) > TRA_TRANSFER_R) continue;
+      for (const a of nodesOfStation[i]!)
+        for (const b of nodesOfStation[j]!) {
+          adj[a]!.push({ to: b, min: TRA_TRANSFER_MIN });
+          adj[b]!.push({ to: a, min: TRA_TRANSFER_MIN });
+        }
+    }
+  }
+
+  const lineName: Record<string, string> = { [TRA_LINE]: "台鐵" };
+  const lineColor: Record<string, string> = { [TRA_LINE]: "#1d4f91" };
   for (const l of raw.lines) {
     lineName[l.code] = l.name;
     lineColor[l.code] = l.color;
   }
-  cached = { stations, nodes, adj, nodesOfStation, lineName, lineColor };
-  return cached;
+  return { stations, nodes, adj, nodesOfStation, lineName, lineColor };
 }
+
+/** 路網資料版本(彙總快取的 key 要帶:改了捷運時間或台鐵時刻,結果就不同) */
+export const RAIL_VERSION = `${(mrtTimes as { updated?: string }).updated ?? ""}+${tra.updated ?? ""}`;
 
 export interface MrtLabels {
   /** 每個節點到終點(含終點之後的部分)的分鐘 */

@@ -3,9 +3,9 @@ import { CITY_INFO, regionAt, coverageCities, hasCoverage, normalizeCity, OPEN_C
 import { CITIES, DISTRICTS } from "../../src/shared/constants";
 
 describe("regions", () => {
-  it("only north (Taipei + New Taipei) is open for now", () => {
-    expect(OPEN_CITIES).toEqual(["台北市", "新北市"]);
-    expect(CITIES).toEqual(["台北市", "新北市"]);
+  it("only north (北北基桃) is open for now", () => {
+    expect(OPEN_CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市"]);
+    expect(CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市"]);
     expect(Object.values(REGIONS).filter((r) => r.enabled).map((r) => r.key)).toEqual(["north"]);
   });
 
@@ -24,11 +24,11 @@ describe("regions", () => {
     expect(regionOfCity("基隆市")).toBe("north");
     expect(regionAt(25.033, 121.565)).toBe("north"); // 台北
     expect(regionAt(25.012, 121.465)).toBe("north"); // 板橋
-    expect(regionAt(24.957, 121.225)).toBe("north"); // 中壢(桃園還沒開)
+    expect(regionAt(24.957, 121.225)).toBe("north"); // 中壢
     expect(regionAt(24.15, 120.67)).toBe("taichung"); // 還沒開,但歸得出來
     expect(regionAt(22.63, 120.3)).toBe("kaohsiung");
     expect(regionAt(35.68, 139.76)).toBeNull();
-    expect(regionBbox("north")).toEqual([121.28, 24.67, 122.01, 25.3]);
+    expect(regionBbox("north")).toEqual([120.98, 24.58, 122.01, 25.3]);
   });
 
   it("data coverage replaces hard-coded Taipei checks", () => {

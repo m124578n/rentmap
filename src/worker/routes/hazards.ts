@@ -18,6 +18,7 @@ import { HAZARD_KINDS, HazardZoneIn, type HazardKind, type HazardLevels, type Ha
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
+import { hasCoverage, type Coverage } from "@shared/regions";
 import { ownerOf, ownerSql } from "../pool";
 
 export const hazards = new Hono<AppEnv>();
@@ -104,6 +105,8 @@ export function levelsAt(c: NonNullable<typeof cache>, lat: number, lng: number)
 }
 
 
+const HAZARD_COVERAGE: Record<HazardKind, Coverage> = { flood6: "flood", flood24: "flood", liquefaction: "liquefaction", airnoise: "airnoise" };
+
 const num = (v: string | undefined) => (v == null || v === "" ? NaN : Number(v));
 
 hazards.get("/api/hazards", async (c) => {
@@ -114,10 +117,10 @@ hazards.get("/api/hazards", async (c) => {
   const body: HazardResponse = {
     has_data: z.zones.length > 0,
     levels: levelsAt(z, lat, lng),
-    // 液化只有台北市有資料:其他縣市回報「沒有資料」而不是「沒有潛勢」
-    no_coverage: (["liquefaction"] as HazardKind[]).filter((k) => {
-      const city = (c.req.query("city") ?? "").replace("臺", "台");
-      return k === "liquefaction" && city !== "" && !z.cities.has(city);
+    // 這個縣市沒有這項圖資(regions.ts 的 coverage):回報「沒有資料」而不是「沒有潛勢」
+    no_coverage: HAZARD_KINDS.filter((k) => {
+      const city = c.req.query("city") ?? "";
+      return city !== "" && !hasCoverage(city, HAZARD_COVERAGE[k]);
     }),
   };
   return c.json(body);

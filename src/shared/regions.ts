@@ -118,8 +118,9 @@ export const REGIONS: Record<RegionKey, RegionInfo> = {
   north: {
     key: "north",
     label: "北北基桃",
-    cities: ["台北市", "新北市"],
-    planned: ["桃園市", "基隆市"],
+    // 桃園、基隆 2026-09-30 開放:公車、實價登錄、生活機能、台鐵照全國一致的來源補;垃圾車、治安、災害等各縣市資料還沒有(coverage 空的會標「無資料」)
+    cities: ["台北市", "新北市", "桃園市", "基隆市"],
+    planned: [],
     enabled: true,
     view: [
       [121.28, 24.88],

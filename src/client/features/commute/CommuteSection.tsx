@@ -317,7 +317,7 @@ function TripDetail({ trip }: { trip: Trip }) {
           ) : (
             <div>
               <TrainFront size={12} className="mr-1 inline" style={{ color: l.colors[0] }} />
-              等約 {l.wait} 分,搭捷運 <b>{l.lines.join(" → ")}</b>:{l.from} → {l.to},{l.stops} 站約 {l.min} 分{l.lines.length > 1 ? "(含站內換線)" : ""}
+              等約 {l.wait} 分,搭{l.lines.every((x) => x === "台鐵") ? "" : "捷運"} <b>{l.lines.join(" → ")}</b>:{l.from} → {l.to},{l.stops} 站約 {l.min} 分{l.lines.length > 1 ? "(含換線)" : ""}
             </div>
           )}
         </li>

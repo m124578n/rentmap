@@ -7,7 +7,7 @@ describe("OSM / Overpass", () => {
     const q = overpassQuery("pharmacy", { s: 25, w: 121.5, n: 25.1, e: 121.6 });
     expect(q).toBe('[out:json][timeout:180];(nwr["amenity"="pharmacy"](25.0000,121.5000,25.1000,121.6000);nwr["healthcare"="pharmacy"](25.0000,121.5000,25.1000,121.6000););out center tags;');
     expect(overpassQuery("gym", { s: 25, w: 121.5, n: 25.1, e: 121.6 }).match(/nwr\[/g)).toHaveLength(3);
-    expect(bboxOf("north")).toEqual({ s: 24.67, w: 121.28, n: 25.3, e: 122.01 }); // 雙北,跟拆出 regions.ts 之前一樣
+    expect(bboxOf("north")).toEqual({ s: 24.58, w: 120.98, n: 25.3, e: 122.01 }); // 北北基桃四個縣市外框的聯集
     expect(() => overpassQuery("ramen", bboxOf("north"))).toThrow();
   });
 

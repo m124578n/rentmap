@@ -28,6 +28,7 @@ import { db, schema } from "../db";
 import { loadBusNet } from "../transit/network";
 import { EMPTY_BIKES, loadBikes } from "../transit/bike";
 import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
+import { RAIL_VERSION } from "../transit/mrt";
 
 export const commute = new Hono<AppEnv>();
 commute.use("/api/commute", requireUser());
@@ -73,6 +74,7 @@ commute.get("/api/commute", async (c) => {
     await tableSig(DB, "bus_routes", "version"),
     bike ? await tableSig(DB, "pois", "version", "WHERE category = 'youbike'") : "-",
     await propertiesSig(DB, owner),
+    RAIL_VERSION,
   ];
   return cachedJson(c, key, async (): Promise<CommuteMatrix> => {
     const props = (

@@ -15,7 +15,7 @@
  * 把住處當目的地算(捷運圖本來就雙向對稱),buildTrip 最後把行程翻回正向。
  */
 import { haversine, serviceWait, toMin, walkMin } from "@shared/bus";
-import { COMMUTE_DEFAULT, type CommuteWhen, type Trip, type TripKind, type TripLeg } from "@shared/trip";
+import { COMMUTE_DEFAULT, railLines, railStop, type CommuteWhen, type Trip, type TripKind, type TripLeg } from "@shared/trip";
 import { mrtGraph, mrtLabels, mrtPath, mrtWait, type MrtGraph, type MrtLabels } from "./mrt";
 import { nearStops, reverseNet, type BusNet } from "./network";
 import { BIKE_DIRECT_MAX_M, BIKE_DOCK_MIN, BIKE_MRT_R, BIKE_TO_MRT_MAX_M, BIKE_WALK_R, bikesNear, EMPTY_BIKES, rideMin, type BikeNet } from "./bike";
@@ -363,7 +363,7 @@ function bikeLeg(p: Plan, a: number, t: number): TripLeg {
   return { mode: "bike", min: Math.max(1, Math.round(rideMin(m))), wait: BIKE_DOCK_MIN, from: A.name, to: T.name, from_pt: [A.lng, A.lat], to_pt: [T.lng, T.lat], m: Math.round(m) };
 }
 const bikeLabel = (name: string) => `YouBike ${stopLabel(name)}`;
-const stationLabel = (g: MrtGraph, node: number) => `捷運${g.stations[g.nodes[node]!.station]!.name}站`;
+const stationLabel = (g: MrtGraph, node: number) => railStop(g.stations[g.nodes[node]!.station]!.name);
 /** 公車站牌名常已經帶「站」(捷運公館站、臺北車站),不要變成「捷運公館站站」 */
 const stopLabel = (name: string) => (name.endsWith("站") ? name : `${name}站`);
 
@@ -434,7 +434,7 @@ function finishTrip(kind: TripKind, legs: TripLeg[], walkM: number): Trip {
   const total = legs.reduce((s, l) => s + l.min + (l.mode === "walk" ? 0 : l.wait), 0);
   const rides = legs.filter((l) => l.mode !== "walk");
   const summary = rides.length
-    ? rides.map((l) => (l.mode === "bus" ? l.name : l.mode === "bike" ? "YouBike" : `捷運${l.lines.join("→")}`)).join(" → ")
+    ? rides.map((l) => (l.mode === "bus" ? l.name : l.mode === "bike" ? "YouBike" : railLines(l.lines))).join(" → ")
     : `步行 ${Math.round(walkM / 100) / 10} km`;
   return { kind, total_min: total, transfers: Math.max(0, rides.length - 1), summary, legs };
 }
@@ -457,7 +457,7 @@ export function flipTrip(t: Trip, walkM: number): Trip {
     l.to =
       !next || next.mode === "walk"
         ? HOME_LABEL
-        : `${next.mode === "bus" ? stopLabel(next.from) : next.mode === "bike" ? bikeLabel(next.from) : `捷運${next.from}站`}${i > 0 ? "(轉乘)" : ""}`;
+        : `${next.mode === "bus" ? stopLabel(next.from) : next.mode === "bike" ? bikeLabel(next.from) : railStop(next.from)}${i > 0 ? "(轉乘)" : ""}`;
   });
   return finishTrip(FLIP_KIND[t.kind] ?? t.kind, legs, walkM);
 }

@@ -10,6 +10,7 @@
  *   npm run collect -- hazards [--dry]                    災害潛勢(淹水、液化)多邊形 → 推入(先跑 python scripts/build_hazards.py)
  *   npm run collect -- crime [--years=3] [--dry]           臺北市竊盜點位(門牌轉座標)+ 雙北各區件數 → 推入 / public/crime-districts.json(每季一次)
  *   npm run collect -- metro [--dry]                     下載捷運官方站間時間(TDX)→ public/mrt-times.json(進 git)
+ *   npm run collect -- tra [--dry] [--date=YYYY-MM-DD]     下載台鐵車站與區間車時刻(TDX)→ public/tra.json(進 git)
  *
  * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET;公車另讀 TDX_CLIENT_ID / TDX_CLIENT_SECRET。
  */
@@ -121,12 +122,17 @@ async function main() {
     await runCrime({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
     return;
   }
+  if (cmd === "tra") {
+    const { runTra } = await import("./tra");
+    await runTra([arg, ...rest].filter((x): x is string => !!x));
+    return;
+  }
   if (cmd === "metro") {
     const { runMetro } = await import("./metro");
     await runMetro([arg, ...rest].filter((x): x is string => !!x));
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect rent-stats [--dry] | collect pois [--dry] | collect hazards [--dry] | collect crime [--dry]");
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect tra [--dry] | collect rent-stats [--dry] | collect pois [--dry] | collect hazards [--dry] | collect crime [--dry]");
   process.exit(1);
 }
 
