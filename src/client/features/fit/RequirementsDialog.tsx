@@ -159,7 +159,7 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
           </label>
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={r.avoid_liquefaction} onChange={(e) => set({ avoid_liquefaction: e.target.checked })} /> 避開土壤液化高潛勢
-            <span className="text-neutral-500">(只有{coverageCities("liquefaction", region.key)}有資料)</span>
+            <span className="text-neutral-500">{coverageCities("liquefaction", region.key) ? `(只有${coverageCities("liquefaction", region.key)}有資料)` : "(這一區沒有資料)"}</span>
           </label>
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={r.avoid_airnoise} onChange={(e) => set({ avoid_airnoise: e.target.checked })} /> 避開航空噪音區

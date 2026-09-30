@@ -64,7 +64,7 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
         <Siren size={14} /> 治安(竊盜)
       </h2>
       {!hasCoverage(city, "crimeDistricts") ? (
-        <p className="text-xs text-neutral-500">{city}還沒有治安資料(目前只有{coverageCities("crimeDistricts", region.key)})。</p>
+        <p className="text-xs text-neutral-500">{city}還沒有治安資料{coverageCities("crimeDistricts", region.key) ? `(目前只有${coverageCities("crimeDistricts", region.key)})` : ""}。</p>
       ) : !d ? (
         <p className="text-xs text-neutral-500">還沒匯入治安資料(家裡跑 npm run collect -- crime)。</p>
       ) : (

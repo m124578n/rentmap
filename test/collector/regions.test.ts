@@ -3,10 +3,10 @@ import { CITY_INFO, cityAt, regionAt, coverageCities, hasCoverage, normalizeCity
 import { CITIES, DISTRICTS } from "../../src/shared/constants";
 
 describe("regions", () => {
-  it("only north (北北基桃) is open for now", () => {
-    expect(OPEN_CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市"]);
-    expect(CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市"]);
-    expect(Object.values(REGIONS).filter((r) => r.enabled).map((r) => r.key)).toEqual(["north"]);
+  it("四個生活圈都開放(六都 + 基隆)", () => {
+    expect(OPEN_CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市", "台中市", "台南市", "高雄市"]);
+    expect(CITIES).toEqual(OPEN_CITIES);
+    expect(Object.values(REGIONS).filter((r) => r.enabled).map((r) => r.key)).toEqual(["north", "taichung", "tainan", "kaohsiung"]);
   });
 
   it("district lists per city", () => {
@@ -25,7 +25,7 @@ describe("regions", () => {
     expect(regionAt(25.033, 121.565)).toBe("north"); // 台北
     expect(regionAt(25.012, 121.465)).toBe("north"); // 板橋
     expect(regionAt(24.957, 121.225)).toBe("north"); // 中壢
-    expect(regionAt(24.15, 120.67)).toBe("taichung"); // 還沒開,但歸得出來
+    expect(regionAt(24.15, 120.67)).toBe("taichung");
     expect(regionAt(22.63, 120.3)).toBe("kaohsiung");
     expect(regionAt(35.68, 139.76)).toBeNull();
     expect(regionBbox("north")).toEqual([120.98, 24.58, 122.01, 25.3]);
@@ -54,6 +54,8 @@ describe("regions", () => {
     expect(hasCoverage("新北市", "liquefaction")).toBe(false);
     expect(hasCoverage("新北市", "crimeDistricts")).toBe(true);
     expect(coverageCities("theftPoints")).toBe("台北市");
-    expect(coverageCities("garbage")).toBe("台北市、新北市");
+    expect(coverageCities("garbage")).toBe("台北市、新北市、台南市");
+    expect(coverageCities("garbage", "north")).toBe("台北市、新北市");
+    expect(coverageCities("garbage", "taichung")).toBe("");
   });
 });

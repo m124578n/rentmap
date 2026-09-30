@@ -33,6 +33,8 @@ interface Props {
   point?: { lat: number; lng: number } | null;
   /** 一開始看的範圍(生活圈的都會核心);換生活圈時地圖跟著移過去 */
   view: [[number, number], [number, number]];
+  /** 第一次框畫面只看這個範圍內的房源 [w, s, e, n](目前的生活圈);範圍內沒有房源就停在 view */
+  fitWithin?: [number, number, number, number];
   /** 區域圖層(通勤網格、災害多邊形…) */
   heat?: FeatureCollection | null;
   /** 畫面移動結束(區域圖層依範圍抓資料) */
@@ -61,7 +63,7 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport, view }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport, view, fitWithin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -253,7 +255,9 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     const cancel = whenReady(map, () => pm.attach());
     if (!fittedRef.current) {
       const bounds = new maplibregl.LngLatBounds();
-      for (const p of items) if (p.lat != null && p.lng != null) bounds.extend([p.lng, p.lat]);
+      // 只框目前生活圈裡的房源(別的生活圈、舊資料裡座標是 (0, 0) 的都不算),不然會被拉到別的城市甚至全世界
+      const [w, so, e, n] = fitWithin ?? [118, 21, 123, 26.5];
+      for (const p of items) if (p.lat != null && p.lng != null && p.lat >= so && p.lat <= n && p.lng >= w && p.lng <= e) bounds.extend([p.lng, p.lat]);
       if (!bounds.isEmpty()) {
         fittedRef.current = true;
         map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });

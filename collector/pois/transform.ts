@@ -4,7 +4,7 @@
  *   menmap shops.json → PoiIn(拉麵,只收雙北、營業中,帶 Google 評分與地圖連結)
  */
 import { POI_CATEGORIES, type PoiCat, type PoiIn } from "../../src/shared/poi";
-import { normalizeCity, OPEN_CITIES, regionBbox, type RegionKey } from "../../src/shared/regions";
+import { normalizeCity, OPEN_CITIES, regionBbox, type CityName, type RegionKey } from "../../src/shared/regions";
 
 type Bbox = { s: number; w: number; n: number; e: number };
 
@@ -136,9 +136,10 @@ export interface MenmapShop {
   maps_url?: string | null;
 }
 
-export function fromMenmap(shops: MenmapShop[]): PoiIn[] {
+/** cities:只收這些縣市的店(一個生活圈匯一次,commit 只換那個生活圈) */
+export function fromMenmap(shops: MenmapShop[], cities: readonly CityName[] = OPEN_CITIES): PoiIn[] {
   return shops
-    .filter((s) => OPEN_CITIES.includes(normalizeCity(s.city)!) && s.status === "OPERATIONAL" && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+    .filter((s) => cities.includes(normalizeCity(s.city)!) && s.status === "OPERATIONAL" && Number.isFinite(s.lat) && Number.isFinite(s.lng))
     .map((s) => ({
       key: `m${s.ftid}`.slice(0, 80),
       category: "ramen" as const,

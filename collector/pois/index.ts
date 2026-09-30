@@ -218,8 +218,8 @@ export async function runPois(opts: { base: string; secret: string; args: string
   const regionArg = args.find((a) => a.startsWith("--region="))?.slice(9) ?? "north";
   if (!(REGION_KEYS as readonly string[]).includes(regionArg)) throw new Error(`--region 只能是 ${REGION_KEYS.join(" / ")}`);
   const region = regionArg as RegionKey;
-  // 拉麵、治安是雙北各自的來源,其他生活圈還沒有;垃圾車看 GARBAGE_REGIONS(YouBike 其他縣市走 TDX)
-  const NORTH_ONLY: PoiCat[] = ["ramen", ...CRIME_CATS];
+  // 治安點位只有台北市的來源;垃圾車看 GARBAGE_REGIONS(YouBike 其他縣市走 TDX;拉麵 menmap 全台都有,依生活圈的縣市收)
+  const NORTH_ONLY: PoiCat[] = [...CRIME_CATS];
   const cats = POI_CATS.filter(
     (c) => (!only || only.includes(c)) && (region === "north" || !NORTH_ONLY.includes(c)) && (c !== "garbage" || GARBAGE_REGIONS.includes(region)),
   );
@@ -241,7 +241,7 @@ export async function runPois(opts: { base: string; secret: string; args: string
       } else if (cat === "ramen") {
         const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
         if (!res.ok) throw new Error(`menmap ${res.status}`);
-        items = fromMenmap(((await res.json()) as { shops: MenmapShop[] }).shops);
+        items = fromMenmap(((await res.json()) as { shops: MenmapShop[] }).shops, [...REGIONS[region].cities, ...REGIONS[region].planned]);
       } else {
         if (!("osm" in POI_CATEGORIES[cat])) continue;
         if (waited) await sleep(10_000);

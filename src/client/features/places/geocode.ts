@@ -51,6 +51,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseH
   const a = j.address ?? {};
   const city = (a.city ?? a.state ?? a.county ?? "").replace("臺", "台");
   const district = a.suburb ?? a.city_district ?? a.town ?? "";
-  const road = [a.road, a.house_number ? `${a.house_number}號` : ""].join("");
+  const road = [a.road, a.house_number ? `${a.house_number.replace(/號$/, "")}號` : ""].join("");
   return { label: `${city}${district}${road}` || (j.display_name ? shortLabel(j.display_name) : ""), city, district, road };
 }

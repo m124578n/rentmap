@@ -129,9 +129,10 @@ export const REGIONS: Record<RegionKey, RegionInfo> = {
       [121.75, 25.22],
     ],
   },
-  taichung: { key: "taichung", label: "台中", cities: [], planned: ["台中市"], enabled: false, view: [[120.55, 24.05], [120.8, 24.3]] },
-  tainan: { key: "tainan", label: "台南", cities: [], planned: ["台南市"], enabled: false, view: [[120.13, 22.93], [120.3, 23.08]] },
-  kaohsiung: { key: "kaohsiung", label: "高雄", cities: [], planned: ["高雄市"], enabled: false, view: [[120.25, 22.55], [120.42, 22.75]] },
+  // 台中、台南、高雄 2026-09-30 開放(資料狀況見 docs/design/2026-09-30-open-a-region.md §4)
+  taichung: { key: "taichung", label: "台中", cities: ["台中市"], planned: [], enabled: true, view: [[120.55, 24.05], [120.8, 24.3]] },
+  tainan: { key: "tainan", label: "台南", cities: ["台南市"], planned: [], enabled: true, view: [[120.13, 22.93], [120.3, 23.08]] },
+  kaohsiung: { key: "kaohsiung", label: "高雄", cities: ["高雄市"], planned: [], enabled: true, view: [[120.25, 22.55], [120.42, 22.75]] },
 };
 
 export const DEFAULT_REGION: RegionKey = "north";
@@ -201,8 +202,9 @@ export function hasCoverage(city: string | null | undefined, what: Coverage): bo
 }
 
 /** 生活圈裡有這項資料的縣市,例:「台北市」「台北市、新北市」;給「只有 X 有資料」這種說明用 */
-export function coverageCities(what: Coverage, region: RegionKey = DEFAULT_REGION): string {
-  return REGIONS[region].cities.filter((c) => hasCoverage(c, what)).join("、");
+/** 有這項資料的縣市(頓號串起來);給 region 只列那個生活圈的,不給就列所有已開放的。可能是空字串 */
+export function coverageCities(what: Coverage, region?: RegionKey): string {
+  return (region ? REGIONS[region].cities : OPEN_CITIES).filter((c) => hasCoverage(c, what)).join("、");
 }
 
 /** API 參數 → 生活圈(不認得或還沒開放 → 預設) */

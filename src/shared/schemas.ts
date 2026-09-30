@@ -7,6 +7,12 @@ const optInt = z.preprocess((v) => (v === "" || v == null ? undefined : Number(v
 const optNum = z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().nonnegative().optional());
 const optBool = z.preprocess((v) => (v === "" || v == null ? undefined : v === true || v === "true" || v === 1 || v === "1" || v === "on"), z.boolean().optional());
 
+const coordIn = (v: unknown, min: number, max: number) => {
+  if (v === "" || v == null) return undefined;
+  const n = Number(v);
+  return n >= min && n <= max ? n : undefined;
+};
+
 /** 手動新增 / 採集機推入共用的房源欄位。property 欄位 + 一筆 listing 欄位攤平在一起。 */
 const PropertyFields = z
   .object({
@@ -15,8 +21,9 @@ const PropertyFields = z
     district: z.string().trim().min(1, "請選行政區"),
     road: optStr,
     address_text: optStr,
-    lat: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().min(-90).max(90).optional()),
-    lng: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().min(-180).max(180).optional()),
+    // 台灣以外的座標當成沒有(591 有些物件給 0, 0,會把地圖拉到全世界)
+    lat: z.preprocess((v) => coordIn(v, 21, 26.5), z.number().optional()),
+    lng: z.preprocess((v) => coordIn(v, 118, 123), z.number().optional()),
 
     kind: z.preprocess((v) => (v === "" ? undefined : v), z.enum(KINDS).optional()),
     building_type: z.preprocess((v) => (v === "" ? undefined : v), z.enum(BUILDING_TYPES).optional()),

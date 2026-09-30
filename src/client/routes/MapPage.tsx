@@ -18,6 +18,7 @@ import { AddressSearch } from "@/features/report/AddressSearch";
 import { RegionPicker } from "@/features/report/RegionPicker";
 import type { BusOverlay } from "@/features/map/busLayer";
 import type { PropertySummary } from "@shared/schemas";
+import { regionBbox } from "@shared/regions";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
@@ -170,6 +171,7 @@ export function MapPage() {
             onPoint={pickPoint}
             point={point}
             view={region.view}
+            fitWithin={regionBbox(region.key)}
             heat={heat.fc}
             onViewport={setView}
           />

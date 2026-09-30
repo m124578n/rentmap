@@ -44,13 +44,15 @@ describe("OSM / Overpass", () => {
 });
 
 describe("menmap 拉麵", () => {
-  it("只收雙北、營業中,帶評分與連結", () => {
-    const out = fromMenmap([
+  it("只收指定縣市、營業中,帶評分與連結", () => {
+    const shops = [
       { ftid: "0x1:0x2", name: "麵屋 A", lat: 25.05, lng: 121.52, city: "台北市", status: "OPERATIONAL", rating: 4.4, maps_url: "https://maps.google.com/?cid=1" },
       { ftid: "0x3:0x4", name: "麵屋 B", lat: 25.0, lng: 121.45, city: "新北市", status: "OPERATIONAL", rating: null, maps_url: null },
       { ftid: "0x5:0x6", name: "台中店", lat: 24.1, lng: 120.6, city: "台中市", status: "OPERATIONAL", rating: 4 },
       { ftid: "0x7:0x8", name: "暫停", lat: 25.05, lng: 121.5, city: "台北市", status: "CLOSED_TEMPORARILY", rating: 4 },
-    ]);
+    ];
+    const out = fromMenmap(shops, ["台北市", "新北市"]);
+    expect(fromMenmap(shops, ["台中市"]).map((x) => x.key)).toEqual(["m0x5:0x6"]);
     expect(out.map((x) => [x.key, x.rating, x.url])).toEqual([
       ["m0x1:0x2", 4.4, "https://maps.google.com/?cid=1"],
       ["m0x3:0x4", null, "https://www.google.com/maps?ftid=0x3%3A0x4"],
