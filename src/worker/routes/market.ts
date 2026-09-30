@@ -3,7 +3,8 @@
  *
  * 查詢(需登入):
  *   GET /api/market                  所有房源的行情摘要(中位數、比行情高低幾 %),列表 / 卡片用
- *   GET /api/properties/:id/market   一間的行情:四分位、每坪、用了哪些條件、最像的幾筆
+ *   GET /api/properties/:id/market   一間的行情:四分位、每坪、用了哪些條件、最像的幾筆;
+ *                                    另附「目前開價」:系統裡還在刊登(active)的同區同房型房源,同一套相似條件(不含自己)
  *
  * 採集機推入(bearer INGEST_SECRET):
  *   POST /api/ingest/rent-stats        { items: RentStatIn[] }  用實價登錄編號 upsert
@@ -84,13 +85,39 @@ market.get("/api/market", async (c) => {
   return c.json(body);
 });
 
+/** 還在刊登的同縣市同房型房源 → 行情計算用的列(date = 最後看到的日期) */
+async function askingPools(DB: D1Database, p: PropRow) {
+  if (!p.kind) return null;
+  const { results } = await DB.prepare(
+    `SELECT p.id, p.district, p.road, p.kind, p.building_type, p.floor, p.total_floors, p.building_age, p.size_ping, p.rooms, p.has_elevator,
+            l.rent, substr(l.last_seen_at, 1, 10) AS date
+       FROM properties p
+       JOIN listings l ON l.id = (SELECT id FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1)
+      WHERE p.city = ? AND p.kind = ? AND p.id <> ? AND l.status = 'active'`,
+  )
+    .bind(p.city, p.kind, p.id)
+    .all<Omit<RentStat, "has_elevator"> & { id: number; has_elevator: number | null }>();
+  const rows: RentStat[] = results.map(({ id: _id, ...r }) => ({ ...r, has_elevator: r.has_elevator == null ? null : r.has_elevator === 1 }));
+  return { district: rows.filter((r) => r.district === p.district), city: rows };
+}
+
 market.get("/api/properties/:id/market", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
   const p = await c.env.DB.prepare(`${PROP_SQL} WHERE p.id = ?`).bind(id).first<PropRow>();
   if (!p) return c.json({ error: "not found" }, 404);
   const pools = await loadPools(c.env.DB);
-  const body: MarketResponse = { has_data: pools.size > 0, market: marketOf(pools, p) };
+  const ask = await askingPools(c.env.DB, p);
+  let asking: MarketResponse["asking"] = null;
+  if (ask) {
+    const t: MarketTarget = { kind: p.kind, size_ping: p.size_ping, rooms: p.rooms, building_age: p.building_age, has_elevator: p.has_elevator == null ? null : p.has_elevator === 1, rent: p.rent };
+    const m = computeMarket(t, ask.district, ask.city);
+    if (m) {
+      const { comparables: _c, ...rest } = m;
+      asking = rest;
+    }
+  }
+  const body: MarketResponse = { has_data: pools.size > 0, market: marketOf(pools, p), asking };
   return c.json(body);
 });
 

@@ -92,6 +92,26 @@ describe("rent stats ingest + market", () => {
     expect(all.items[noKind]).toBeNull();
   });
 
+  it("asking prices: other active listings of the same district and kind, not itself", async () => {
+    const mk = (id: string, rent: number, district = "大安區") => ({
+      source: "591",
+      source_listing_id: id,
+      source_url: `https://rent.591.com.tw/${id}`,
+      title: id,
+      city: "台北市",
+      district,
+      rent,
+      kind: "整層住家",
+      size_ping: 30,
+      rooms: 2,
+    });
+    expect((await post("listings", { items: [mk("k1", 40000), mk("k2", 42000), mk("k3", 44000), mk("other", 90000, "萬華區")] })).status).toBe(200);
+    const one = (await (await SELF.fetch(`${ORIGIN}/api/properties/${target}/market`, authed())).json()) as MarketResponse;
+    // 3 間不到 5:退到同區全部;不含自己(36000)、不含別區
+    expect(one.asking).toMatchObject({ scope: "district", count: 3, enough: false, median: 42000, diff_pct: -14 });
+    expect(one.asking).not.toHaveProperty("comparables");
+  });
+
   it("prune drops rows older than a date", async () => {
     const r = (await (await post("rent-stats/prune", { before: "2025-01-01" })).json()) as { deleted: number; total: number };
     expect(r).toEqual({ deleted: 1, total: 7 });

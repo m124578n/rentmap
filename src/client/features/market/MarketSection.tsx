@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Scale } from "lucide-react";
-import type { MarketBrief } from "@shared/market";
+import type { MarketBrief, MarketResponse, MarketResult } from "@shared/market";
 import { api } from "@/lib/api";
 
 const fmt = (n: number) => `$${n.toLocaleString()}`;
@@ -30,7 +30,7 @@ export function MarketSection({ propertyId, city, district, kind, rent }: { prop
   const q = useQuery({ queryKey: ["property-market", propertyId, rent], queryFn: () => api.propertyMarket(propertyId), staleTime: 10 * 60_000 });
   const [open, setOpen] = useState(false);
   if (q.isLoading || !q.data) return null;
-  const { has_data, market: m } = q.data;
+  const { has_data, market: m, asking } = q.data;
   const head = (
     <h2 className="mb-1.5 flex items-center gap-1 text-xs font-medium text-neutral-500">
       <Scale size={14} /> 租金行情(實價登錄)
@@ -41,6 +41,7 @@ export function MarketSection({ propertyId, city, district, kind, rent }: { prop
       <section className="text-sm">
         {head}
         <p className="text-xs text-neutral-500">還沒匯入實價登錄(家裡跑 npm run collect -- rent-stats)。</p>
+        <Asking a={asking} m={null} city={city} district={district} kind={kind} />
       </section>
     );
   if (!m)
@@ -48,6 +49,7 @@ export function MarketSection({ propertyId, city, district, kind, rent }: { prop
       <section className="text-sm">
         {head}
         <p className="text-xs text-neutral-500">{kind ? `${district}最近一年沒有${kind}的租賃登錄。` : "這間沒有房型資料,算不出行情。"}</p>
+        <Asking a={asking} m={null} city={city} district={district} kind={kind} />
       </section>
     );
 
@@ -103,7 +105,42 @@ export function MarketSection({ propertyId, city, district, kind, rent }: { prop
           </table>
         )}
         <p className="mt-1 text-[11px] text-neutral-400">內政部租賃實價登錄(簽約租金),近一年;不含社宅包租代管與含車位的案件。</p>
+        <Asking a={asking} m={m} city={city} district={district} kind={kind} />
       </div>
     </section>
+  );
+}
+
+/**
+ * 目前開價:系統裡還在刊登的相似房源(591 / 好房)。刊登價通常比簽約價高,
+ * 所以跟實價登錄並列、標出「開價比成交高幾 %」,讓人知道殺價空間大概多少。
+ */
+function Asking({ a, m, city, district, kind }: { a: MarketResponse["asking"]; m: MarketResult | null; city: string; district: string; kind: string | null }) {
+  if (!a) return null;
+  const gap = m && m.median > 0 ? Math.round(((a.median - m.median) / m.median) * 100) : null;
+  return (
+    <div className="mt-2 border-t border-neutral-100 pt-1.5 text-xs dark:border-neutral-800">
+      <div className="flex items-baseline justify-between gap-2">
+        <span>
+          目前開價中位數 <b className="tabular-nums">{fmt(a.median)}</b>
+          <span className="ml-1.5 text-neutral-500 tabular-nums">
+            多數在 {fmt(a.p25)}–{fmt(a.p75)}
+          </span>
+        </span>
+        {a.diff_pct != null && (
+          <span className="text-[11px] whitespace-nowrap text-neutral-500 tabular-nums">
+            這間 {a.diff_pct > 0 ? "+" : ""}
+            {a.diff_pct}%
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-neutral-500">
+        系統裡刊登中的{a.scope === "city" ? `全${city}` : district}
+        {kind}
+        {a.criteria.length ? `、${a.criteria.join("、")}` : ""} · {a.count} 間
+        {gap != null && ` · 開價比成交${gap >= 0 ? "高" : "低"} ${Math.abs(gap)}%`}
+        {!a.enough && <span className="text-amber-700 dark:text-amber-400"> · 樣本不足</span>}
+      </p>
+    </div>
   );
 }
