@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Star, Store } from "lucide-react";
-import { googleNearbyUrl, isNuisance, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
+import { googleNearbyUrl, isCrime, isNuisance, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, POI_SUBTYPE_LABEL, poiLabel, type NearbyPoi, type PoiCat } from "@shared/poi";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
 
@@ -51,7 +51,7 @@ export function NearbySection({
 
   if (!q.data) return null;
   const d = q.data;
-  const cats = POI_CATS.filter((c) => !isNuisance(c) && (more || POI_CATEGORIES[c].main || (c === "ramen" && (d.counts.ramen ?? 0) > 0)));
+  const cats = POI_CATS.filter((c) => !isNuisance(c) && !isCrime(c) && (more || POI_CATEGORIES[c].main || (c === "ramen" && (d.counts.ramen ?? 0) > 0)));
   // 嫌惡設施:半徑內有的才列,顯示最近距離
   const nuisances = NUISANCE_CATS.map((c) => ({ c, d: d.items[c]?.[0]?.distance_m })).filter((x): x is { c: PoiCat; d: number } => x.d != null).sort((a, b) => a.d - b.d);
 

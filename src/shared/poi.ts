@@ -15,6 +15,8 @@ export interface PoiCategory {
   nuisance?: boolean;
   /** 線狀(道路、鐵道):抓 way 的線形,每 40m 取一點存,距離 ≈ 到線的距離;排除隧道 */
   line?: boolean;
+  /** 治安(竊盜案件點,collect -- crime):不算生活機能,面板「治安」區塊看半徑內件數 */
+  crime?: boolean;
 }
 
 export const POI_CATEGORIES = {
@@ -47,12 +49,18 @@ export const POI_CATEGORIES = {
   nightmarket: { label: "夜市", main: false, nuisance: true },
   highway: { label: "快速道路", main: false, nuisance: true, line: true, osm: [["highway", ["motorway", "trunk"]]] },
   railway: { label: "鐵道高架", main: false, nuisance: true, line: true, osm: [["railway", ["rail", "subway", "light_rail"]]] },
+  // 治安:臺北市警察局竊盜點位(門牌轉座標,近 3 年)
+  theft_house: { label: "住宅竊盜", main: false, crime: true },
+  theft_moto: { label: "機車竊盜", main: false, crime: true },
+  theft_car: { label: "汽車竊盜", main: false, crime: true },
 } as const satisfies Record<string, PoiCategory>;
 export type PoiCat = keyof typeof POI_CATEGORIES;
 export const POI_CATS = Object.keys(POI_CATEGORIES) as PoiCat[];
 export const poiLabel = (c: PoiCat) => POI_CATEGORIES[c].label;
 export const isNuisance = (c: PoiCat) => !!(POI_CATEGORIES[c] as PoiCategory).nuisance;
 export const NUISANCE_CATS = POI_CATS.filter(isNuisance);
+export const isCrime = (c: PoiCat) => !!(POI_CATEGORIES[c] as PoiCategory).crime;
+export const CRIME_CATS = POI_CATS.filter(isCrime);
 /** 需求「N 公尺內不要有」可以選的:嫌惡設施 + 宮廟(廟會、鞭炮) */
 export const AVOIDABLE_CATS: PoiCat[] = [...NUISANCE_CATS, "worship"];
 

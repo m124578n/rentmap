@@ -16,6 +16,7 @@ import { CostSection, useMonthlyCost } from "@/features/cost/cost";
 import { EMPTY_REQUIREMENTS } from "@shared/fit";
 import { NearbySection } from "@/features/nearby/NearbySection";
 import { HazardSection } from "@/features/hazard/HazardSection";
+import { CrimeSection } from "@/features/crime/CrimeSection";
 import { garbageService } from "@shared/poi";
 
 interface Props {
@@ -133,6 +134,8 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
         />}
 
       {p.lat != null && p.lng != null && <HazardSection key={`h${id}`} lat={p.lat} lng={p.lng} city={p.city} />}
+
+      {p.lat != null && p.lng != null && <CrimeSection key={`cr${id}`} lat={p.lat} lng={p.lng} city={p.city} district={p.district} />}
 
       {p.lat != null && p.lng != null && <BusSection key={`b${id}`} lat={p.lat} lng={p.lng} onOverlay={onBusOverlay} />}
 

@@ -16,7 +16,8 @@ import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/c
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { useMonthlyCost } from "@/features/cost/cost";
 import { FIT_DIM_LABEL } from "@shared/fit";
-import { NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
+import { CRIME_CATS, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
+import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
@@ -68,6 +69,7 @@ export function ComparePage() {
   const f = useFilters();
   const fit = useFit();
   const cost = useMonthlyCost(fit.requirements);
+  const crimeDist = useCrimeDistricts();
   const hazards = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, staleTime: 60 * 60_000 });
   const nearby = useQuery({ queryKey: ["nearby-summary", 500], queryFn: () => api.nearbySummary(500), staleTime: 30 * 60_000 });
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
@@ -257,6 +259,24 @@ export function ComparePage() {
             }),
           )
         : [],
+    },
+    {
+      title: "治安(500m 內竊盜,近 3 年;只有台北市有點位)",
+      rows:
+        nearby.data?.has_data && crimeDist.data
+          ? CRIME_CATS.map(
+              (c): Row => ({
+                label: poiLabel(c),
+                better: "low",
+                cells: props.map((p) => {
+                  if (p.lat == null) return { node: dash, v: null };
+                  if (!/^[台臺]北/.test(p.city)) return { node: <span className="text-neutral-400">沒有點位</span>, v: null };
+                  const n = nearby.data.items[p.id]?.[c] ?? 0;
+                  return { node: <span className="tabular-nums">{n}</span>, v: n };
+                }),
+              }),
+            )
+          : [],
     },
     {
       title: "嫌惡設施(最近距離,500m 內)",

@@ -8,6 +8,7 @@ import { CommuteSection } from "@/features/commute/CommuteSection";
 import { NearbySection } from "@/features/nearby/NearbySection";
 import { HazardSection } from "@/features/hazard/HazardSection";
 import { BusSection } from "@/features/bus/BusSection";
+import { CrimeSection } from "@/features/crime/CrimeSection";
 import { reverseGeocode } from "@/features/places/geocode";
 
 export interface MapPoint {
@@ -92,6 +93,7 @@ export function PointDetail({
       <NearbySection key={`n${key}`} lat={lat} lng={lng} onOverlay={onBusOverlay} />
       {/* 等地址查完才知道城市(液化只有台北市有資料);查不到就當「沒有資料」,不要誤報「不在潛勢區」 */}
       {!addr.isLoading && <HazardSection key={`h${key}`} lat={lat} lng={lng} city={addr.data?.city || "?"} />}
+      {addr.data?.city && <CrimeSection key={`cr${key}`} lat={lat} lng={lng} city={addr.data.city} district={addr.data.district} />}
       <BusSection key={`b${key}`} lat={lat} lng={lng} onOverlay={onBusOverlay} />
     </div>
   );
