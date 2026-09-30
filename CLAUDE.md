@@ -4,6 +4,11 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 
 設計與進度在 `docs/design/2026-09-20-architecture.md`。這份只放「怎麼工作」。
 
+**產品方向(2026-09-30 定案,先讀):`docs/business/2026-09-30-direction-notes-and-regions.md`。** 重點:
+- 產品是「找房筆記」:房源由使用者自己帶進來(手動 / 瀏覽器書籤小工具),賣的是對地址的分析。**不再每天抓 591 / 好房**,排程已停用。
+- 抓來的房源只留在使用者本機 D1,不上正式站;公開版每人只看到自己的筆記,不存照片、屋況文字、聯絡人。用「私人模式」開關讓本機維持舊行為。
+- 範圍以六都為主,依**生活圈**分區(north 北北基桃 / taichung / tainan / kaohsiung),一次只載一區;不要再新增寫死「台北市 / 新北市」的程式。
+
 ## 鐵則
 
 - **使用者說「好」之前不部署、不建任何雲端資源**:不跑 `wrangler deploy`、`d1 create`、`r2 bucket create`、
@@ -62,6 +67,8 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 3. 只有版面 / 視覺改動才截圖,一張就好:`npm run dev` 開著,`node scripts/shot.mjs --route=/ --click=.rh-marker`(`--dark` 切暗色),再用 Read 看圖。
 
 ## 排程
+
+**2026-09-30 起兩個排程都已停用(Disabled),方向改為找房筆記、不再每日採集。** 要恢復:`Get-ScheduledTask RentmapSync-* | Enable-ScheduledTask`。以下是原本的設定:
 
 Windows 工作排程 `RentmapSync-*` 兩個時段(20:00 台北、21:00 新北 + 重抓 80 筆;好房中午與 23:00 重抓 2026-09-29 取消以減少喚醒,`--group=housefun|recheck` 仍可手動跑)各跑 `scripts/run_daily.ps1 -Group …`(log 在 `data/logs/{date}-sync-{group}.log`),每組 5–15 分鐘。排程會把睡眠中的電腦喚醒(WakeToRun,電源設定「允許喚醒計時器」已啟用),`run_daily.ps1` 開頭先等網路、`git pull`,自動睡眠預設關閉(`$env:AUTO_SLEEP=1` 才開:腳本開始後沒人動過電腦、且 menmap / 其他 rentmap 排程沒在跑才睡)。**這些時段前後 20 分鐘不要改 Drizzle schema、不要另開 dev server**(它會偵測 5173 沒開就自己起一個,跑完關掉)。menmap 的排程同一時間跑,互不影響。部署後把 `.env` 的 `RENTMAP_API` 改成正式站即可。
 
