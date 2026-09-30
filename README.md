@@ -29,7 +29,7 @@ npm run collect -- add https://rent.591.com.tw/<id>   # 抓一筆 591 推進本�
 - [x] 好房(hb):Playwright 抓列表(頁內 `PM(n)` 分頁)與物件頁,Nominatim 定位到路名;`collect add/list/sync` 自動依網址判斷來源
 - [ ] M3b 貼 URL 佇列 + 採集機 watch;樂屋(Cloudflare 連人工驗證都擋,自動化放棄;將來只能走 bookmarklet)
 - [x] M4 收藏管理:收藏 / 取消、狀態、星等、標籤、私人備註;`/board` 看板拖曳換狀態;地圖未收藏灰色、必看金框;篩選「只看收藏」
-- [ ] 附近地點 / 生活機能 + 我的地點(設計:`docs/design/2026-09-23-nearby-poi-design.md`,OSM Overpass 一次下載進 D1)
+- [x] 附近地點 / 生活機能 + 我的地點:`collect -- pois` 抓 OSM + 麵咩撲拉麵,面板「生活機能」列各類數量與最近幾個、地圖畫點,比較表並排(設計:`docs/design/2026-09-23-nearby-poi-design.md`)
 - [x] M5 實價登錄匯入、租金行情(系統內房源尚未併入行情池)
 - [x] M6 需求設定與符合度:頂欄「我的需求」設預算、房型、坪數、通勤上限、必要設備與權重;列表 / 面板 / 比較表標符合度,地圖可依符合度上色,篩選「符合需求」隱藏不符的
 - [ ] M7 AI 分析

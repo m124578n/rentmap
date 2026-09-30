@@ -2,7 +2,7 @@
  * D1 schema(Drizzle)。改這裡後 `npm run db:generate` 產 migration,再 `npm run db:migrate:local` 套到本地。
  * 凡是「人的資料」都帶 user_id;Phase 1 只有一個帳號,但一開始就多人。
  */
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable(
   "users",
@@ -238,4 +238,24 @@ export const rentStats = sqliteTable(
     social: integer("social", { mode: "boolean" }).notNull(),
   },
   (t) => [uniqueIndex("rent_stats_serial_idx").on(t.serial), index("rent_stats_area_idx").on(t.city, t.district, t.kind), index("rent_stats_date_idx").on(t.date)],
+);
+
+/**
+ * 生活機能(OSM + menmap 拉麵)。採集機 `collect -- pois` 每類覆蓋式匯入(version 不同的舊列在 commit 時刪掉)。
+ * 同一個 OSM 地點可能屬於兩類,所以主鍵是 (category, key)。
+ */
+export const pois = sqliteTable(
+  "pois",
+  {
+    category: text("category").notNull(),
+    key: text("key").notNull(), // OSM n123 / w456 / r789;menmap m{ftid}
+    subtype: text("subtype"),
+    name: text("name"),
+    lat: real("lat").notNull(),
+    lng: real("lng").notNull(),
+    rating: real("rating"),
+    url: text("url"),
+    version: text("version").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.category, t.key] }), index("pois_latlng_idx").on(t.lat, t.lng)],
 );
