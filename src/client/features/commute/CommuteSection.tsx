@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Bus, ChevronDown, ChevronUp, Footprints, Route, TrainFront } from "lucide-react";
+import { Bike, Bus, ChevronDown, ChevronUp, Footprints, Route, TrainFront } from "lucide-react";
 import { COMMUTE_SIDE_LABEL, TRIP_KIND_LABEL, type CommuteSide, type CommuteWhen, type Trip, type TripBrief, type TripLeg } from "@shared/trip";
 import { DAY_LABEL } from "@shared/bus";
 import { useFilters, whenOf } from "@/lib/filters";
@@ -141,9 +141,10 @@ function Trips({
   when: CommuteWhen;
   onOverlay?: (o: BusOverlay | null) => void;
 }) {
+  const bike = useFilters().commuteBike;
   const q = useQuery({
-    queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir],
-    queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when }),
+    queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir, bike],
+    queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when, bike }),
     staleTime: 10 * 60_000,
   });
   const [sel, setSel] = useState<number | null>(null);
@@ -244,6 +245,11 @@ function LegStrip({ legs }: { legs: TripLeg[] }) {
               <Bus size={11} />
               {l.name} {l.min}′
             </>
+          ) : l.mode === "bike" ? (
+            <>
+              <Bike size={11} className="text-lime-600" />
+              YouBike {l.min}′
+            </>
           ) : (
             <>
               <TrainFront size={11} style={{ color: l.colors[0] }} />
@@ -278,6 +284,11 @@ function TripDetail({ trip }: { trip: Trip }) {
                 {times === i ? "收起班次" : "班次"}
               </button>
               {times === i && <RouteTimes pick={{ key: l.key, boardSeq: l.board_seq, alightSeq: l.alight_seq }} />}
+            </div>
+          ) : l.mode === "bike" ? (
+            <div>
+              <Bike size={12} className="mr-1 inline text-lime-600" />
+              租 YouBike(租還約 {l.wait} 分):{l.from} → {l.to},{(l.m / 1000).toFixed(1)} km 約 {l.min} 分
             </div>
           ) : (
             <div>

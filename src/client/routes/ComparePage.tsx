@@ -15,6 +15,8 @@ import { ageOf, fmtMoney, priceOf } from "@/features/listing/age";
 import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/compare/compare";
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { FIT_DIM_LABEL } from "@shared/fit";
+import { NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
+import { HAZARD_KINDS, HAZARD_LABEL, hazardLevelLabel } from "@shared/hazard";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
 interface Cell {
@@ -64,6 +66,8 @@ export function ComparePage() {
   const back = useCommute("back");
   const f = useFilters();
   const fit = useFit();
+  const hazards = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, staleTime: 60 * 60_000 });
+  const nearby = useQuery({ queryKey: ["nearby-summary", 500], queryFn: () => api.nearbySummary(500), staleTime: 30 * 60_000 });
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
   const props = ids.map((id) => byId.get(id)).filter((p): p is PropertySummary => !!p);
 
@@ -226,6 +230,58 @@ export function ComparePage() {
             },
           ])
         : [{ label: "通勤", cells: props.map(() => ({ node: <span className="text-neutral-400">先設「我的地點」</span> })) }],
+    },
+    {
+      title: "生活機能(走路 500m 內)",
+      rows: nearby.data?.has_data
+        ? POI_CATS.filter((c) => POI_CATEGORIES[c].main).map(
+            (c): Row => ({
+              label: poiLabel(c),
+              better: "high",
+              cells: props.map((p) => {
+                const n = p.lat == null ? null : (nearby.data.items[p.id]?.[c] ?? 0);
+                return { node: n == null ? dash : <span className="tabular-nums">{n}</span>, v: n };
+              }),
+            }),
+          )
+        : [],
+    },
+    {
+      title: "嫌惡設施(最近距離,500m 內)",
+      rows: nearby.data?.has_data
+        ? NUISANCE_CATS.filter((c) => props.some((p) => nearby.data.nearest[p.id]?.[c] != null)).map(
+            (c): Row => ({
+              label: poiLabel(c),
+              better: "high",
+              cells: props.map((p) => {
+                if (p.lat == null) return { node: dash, v: null };
+                const d = nearby.data.nearest[p.id]?.[c];
+                return d == null
+                  ? { node: <span className="text-emerald-700 dark:text-emerald-400">500m 外</span>, v: 501 }
+                  : { node: <span className={`tabular-nums ${d <= 100 ? "text-red-600" : d <= 300 ? "text-amber-700 dark:text-amber-400" : ""}`}>{d}m</span>, v: d };
+              }),
+            }),
+          )
+        : [],
+    },
+    {
+      title: "災害風險",
+      rows: hazards.data?.has_data
+        ? HAZARD_KINDS.map(
+            (k): Row => ({
+              label: HAZARD_LABEL[k],
+              better: "low",
+              cells: props.map((p) => {
+                if (p.lat == null) return { node: dash, v: null };
+                const lv = hazards.data.items[p.id]?.[k] ?? 0;
+                return {
+                  node: lv ? <span className="text-red-600 dark:text-red-400">{hazardLevelLabel(k, lv)}</span> : <span className="text-emerald-700 dark:text-emerald-400">不在潛勢區</span>,
+                  v: lv,
+                };
+              }),
+            }),
+          )
+        : [],
     },
     {
       title: "刊登",

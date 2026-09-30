@@ -1,7 +1,8 @@
 /**
  * M6 需求符合度(🟢🟡🔴)。純函式,前端算、不打 API;需求本身存在伺服器(手機電腦共用)。
  *
- * 硬性條件,不符直接紅:預算上限、房型、最少房數、必要設備(電梯 / 寵物 / 開伙)、通勤上限。
+ * 硬性條件,不符直接紅:預算上限、房型、最少房數、必要設備(電梯 / 寵物 / 開伙)、通勤上限、
+ *   垃圾車(走 N 公尺內要有幾點以後、平日至少 3 天的清運點;房東寫了垃圾代收就不看)。
  *   房源缺那個欄位 → 不算不符,但列在「不確定」。
  * 軟性維度各給 0–1 分,乘權重平均:
  *   租金   ≤ 理想價 1 分,到預算上限(沒設就理想價 ×1.3)0 分
@@ -13,6 +14,7 @@
  */
 import { z } from "zod";
 import { KINDS } from "./constants";
+import { AVOIDABLE_CATS, poiLabel, type PoiCat } from "./poi";
 
 const pos = z.number().positive().nullable();
 const posInt = z.number().int().positive().nullable();
@@ -31,6 +33,18 @@ export const Requirements = z.object({
   need_elevator: z.boolean(),
   need_pet: z.boolean(),
   need_cooking: z.boolean(),
+  /** 垃圾車:走多遠內(公尺)要有「幾點以後」的清運點;garbage_after 為 null = 不看 */
+  /** 災害:避開淹水潛勢(颱風情境 ≥ 0.5m 或短時強降雨會淹)、避開土壤液化高潛勢 */
+  avoid_flood: z.boolean(),
+  avoid_liquefaction: z.boolean(),
+  garbage_max_m: z.number().int().min(50).max(1000),
+  /** 嫌惡設施:avoid_m 公尺內不要有這些(加油站、殯葬、快速道路…) */
+  avoid: z.array(z.enum(AVOIDABLE_CATS as [PoiCat, ...PoiCat[]])).max(AVOIDABLE_CATS.length),
+  avoid_m: z.number().int().min(50).max(500),
+  garbage_after: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .nullable(),
   weights: z.object({ price: weight, market: weight, commute: weight, size: weight, age: weight }),
 });
 export type Requirements = z.infer<typeof Requirements>;
@@ -49,6 +63,12 @@ export const EMPTY_REQUIREMENTS: Requirements = {
   need_elevator: false,
   need_pet: false,
   need_cooking: false,
+  avoid: [],
+  avoid_m: 100,
+  avoid_flood: false,
+  avoid_liquefaction: false,
+  garbage_max_m: 300,
+  garbage_after: null,
   weights: { price: 3, market: 2, commute: 3, size: 2, age: 1 },
 };
 
@@ -69,6 +89,12 @@ export interface FitCtx {
   commuteMin?: number | null;
   /** 比行情 %;undefined / null = 沒有(或樣本不足) */
   marketDiff?: number | null;
+  /** 垃圾車條件的結果(/api/garbage/fit);undefined = 沒查 / 還在查 */
+  garbage?: { ok: boolean; service: boolean } | null;
+  /** 可避開類別的最近距離(/api/nearby/summary 的 nearest);undefined = 還在查 */
+  nearest?: Partial<Record<PoiCat, number>>;
+  /** 災害潛勢等級(/api/hazards/summary);undefined = 還在查 */
+  hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction", number>>;
 }
 
 export type FitLevel = "green" | "yellow" | "red";
@@ -100,7 +126,11 @@ export function hasRequirements(r: Requirements) {
     r.age_max != null ||
     r.need_elevator ||
     r.need_pet ||
-    r.need_cooking
+    r.need_cooking ||
+    r.garbage_after != null ||
+    r.avoid.length > 0 ||
+    r.avoid_flood ||
+    r.avoid_liquefaction
   );
 }
 
@@ -140,6 +170,22 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
   if (r.commute_max != null && ctx.commuteMin !== undefined) {
     if (ctx.commuteMin === null) fails.push("通勤搭不到(轉乘一次內)");
     else if (ctx.commuteMin > r.commute_max) fails.push(`通勤最久 ${ctx.commuteMin} 分(上限 ${r.commute_max} 分)`);
+  }
+
+  if (r.avoid.length && ctx.nearest) {
+    for (const c of r.avoid) {
+      const d = ctx.nearest[c];
+      if (d != null && d <= r.avoid_m) fails.push(`${d}m 有${poiLabel(c)}(不要 ${r.avoid_m}m 內)`);
+    }
+  }
+  if (ctx.hazards) {
+    const h = ctx.hazards;
+    if (r.avoid_flood && ((h.flood24 ?? 0) >= 2 || (h.flood6 ?? 0) >= 1))
+      fails.push(`在淹水潛勢區(${(h.flood6 ?? 0) >= 1 ? "短時強降雨就會淹" : "颱風情境 0.5m 以上"})`);
+    if (r.avoid_liquefaction && (h.liquefaction ?? 0) >= 3) fails.push("土壤液化高潛勢");
+  }
+  if (r.garbage_after != null && ctx.garbage) {
+    if (!ctx.garbage.ok) fails.push(`走 ${r.garbage_max_m}m 內沒有 ${r.garbage_after} 以後的垃圾車(也沒寫代收)`);
   }
 
   // ---- 軟性 ----

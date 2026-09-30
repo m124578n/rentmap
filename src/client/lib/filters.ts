@@ -29,6 +29,8 @@ export interface Filters {
   commuteSide: CommuteSide;
   /** 上班、下班各自的日子與出發時間(方向固定:上班 住處 → 地點,下班 地點 → 住處) */
   commuteTimes: Record<CommuteSide, { day: DayType; time: string }>;
+  /** 通勤算不算 YouBike(騎到目的地或捷運站旁) */
+  commuteBike: boolean;
   /** 經過這些路線(任一條):公車主路線名(307)或捷運線名(板南線);走得到才留 */
   alongRoutes: string[];
   /** 隱藏不符需求(紅)的房源;沒設需求時無效 */
@@ -60,6 +62,7 @@ export const EMPTY: Filters = {
   alongRoutes: [],
   fitOnly: false,
   commuteSide: "go",
+  commuteBike: true,
   commuteTimes: {
     go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time },
     back: { day: COMMUTE_DEFAULT.back.day, time: COMMUTE_DEFAULT.back.time },
@@ -93,7 +96,7 @@ export function setFilters(patch: Partial<Filters>) {
 
 /** 清除篩選;排序與上下班時間是設定,不跟著清 */
 export function resetFilters() {
-  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes });
+  setFilters({ ...EMPTY, sort: current.sort, commuteSide: current.commuteSide, commuteTimes: current.commuteTimes, commuteBike: current.commuteBike });
 }
 
 /** 某一邊(上班 / 下班)的完整時段 */

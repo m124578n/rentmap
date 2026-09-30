@@ -2,6 +2,8 @@ import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, Prop
 import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
+import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
+import type { HazardResponse, HazardSummary } from "@shared/hazard";
 import { whenParams, type CommuteMatrix, type CommuteWhen, type TripsResponse } from "@shared/trip";
 
 export class ApiError extends Error {
@@ -43,15 +45,21 @@ export const api = {
   busNames: () => req<{ bus: string[]; mrt: string[] }>("/api/bus/names"),
   busAlong: (names: string[], radius = 400) => req<AlongResponse>(`/api/bus/along?names=${encodeURIComponent(names.join(","))}&radius=${radius}`),
 
-  commute: (when: CommuteWhen, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}`),
-  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen }) =>
-    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}`),
+  commute: (when: CommuteWhen, bike = true, radius = 400) => req<CommuteMatrix>(`/api/commute?radius=${radius}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
+  commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen; bike: boolean }) =>
+    req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}${q.bike ? "" : "&bike=0"}`),
 
   market: () => req<MarketMatrix>("/api/market"),
   propertyMarket: (id: number) => req<MarketResponse>(`/api/properties/${id}/market`),
 
   getRequirements: () => req<{ requirements: Requirements }>("/api/requirements"),
   putRequirements: (r: Requirements) => req<{ requirements: Requirements }>("/api/requirements", { method: "PUT", body: JSON.stringify(r) }),
+
+  nearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyResponse>(`/api/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
+  garbageFit: (maxM: number, after: string) => req<GarbageFit>(`/api/garbage/fit?max=${maxM}&after=${encodeURIComponent(after)}`),
+  hazards: (lat: number, lng: number, city: string) => req<HazardResponse>(`/api/hazards?lat=${lat}&lng=${lng}&city=${encodeURIComponent(city)}`),
+  hazardSummary: () => req<HazardSummary>("/api/hazards/summary"),
+  nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),

@@ -46,6 +46,29 @@ describe("computeFit", () => {
     expect(computeFit(home, r)).toMatchObject({ level: "green", score: null });
   });
 
+  it("垃圾車:走得到的範圍內沒有指定時間以後的車 → 不符;沒查到(undefined)不判", () => {
+    const r = req({ garbage_after: "19:00", garbage_max_m: 300 });
+    expect(computeFit(home, r, { garbage: { ok: false, service: false } })!.fails).toEqual(["走 300m 內沒有 19:00 以後的垃圾車(也沒寫代收)"]);
+    expect(computeFit(home, r, { garbage: { ok: true, service: true } })!.level).toBe("green");
+    expect(computeFit(home, r, {})!.fails).toEqual([]);
+  });
+
+  it("不要太近:最近距離在範圍內就不符;沒勾的類別不管", () => {
+    const r = req({ avoid: ["fuel", "highway"], avoid_m: 100 });
+    expect(computeFit(home, r, { nearest: { fuel: 80, highway: 150, funeral: 20 } })!.fails).toEqual(["80m 有加油站(不要 100m 內)"]);
+    expect(computeFit(home, r, { nearest: {} })!.level).toBe("green");
+    expect(computeFit(home, r, {})!.fails).toEqual([]);
+  });
+
+  it("災害:颱風情境 ≥0.5m 或短時強降雨會淹 → 不符;液化只擋高潛勢", () => {
+    const r = req({ avoid_flood: true, avoid_liquefaction: true });
+    expect(computeFit(home, r, { hazards: { flood24: 1 } })!.fails).toEqual([]);
+    expect(computeFit(home, r, { hazards: { flood24: 2 } })!.fails).toEqual(["在淹水潛勢區(颱風情境 0.5m 以上)"]);
+    expect(computeFit(home, r, { hazards: { flood6: 1, flood24: 3 } })!.fails).toEqual(["在淹水潛勢區(短時強降雨就會淹)"]);
+    expect(computeFit(home, r, { hazards: { liquefaction: 2 } })!.fails).toEqual([]);
+    expect(computeFit(home, r, { hazards: { liquefaction: 3 } })!.fails).toEqual(["土壤液化高潛勢"]);
+  });
+
   it("屋齡:上限 ×0.4 內滿分", () => {
     const r = req({ age_max: 40, weights: { price: 0, market: 0, commute: 0, size: 0, age: 1 } });
     expect(computeFit({ ...home, building_age: 10 }, r)!.score).toBe(1);

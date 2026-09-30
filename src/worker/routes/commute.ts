@@ -6,6 +6,7 @@
  *                                                一個點到一個地點:每種搭法最快的 + 公車直達前三條(面板用)
  * 時段參數:day = wd / sat / sun、time = 出發時刻、dir = to(住處 → 地點,上班)/ from(地點 → 住處,下班);
  * 省略就是平日 08:00 上班。等車依那個時段的班距,那段時間沒開的路線不算。
+ * bike=0 不算 YouBike(預設會算:騎到目的地或捷運站旁的站,見 transit/bike.ts)。
  *
  * 每個地點算一次「從目的地往回」的標記,之後每間房只看走得到的站,所以跟房源數幾乎無關。
  * 公車資料整份在記憶體(transit/network.ts);沒匯入公車時仍有捷運與步行。
@@ -19,6 +20,7 @@ import type { AppEnv } from "../env";
 import { requireUser } from "../auth";
 import { db, schema } from "../db";
 import { loadBusNet } from "../transit/network";
+import { EMPTY_BIKES, loadBikes } from "../transit/bike";
 import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 
 export const commute = new Hono<AppEnv>();
@@ -54,10 +56,11 @@ commute.get("/api/commute", async (c) => {
     (p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null,
   );
   const net = await loadBusNet(c.env.DB);
+  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
   const items: CommuteMatrix["items"] = {};
   for (const p of props) items[p.id] = {};
   for (const place of places) {
-    const plan = buildPlan(net, place, when);
+    const plan = buildPlan(net, place, when, bikes);
     for (const p of props) {
       const t = bestTrip(plan, p.lat, p.lng, radius);
       items[p.id]![place.id] = t ? { kind: t.kind, total_min: t.total_min, transfers: t.transfers, summary: t.summary } : null;
@@ -80,7 +83,8 @@ commute.get("/api/commute/trips", async (c) => {
     .where(and(eq(schema.myPlaces.id, placeId), eq(schema.myPlaces.userId, c.get("user").id)));
   if (!place) return c.json({ error: "place not found" }, 404);
   const net = await loadBusNet(c.env.DB);
-  const plan = buildPlan(net, place, when);
+  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB);
+  const plan = buildPlan(net, place, when, bikes);
   const trips = candidates(plan, lat, lng, radiusOf(c.req.query("radius")), 3)
     .map((x) => buildTrip(plan, x))
     .sort((a, b) => a.total_min - b.total_min);

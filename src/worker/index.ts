@@ -8,6 +8,8 @@ import { places } from "./routes/places";
 import { commute } from "./routes/commute";
 import { market } from "./routes/market";
 import { requirements } from "./routes/requirements";
+import { nearby } from "./routes/nearby";
+import { hazards } from "./routes/hazards";
 
 const app = new Hono<AppEnv>();
 
@@ -25,6 +27,10 @@ app.route("/", commute);
 app.route("/", market);
 // 找房需求(M6 符合度)
 app.route("/", requirements);
+// 生活機能 /api/nearby*;匯入 /api/ingest/pois*
+app.route("/", nearby);
+// 災害潛勢 /api/hazards*;匯入 /api/ingest/hazards*
+app.route("/", hazards);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

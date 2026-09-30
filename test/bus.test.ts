@@ -303,6 +303,31 @@ describe("commute (bus + MRT, up to one transfer)", () => {
     expect(names.mrt).toContain("板南線");
   });
 
+  it("YouBike:住處與公司旁都有站 → 有騎車的搭法;bike=0 不算;下班方向段落正向", async () => {
+    const places = ((await (await SELF.fetch(`${ORIGIN}/api/places`, authed())).json()) as { items: Place[] }).items;
+    const office = places.find((p) => p.name === "公司")!.id;
+    const yb = (key: string, lng: number) => ({ key, category: "youbike", subtype: null, name: key, lat: LAT + 0.0005, lng, rating: null, url: null, note: "20 格" });
+    await SELF.fetch(`${ORIGIN}/api/ingest/pois`, { method: "POST", headers: ingestHeaders, body: JSON.stringify({ version: "y1", items: [yb("住處站", lngAt(1)), yb("公司站", lngAt(8))] }) });
+    await SELF.fetch(`${ORIGIN}/api/ingest/pois/commit`, { method: "POST", headers: ingestHeaders, body: JSON.stringify({ version: "y1", category: "youbike" }) });
+    const q = (extra: string) => `${ORIGIN}/api/commute/trips?lat=${LAT + 0.0003}&lng=${lngAt(1)}&place_id=${office}&radius=300&${extra}`;
+
+    const r = (await (await SELF.fetch(q("day=wd&time=08:00&dir=to"), authed())).json()) as TripsResponse;
+    const bike = r.trips.find((t) => t.kind === "bike")!;
+    expect(bike.legs.map((l) => l.mode)).toEqual(["walk", "bike", "walk"]);
+    expect(bike.legs[1]).toMatchObject({ mode: "bike", from: "住處站", to: "公司站", wait: 2 });
+    expect(bike.summary).toBe("YouBike");
+    expect(bike.total_min).toBe(legSum(bike));
+
+    const off = (await (await SELF.fetch(q("day=wd&time=08:00&dir=to&bike=0"), authed())).json()) as TripsResponse;
+    expect(off.trips.some((t) => t.kind.startsWith("bike"))).toBe(false);
+
+    const back = (await (await SELF.fetch(q("day=wd&time=18:00&dir=from"), authed())).json()) as TripsResponse;
+    const bb = back.trips.find((t) => t.kind === "bike")!;
+    expect(bb.legs[1]).toMatchObject({ mode: "bike", from: "公司站", to: "住處站" });
+    expect(bb.legs[0]).toMatchObject({ mode: "walk", to: "YouBike 公司站" });
+    expect(bb.legs[2]).toMatchObject({ mode: "walk", to: "住處" });
+  });
+
   it("requires login and a valid place", async () => {
     expect((await SELF.fetch(`${ORIGIN}/api/commute`)).status).toBe(401);
     expect((await SELF.fetch(`${ORIGIN}/api/commute/trips?lat=25&lng=121.5&place_id=99999`, authed())).status).toBe(404);

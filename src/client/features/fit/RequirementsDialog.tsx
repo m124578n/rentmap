@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { EMPTY_REQUIREMENTS, FIT_DIM_LABEL, type FitDimKey, type Requirements } from "@shared/fit";
 import { KINDS } from "@shared/constants";
+import { AVOIDABLE_CATS, poiLabel } from "@shared/poi";
 import { useRequirements, useRequirementsDialogOpen, useSaveRequirements } from "./fit";
 
 export function RequirementsDialogHost() {
@@ -94,6 +95,67 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
               </label>
             ))}
           </div>
+        </Group>
+        <Group title="不要太近(嫌惡設施、噪音源)">
+          <select className="input !w-auto" value={r.avoid_m} onChange={(e) => set({ avoid_m: Number(e.target.value) })}>
+            {[50, 100, 200, 300].map((m) => (
+              <option key={m} value={m}>
+                {m}m
+              </option>
+            ))}
+          </select>
+          <span>內不要有</span>
+          <div className="flex flex-wrap gap-1">
+            {AVOIDABLE_CATS.map((c) => {
+              const on = r.avoid.includes(c);
+              return (
+                <button
+                  key={c}
+                  onClick={() => set({ avoid: on ? r.avoid.filter((x) => x !== c) : [...r.avoid, c] })}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${on ? "border-red-600 bg-red-600 text-white" : "border-neutral-300 dark:border-neutral-700"}`}
+                >
+                  {poiLabel(c)}
+                </button>
+              );
+            })}
+          </div>
+        </Group>
+        <Group title="災害風險">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={r.avoid_flood} onChange={(e) => set({ avoid_flood: e.target.checked })} /> 避開淹水潛勢區
+            <span className="text-neutral-500">(颱風情境 0.5m 以上,或短時強降雨就會淹)</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={r.avoid_liquefaction} onChange={(e) => set({ avoid_liquefaction: e.target.checked })} /> 避開土壤液化高潛勢
+            <span className="text-neutral-500">(只有台北市有資料)</span>
+          </label>
+        </Group>
+        <Group title="垃圾車(房東沒寫代收時,要追得到車)">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={r.garbage_after != null}
+              onChange={(e) => set({ garbage_after: e.target.checked ? (r.garbage_after ?? "19:00") : null })}
+            />
+            走
+          </label>
+          <select className="input !w-auto" value={r.garbage_max_m} disabled={r.garbage_after == null} onChange={(e) => set({ garbage_max_m: Number(e.target.value) })}>
+            {[100, 200, 300, 500].map((m) => (
+              <option key={m} value={m}>
+                {m}m
+              </option>
+            ))}
+          </select>
+          <span>內要有</span>
+          <input
+            type="time"
+            className="input !w-auto"
+            step={900}
+            disabled={r.garbage_after == null}
+            value={r.garbage_after ?? "19:00"}
+            onChange={(e) => e.target.value && set({ garbage_after: e.target.value })}
+          />
+          <span className="text-neutral-500">以後的車(平日至少 3 天)</span>
         </Group>
         <Group title="權重(0 = 不算,5 = 最在意)">
           <div className="grid gap-1">

@@ -39,6 +39,19 @@ export function useFit() {
   const r = rq.data?.requirements ?? EMPTY_REQUIREMENTS;
   const configured = hasRequirements(r);
   const market = useMarket();
+  const garbage = useQuery({
+    queryKey: ["garbage-fit", r.garbage_max_m, r.garbage_after],
+    queryFn: () => api.garbageFit(r.garbage_max_m, r.garbage_after!),
+    enabled: r.garbage_after != null,
+    staleTime: 30 * 60_000,
+  });
+  const nearby = useQuery({
+    queryKey: ["nearby-summary", 500],
+    queryFn: () => api.nearbySummary(500),
+    enabled: r.avoid.length > 0,
+    staleTime: 30 * 60_000,
+  });
+  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction, staleTime: 60 * 60_000 });
   const go = useCommute("go");
   const back = useCommute("back");
   const fitOf = useCallback(
@@ -58,9 +71,12 @@ export function useFit() {
         }
       }
       const mb = market.data?.items[p.id];
-      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null });
+      return computeFit(p, r, { commuteMin, marketDiff: mb?.enough ? mb.diff_pct : null, garbage: garbage.data?.items[p.id],
+        nearest: nearby.data ? (nearby.data.nearest[p.id] ?? {}) : undefined,
+        hazards: hz.data ? (hz.data.items[p.id] ?? {}) : undefined,
+      });
     },
-    [configured, r, go.places, go.matrix, back.matrix, market.data],
+    [configured, r, go.places, go.matrix, back.matrix, market.data, garbage.data, nearby.data, hz.data],
   );
   return { configured, requirements: r, loaded: rq.isSuccess, fitOf };
 }
