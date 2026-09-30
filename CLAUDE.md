@@ -17,7 +17,9 @@ repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不�
 
 ```
 src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是地圖(CARTO 底圖、捷運圖層、價格標記;
-              PointDetail 是右鍵 / 長按任意點的面板、heat.ts + heatLayer.ts 是「區域圖層」:通勤網格、每坪租金、災害多邊形)
+              PointDetail 是右鍵 / 長按任意點的面板、heat.ts + heatLayer.ts 是「區域圖層」:通勤網格、每坪租金、災害多邊形、
+              priceMarkers.ts 是價格標記 + 群集:HTML 標記照舊,cluster source 決定誰被合併)
+              features/cost/ 是每月支出(估,src/shared/cost.ts)、features/crime/ 是治安區塊;routes/TourPage 看房路線、routes/StatusPage 資料狀態
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
               features/nearby/ 是生活機能(面板區塊,含垃圾車、嫌惡設施「注意」列;資料 src/shared/poi.ts、API routes/nearby.ts)
@@ -48,6 +50,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- rent-stats [--seasons=4] [--dry]` | 內政部租賃實價登錄(雙北最近 N 季)→ 推入 `rent_stats`(每季公布後一次,約 1/4/7/10 月;zip 快取 `data/lvr/`)。行情計算在 `src/shared/market.ts` |
 | `npm run collect -- pois [--only=food,park] [--dry] [--force]` | 生活機能:OSM Overpass 一類一類抓 + menmap 拉麵 + 雙北環保局垃圾車清運點(`--only=garbage`,約 1 分鐘)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
 | `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON + 雙北航空噪音防制區,依里公告對上里界 SHP)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
+| `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(20:00 台北、21:00 新北含重抓 80 筆;housefun / recheck 組不排程);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
