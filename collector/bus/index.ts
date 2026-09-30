@@ -12,7 +12,7 @@ import { CITY_INFO, collectCities } from "../../src/shared/regions";
 import fs from "node:fs";
 import path from "node:path";
 import type { BusRouteIn, BusStopIn } from "../../src/shared/bus";
-import { transformCity, type TdxCity } from "./transform";
+import { dailyToSchedules, transformCity, type TdxCity, type TdxDailyTimeTable } from "./transform";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const CACHE_DIR = path.join(ROOT, "data", "tdx");
@@ -73,6 +73,20 @@ async function loadCity(city: string, refresh: boolean): Promise<TdxCity> {
     fs.writeFileSync(file, JSON.stringify(out[k]));
     console.log(`  ${city} ${dataset}:下載 ${out[k]!.length} 筆(${((Date.now() - t0) / 1000).toFixed(1)}s)`);
     await new Promise((r) => setTimeout(r, 1500)); // 別連發
+  }
+  // 高雄等縣市的 Schedule 是空的:改用 DailyTimeTable(逐日時刻表)轉成同樣的形狀
+  if ((out.schedules ?? []).length === 0) {
+    const file = path.join(CACHE_DIR, `${city}-DailyTimeTable.json`);
+    const fresh = fs.existsSync(file) && Date.now() - fs.statSync(file).mtimeMs < CACHE_DAYS * 86400_000;
+    let daily: TdxDailyTimeTable[];
+    if (fresh && !refresh) daily = JSON.parse(fs.readFileSync(file, "utf8")) as TdxDailyTimeTable[];
+    else {
+      daily = (await tdxGet("DailyTimeTable", city)) as TdxDailyTimeTable[];
+      fs.writeFileSync(file, JSON.stringify(daily));
+    }
+    out.schedules = dailyToSchedules(daily);
+    const dates = [...new Set(daily.map((d) => (d.BusDate ?? "").slice(0, 10)))].sort();
+    console.log(`  ${city} Schedule 是空的 → 用 DailyTimeTable:${daily.length} 筆(日期 ${dates.join("、") || "?"};當成每天適用,平日班次可能被低估)`);
   }
   return out as unknown as TdxCity;
 }

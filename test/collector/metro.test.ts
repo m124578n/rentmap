@@ -27,3 +27,20 @@ describe("TDX metro S2STravelTime", () => {
     expect(edges).toEqual({ "KR10-KR11": 120 });
   });
 });
+
+describe("台中捷運用站名對站號", () => {
+  it("TDX 的 G0 / G3 / G8a 對到 mrt.json 的 TG103A / TG103 / TG109", async () => {
+    const { buildMrtTimes, tmrtNameMap } = await import("../../collector/metro-transform");
+    const map = tmrtNameMap([
+      { name: "北屯總站", refs: ["TG103A"] },
+      { name: "舊社", refs: ["TG103"] },
+      { name: "高鐵台中站", refs: ["TG119"] },
+      { name: "烏日", refs: ["TG118"] },
+      { name: "市政府", refs: ["BL18"] }, // 台北的市政府不是 TG,不會混進來
+    ]);
+    expect(map.get("市政府")).toBeUndefined();
+    const seg = (a: string, an: string, b: string, bn: string, s: number) => ({ FromStationID: a, FromStationName: { Zh_tw: an }, ToStationID: b, ToStationName: { Zh_tw: bn }, RunTime: s, StopTime: 0 });
+    const out = buildMrtTimes([{ op: "TMRT", TravelTimes: [seg("G0", "北屯總站", "G3", "舊社", 124), seg("G16", "烏日", "G17", "高鐵臺中站", 150)] }], map);
+    expect(Object.keys(out.edges).sort()).toEqual(["TG103-TG103A", "TG118-TG119"].sort());
+  });
+});

@@ -7,7 +7,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { buildMrtTimes, type TdxS2S } from "./metro-transform";
+import { buildMrtTimes, tmrtNameMap, type TdxS2S } from "./metro-transform";
 import { tdxGet } from "./lib/tdx";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -24,7 +24,11 @@ export async function runMetro(args: string[]) {
     all.push(...body.map((x) => ({ ...x, op })));
     await new Promise((r) => setTimeout(r, 5000));
   }
-  const out = buildMrtTimes(all);
+  // 台中捷運要用站名對站號(TDX 與 mrt.json 的編號不同)
+  const mrt = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "mrt.json"), "utf8")) as { stations: { name: string; refs: string[] }[] };
+  const out = buildMrtTimes(all, tmrtNameMap(mrt.stations));
+  const tg = Object.keys(out.edges).filter((k) => k.startsWith("TG")).length;
+  console.log(`  台中綠線對上 ${tg} 段${tg === 0 ? "(0 段:站名對不上,檢查 tmrtNameMap)" : ""}`);
   console.log(`站間 ${Object.keys(out.edges).length} 段`);
   if (args.includes("--dry")) return console.log(JSON.stringify(Object.entries(out.edges).slice(0, 5)));
   fs.writeFileSync(OUT, JSON.stringify({ updated: new Date().toISOString().slice(0, 10), ...out }, null, 0) + "\n");

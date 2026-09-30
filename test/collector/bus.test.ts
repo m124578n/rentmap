@@ -118,3 +118,23 @@ describe("helpers", () => {
     ]);
   });
 });
+
+describe("DailyTimeTable fallback (高雄:Schedule 是空的)", () => {
+  it("turns daily timetables into every-day schedules, keeping the latest date per route direction", async () => {
+    const { dailyToSchedules, buildSchedule } = await import("../../collector/bus/transform");
+    const trip = (t: string) => ({ StopTimes: [{ StopSequence: 1, ArrivalTime: t, DepartureTime: t }, { StopSequence: 2, ArrivalTime: "23:59", DepartureTime: "23:59" }] });
+    const out = dailyToSchedules([
+      { BusDate: "2026-08-15T00:00:00+08:00", RouteUID: "KHH100", SubRouteUID: "KHH100", Direction: 1, Timetables: [trip("05:00")] },
+      { BusDate: "2026-08-22T00:00:00+08:00", RouteUID: "KHH100", SubRouteUID: "KHH100", Direction: 1, Timetables: [trip("06:35"), trip("07:05")] },
+      { BusDate: "2026-08-22T00:00:00+08:00", RouteUID: "KHH100", SubRouteUID: "KHH100", Direction: 0, Timetables: [trip("06:00")] },
+    ]);
+    expect(out).toHaveLength(2);
+    const dir1 = out.find((s) => s.Direction === 1)!;
+    expect(dir1.Timetables).toHaveLength(2); // 只留較新的那天
+    expect(dir1.Timetables![0]!.ServiceDay).toMatchObject({ Monday: 1, Saturday: 1, Sunday: 1 });
+    // 接得上原本的班表計算:平日、週末都有班
+    const { schedule } = buildSchedule([dir1]);
+    expect(schedule).not.toBeNull();
+    expect(Object.keys(schedule!).length).toBeGreaterThanOrEqual(2);
+  });
+});

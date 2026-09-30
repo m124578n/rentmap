@@ -143,6 +143,37 @@ function dayTypes(sd: ServiceDay | undefined): DayType[] {
 
 const validTime = (t: string | undefined): t is string => !!t && /^\d{1,2}:\d{2}$/.test(t);
 
+/** TDX DailyTimeTable 的一筆(某一天、某條子路線某方向的所有班次);結構跟 Schedule 的 Timetables 一樣,只是沒有 ServiceDay */
+export interface TdxDailyTimeTable {
+  BusDate?: string;
+  RouteUID: string;
+  SubRouteUID?: string;
+  Direction?: number;
+  Timetables?: { StopTimes?: { StopSequence?: number; ArrivalTime?: string; DepartureTime?: string }[] }[];
+}
+
+const EVERY_DAY: ServiceDay = { Sunday: 1, Monday: 1, Tuesday: 1, Wednesday: 1, Thursday: 1, Friday: 1, Saturday: 1 };
+
+/**
+ * 有些縣市(高雄)的 Schedule 是空的,班次放在 DailyTimeTable(逐日時刻表)。
+ * 把它轉成 Schedule 的形狀;TDX 上常常只有某一天(2026-09 實測高雄只有一個週六),所以當成每天都適用:
+ * 平日班次可能被低估,但比完全沒有等車時間好。同一條(子路線 × 方向)有多天時只取最新的一天。
+ */
+export function dailyToSchedules(items: TdxDailyTimeTable[]): TdxSchedule[] {
+  const latest = new Map<string, TdxDailyTimeTable>();
+  for (const it of items) {
+    const key = `${it.SubRouteUID ?? it.RouteUID}:${it.Direction ?? 0}`;
+    const cur = latest.get(key);
+    if (!cur || (it.BusDate ?? "") > (cur.BusDate ?? "")) latest.set(key, it);
+  }
+  return [...latest.values()].map((it) => ({
+    RouteUID: it.RouteUID,
+    SubRouteUID: it.SubRouteUID,
+    Direction: it.Direction,
+    Timetables: (it.Timetables ?? []).map((tt) => ({ ServiceDay: EVERY_DAY, StopTimes: tt.StopTimes })),
+  })) as TdxSchedule[];
+}
+
 /** 時刻表 / 班距 → Schedule;另外回傳「從起點到第 n 站幾分鐘」(拿站最多的一班算) */
 export function buildSchedule(items: TdxSchedule[]): { schedule: Schedule | null; tMin: Map<number, number> } {
   const deps: Record<DayType, Set<string>> = { wd: new Set(), sat: new Set(), sun: new Set() };
