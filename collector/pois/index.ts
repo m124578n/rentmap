@@ -122,23 +122,33 @@ export async function runPois(opts: { base: string; secret: string; args: string
   if (!dry && !opts.secret) throw new Error(".env 沒有 INGEST_SECRET");
   const version = new Date().toISOString();
   let waited = false;
+  const failed: string[] = [];
 
   for (const cat of cats) {
     let items: PoiIn[];
-    if (cat === "ramen") {
-      const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
-      if (!res.ok) throw new Error(`menmap ${res.status}`);
-      items = fromMenmap(((await res.json()) as { shops: MenmapShop[] }).shops);
-    } else {
-      if (!("osm" in POI_CATEGORIES[cat])) continue;
-      if (waited) await sleep(10_000);
-      const { elements, fetched } = await loadCategory(cat, refresh);
-      waited = fetched > 0;
-      items = fromOverpass(cat, elements);
+    try {
+      if (cat === "ramen") {
+        const res = await fetch(MENMAP_URL, { signal: AbortSignal.timeout(60_000) });
+        if (!res.ok) throw new Error(`menmap ${res.status}`);
+        items = fromMenmap(((await res.json()) as { shops: MenmapShop[] }).shops);
+      } else {
+        if (!("osm" in POI_CATEGORIES[cat])) continue;
+        if (waited) await sleep(10_000);
+        const { elements, fetched } = await loadCategory(cat, refresh);
+        waited = fetched > 0;
+        items = fromOverpass(cat, elements);
+      }
+    } catch (e) {
+      // 一類抓不到不拖累其他類;已抓到的塊都在快取,之後 --only= 補抓會接著抓
+      console.log(`  ${POI_CATEGORIES[cat].label}(${cat}):抓取失敗,先跳過 — ${String(e).slice(0, 160)}`);
+      failed.push(cat);
+      waited = true;
+      continue;
     }
     const named = items.filter((x) => x.name).length;
     console.log(`  ${POI_CATEGORIES[cat].label}(${cat}):${items.length} 筆,有名字 ${named}`);
     if (dry) continue;
     console.log("   ", await push(opts.base, opts.secret, version, cat, items, force));
   }
+  if (failed.length) throw new Error(`這些類別沒抓到,稍後再跑:npm run collect -- pois --only=${failed.join(",")}`);
 }
