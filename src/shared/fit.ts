@@ -37,6 +37,8 @@ export const Requirements = z.object({
   /** 災害:避開淹水潛勢(颱風情境 ≥ 0.5m 或短時強降雨會淹)、避開土壤液化高潛勢 */
   avoid_flood: z.boolean(),
   avoid_liquefaction: z.boolean(),
+  /** 避開航空噪音防制區第二級以上(65 dB+;第一級只在房源面板提醒) */
+  avoid_airnoise: z.boolean(),
   garbage_max_m: z.number().int().min(50).max(1000),
   /** 嫌惡設施:avoid_m 公尺內不要有這些(加油站、殯葬、快速道路…) */
   avoid: z.array(z.enum(AVOIDABLE_CATS as [PoiCat, ...PoiCat[]])).max(AVOIDABLE_CATS.length),
@@ -67,6 +69,7 @@ export const EMPTY_REQUIREMENTS: Requirements = {
   avoid_m: 100,
   avoid_flood: false,
   avoid_liquefaction: false,
+  avoid_airnoise: false,
   garbage_max_m: 300,
   garbage_after: null,
   weights: { price: 3, market: 2, commute: 3, size: 2, age: 1 },
@@ -94,7 +97,7 @@ export interface FitCtx {
   /** 可避開類別的最近距離(/api/nearby/summary 的 nearest);undefined = 還在查 */
   nearest?: Partial<Record<PoiCat, number>>;
   /** 災害潛勢等級(/api/hazards/summary);undefined = 還在查 */
-  hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction", number>>;
+  hazards?: Partial<Record<"flood6" | "flood24" | "liquefaction" | "airnoise", number>>;
 }
 
 export type FitLevel = "green" | "yellow" | "red";
@@ -130,7 +133,8 @@ export function hasRequirements(r: Requirements) {
     r.garbage_after != null ||
     r.avoid.length > 0 ||
     r.avoid_flood ||
-    r.avoid_liquefaction
+    r.avoid_liquefaction ||
+    r.avoid_airnoise
   );
 }
 
@@ -183,6 +187,7 @@ export function computeFit(p: FitInput, r: Requirements, ctx: FitCtx = {}): FitR
     if (r.avoid_flood && ((h.flood24 ?? 0) >= 2 || (h.flood6 ?? 0) >= 1))
       fails.push(`在淹水潛勢區(${(h.flood6 ?? 0) >= 1 ? "短時強降雨就會淹" : "颱風情境 0.5m 以上"})`);
     if (r.avoid_liquefaction && (h.liquefaction ?? 0) >= 3) fails.push("土壤液化高潛勢");
+    if (r.avoid_airnoise && (h.airnoise ?? 0) >= 2) fails.push(`航空噪音防制區第${["", "一", "二", "三"][h.airnoise!]}級`);
   }
   if (r.garbage_after != null && ctx.garbage) {
     if (!ctx.garbage.ok) fails.push(`走 ${r.garbage_max_m}m 內沒有 ${r.garbage_after} 以後的垃圾車(也沒寫代收)`);

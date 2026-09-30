@@ -16,7 +16,7 @@ import { COMPARE_MAX, setCompare, toggleCompare, useCompare } from "@/features/c
 import { FitBadge, openRequirementsDialog, useFit } from "@/features/fit/fit";
 import { FIT_DIM_LABEL } from "@shared/fit";
 import { NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
-import { HAZARD_KINDS, HAZARD_LABEL, hazardLevelLabel } from "@shared/hazard";
+import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
 interface Cell {
@@ -273,11 +273,11 @@ export function ComparePage() {
               better: "low",
               cells: props.map((p) => {
                 if (p.lat == null) return { node: dash, v: null };
+                // 液化只有台北市有資料:其他縣市不能說「不在潛勢區」
+                if (k === "liquefaction" && !/^[台臺]北/.test(p.city ?? "")) return { node: <span className="text-neutral-400">沒有資料</span>, v: null };
                 const lv = hazards.data.items[p.id]?.[k] ?? 0;
-                return {
-                  node: lv ? <span className="text-red-600 dark:text-red-400">{hazardLevelLabel(k, lv)}</span> : <span className="text-emerald-700 dark:text-emerald-400">不在潛勢區</span>,
-                  v: lv,
-                };
+                const cls = !lv ? "text-emerald-700 dark:text-emerald-400" : hazardSevere(k, lv) ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
+                return { node: <span className={cls}>{hazardText(k, lv)}</span>, v: lv };
               }),
             }),
           )

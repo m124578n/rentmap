@@ -69,6 +69,12 @@ describe("computeFit", () => {
     expect(computeFit(home, r, { hazards: { liquefaction: 3 } })!.fails).toEqual(["土壤液化高潛勢"]);
   });
 
+  it("航空噪音:第二級以上才不符", () => {
+    const r = req({ avoid_airnoise: true });
+    expect(computeFit(home, r, { hazards: { airnoise: 1 } })!.fails).toEqual([]);
+    expect(computeFit(home, r, { hazards: { airnoise: 3 } })!.fails).toEqual(["航空噪音防制區第三級"]);
+  });
+
   it("屋齡:上限 ×0.4 內滿分", () => {
     const r = req({ age_max: 40, weights: { price: 0, market: 0, commute: 0, size: 0, age: 1 } });
     expect(computeFit({ ...home, building_age: 10 }, r)!.score).toBe(1);

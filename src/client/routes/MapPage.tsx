@@ -11,6 +11,7 @@ import { FilterBar } from "@/components/FilterBar";
 import { MapView } from "@/features/map/MapView";
 import { useMrt } from "@/features/map/mrt";
 import { PropertyDetail } from "@/features/property/PropertyDetail";
+import { PointDetail, type MapPoint } from "@/features/map/PointDetail";
 import type { BusOverlay } from "@/features/map/busLayer";
 import type { PropertySummary } from "@shared/schemas";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
@@ -25,7 +26,19 @@ export function MapPage() {
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const mrt = useMrt();
   const filters = useFilters();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelected] = useState<number | null>(null);
+  // 右鍵 / 長按的點;和選中房源互斥
+  const [point, setPoint] = useState<MapPoint | null>(null);
+  const setSelectedId = useCallback((id: number | null) => {
+    setSelected(id);
+    setPoint(null);
+  }, []);
+  const pickPoint = useCallback((p: MapPoint) => {
+    setSelected(null);
+    setBusOverlay(null);
+    setPoint(p);
+    setSnap("half");
+  }, []);
   const [busOverlay, setBusOverlay] = useState<BusOverlay | null>(null);
   const narrow = useNarrow();
   const [snap, setSnap] = useState<Snap>("half");
@@ -56,7 +69,13 @@ export function MapPage() {
     return undefined;
   }, [byCommute, byFit, fitOf, filters, commute.ctx]);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
-  const panelOpen = selectedId != null;
+  const panelOpen = selectedId != null || point != null;
+  const panel = (onOverlay: (o: BusOverlay | null) => void) =>
+    point ? (
+      <PointDetail point={point} items={items} onClose={() => setPoint(null)} onSelect={setSelectedId} onBusOverlay={onOverlay} />
+    ) : selectedId != null ? (
+      <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={onOverlay} />
+    ) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -64,12 +83,12 @@ export function MapPage() {
       <div className="relative flex min-h-0 flex-1">
         {panelOpen && !narrow && (
           <aside className="absolute inset-y-0 left-0 z-10 w-[400px] overflow-auto border-r border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
-            <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={setBusOverlay} />
+            {panel(setBusOverlay)}
           </aside>
         )}
         {panelOpen && narrow && (
           <BottomSheet snap={snap} onSnap={setSnap} onHeight={setSheetH}>
-            <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={onOverlayMobile} />
+            {panel(onOverlayMobile)}
           </BottomSheet>
         )}
         <div className="relative min-w-0 flex-1">
@@ -85,6 +104,8 @@ export function MapPage() {
             places={places.data?.items ?? []}
             onPlaceClick={openPlacesDialog}
             colorOf={colorOf}
+            onPoint={pickPoint}
+            point={point}
           />
 
           {q.isSuccess && all.length === 0 && (
@@ -136,6 +157,11 @@ export function MapPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {!panelOpen && (
+            <div className="pointer-events-none absolute bottom-8 left-2 rounded bg-white/85 px-1.5 py-0.5 text-[11px] text-neutral-500 dark:bg-neutral-900/85">
+              {narrow ? "長按" : "右鍵"}地圖任一點:看那裡的通勤、生活機能、災害
             </div>
           )}
           {noCoords > 0 && (

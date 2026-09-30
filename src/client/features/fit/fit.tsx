@@ -51,7 +51,7 @@ export function useFit() {
     enabled: r.avoid.length > 0,
     staleTime: 30 * 60_000,
   });
-  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction, staleTime: 60 * 60_000 });
+  const hz = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, enabled: r.avoid_flood || r.avoid_liquefaction || r.avoid_airnoise, staleTime: 60 * 60_000 });
   const go = useCommute("go");
   const back = useCommute("back");
   const fitOf = useCallback(

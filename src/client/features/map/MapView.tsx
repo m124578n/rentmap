@@ -24,6 +24,10 @@ interface Props {
   onPlaceClick?: (p: Place) => void;
   /** 有給就用它決定標記顏色(例如依通勤時間),回 undefined 用預設(找房狀態) */
   colorOf?: (p: PropertySummary) => string | undefined;
+  /** 右鍵 / 長按任意一點(「看附近」) */
+  onPoint?: (p: { lat: number; lng: number }) => void;
+  /** 「看附近」的點,畫一根圖釘 */
+  point?: { lat: number; lng: number } | null;
 }
 
 /** 房源價格標記的顏色,依找房狀態;沒收藏的是中性灰 */
@@ -48,7 +52,7 @@ function priceLabel(rent: number | null) {
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML marker,幾百筆內夠用;之後量大再改 symbol layer + cluster)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, { marker: maplibregl.Marker; el: HTMLButtonElement }>>(new Map());
@@ -62,6 +66,9 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const busRef = useRef(busOverlay);
   const placeClickRef = useRef(onPlaceClick);
   const placeMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const onPointRef = useRef(onPoint);
+  onPointRef.current = onPoint;
+  const pointMarkerRef = useRef<maplibregl.Marker | null>(null);
   padRef.current = padLeft;
   busRef.current = busOverlay;
   placeClickRef.current = onPlaceClick;
@@ -88,6 +95,31 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
     });
     map.on("click", () => onSelectRef.current(null));
+    // 看附近:桌機右鍵;手機長按(maplibre 在觸控上不一定發 contextmenu,自己計時,手指一動就取消)
+    const pick = (ll: maplibregl.LngLat) => onPointRef.current?.({ lat: Math.round(ll.lat * 1e6) / 1e6, lng: Math.round(ll.lng * 1e6) / 1e6 });
+    let press: ReturnType<typeof setTimeout> | null = null;
+    let pressed = false;
+    const cancel = () => {
+      if (press) clearTimeout(press);
+      press = null;
+    };
+    map.on("contextmenu", (e) => {
+      e.preventDefault();
+      if (pressed) return; // 長按已經處理過
+      pick(e.lngLat);
+    });
+    map.on("touchstart", (e) => {
+      cancel();
+      pressed = false;
+      if (e.points.length !== 1) return;
+      press = setTimeout(() => {
+        pressed = true;
+        pick(e.lngLat);
+      }, 550);
+    });
+    map.on("touchend", cancel);
+    map.on("touchcancel", cancel);
+    map.on("movestart", cancel);
 
     return () => {
       map.remove();
@@ -152,6 +184,23 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       return new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(map);
     });
   }, [places]);
+
+  // 看附近的圖釘
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    pointMarkerRef.current?.remove();
+    pointMarkerRef.current = null;
+    if (!point) return;
+    pointMarkerRef.current = new maplibregl.Marker({ color: "#2563eb" }).setLngLat([point.lng, point.lat]).addTo(map);
+    const narrow = window.innerWidth < 640;
+    map.easeTo({
+      center: [point.lng, point.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 500,
+      padding: narrow ? { top: 0, bottom: padBottomRef.current, left: 0, right: 0 } : { top: 0, bottom: 0, left: padRef.current, right: 0 },
+    });
+  }, [point]);
 
   // 房源標記:依 id 差異新增 / 更新 / 移除
   useEffect(() => {
