@@ -14,13 +14,13 @@ export const PLAN_LABEL: Record<PlanKey, string> = { free: "免費", pro: "完�
 
 /**
  * 賣的品項(只有一個付費方案,差在天數;價格是新台幣,綠界串好前只用來顯示)。
- * 60 天是「誘餌」:每天的價格跟 30 天差不多,但只比 90 天便宜 50 元,讓 90 天顯得最划算(主推 90 天)。
- * 不寫原價、不寫限時,只是價格的排法。
+ * 主推中間的 60 天(每天最便宜);90 天是「誘餌」:最貴、每天的價格反而比 30 天還高,
+ * 讓 60 天顯得最合理(折衷效應)。不寫原價、不寫限時,只是價格的排法。
  */
 export const OFFERS = [
   { id: "pro30", plan: "pro", days: 30, price: 149 },
-  { id: "pro60", plan: "pro", days: 60, price: 299 },
-  { id: "pro90", plan: "pro", days: 90, price: 349, best: true },
+  { id: "pro60", plan: "pro", days: 60, price: 249, best: true },
+  { id: "pro90", plan: "pro", days: 90, price: 449 },
 ] as const satisfies readonly { id: string; plan: PlanKey; days: number; price: number; best?: boolean }[];
 export type Offer = (typeof OFFERS)[number];
 

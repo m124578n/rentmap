@@ -49,14 +49,16 @@ describe("方案計算(純函式)", () => {
     expect(extendPlan({ plan: "pro", until: "2026-10-11T00:00:00Z" }, { days: 90 }, now).until).toBe("2027-01-09T00:00:00.000Z");
     expect(extendPlan({ plan: "pro", until: "2026-01-01T00:00:00Z" }, { days: 30 }, now).until).toBe("2026-10-31T00:00:00.000Z");
   });
-  it("90 天每天最便宜;60 天(誘餌)每天不比 30 天便宜", () => {
+  it("主推 60 天(每天最便宜);90 天(誘餌)最貴、每天不比 30 天便宜", () => {
     const perDay = (id: string) => {
       const o = OFFERS.find((x) => x.id === id)!;
       return o.price / o.days;
     };
-    expect(perDay("pro90")).toBeLessThan(perDay("pro30"));
-    expect(perDay("pro60")).toBeGreaterThanOrEqual(perDay("pro30"));
-    expect(OFFERS.filter((o) => "best" in o && o.best).map((o) => o.id)).toEqual(["pro90"]);
+    expect(perDay("pro60")).toBeLessThan(perDay("pro30"));
+    expect(perDay("pro60")).toBeLessThan(perDay("pro90"));
+    expect(perDay("pro90")).toBeGreaterThanOrEqual(perDay("pro30"));
+    expect(Math.max(...OFFERS.map((o) => o.price))).toBe(OFFERS.find((o) => o.id === "pro90")!.price);
+    expect(OFFERS.filter((o) => "best" in o && o.best).map((o) => o.id)).toEqual(["pro60"]);
   });
 });
 
