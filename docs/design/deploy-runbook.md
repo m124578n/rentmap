@@ -21,18 +21,18 @@
 - [ ] **Workers Paid**:通勤引擎(`/api/commute`)一次算所有房源 × 地點,免費方案每次請求 CPU 10ms 不夠(本機實測 8 萬站、3000 間、2 個地點約 0.5 秒;每個生活圈第一次載公車網路約 1 秒)。
 - [ ] D1:`npx wrangler d1 create rentmap-db`,把回傳的 `database_id` 填進 `wrangler.jsonc`(目前是 `local-placeholder`)。
 
-## 1.5 網域:`loka.shunzz.com`(2026-10-01 定)
+## 1.5 網域:`lokanote.shunzz.com`(2026-10-01 定)
 
 - Workers 的自訂網域要 `shunzz.com` 的 DNS 由 Cloudflare 代管(名稱伺服器指到 Cloudflare)。如果現在 DNS 在別家:
   把整個 `shunzz.com` 的 NS 移到 Cloudflare(免費方案即可,先把原本的 DNS 紀錄搬過去);只用 CNAME 接入(partial setup)要 Business 方案,不划算。
-- `wrangler.jsonc` 部署時加:`"routes": [{ "pattern": "loka.shunzz.com", "custom_domain": true }]`(憑證 Cloudflare 自動發)。
+- `wrangler.jsonc` 部署時加:`"routes": [{ "pattern": "lokanote.shunzz.com", "custom_domain": true }]`(憑證 Cloudflare 自動發)。
 - 子網域不用另外買;`shunzz.com` 的其他用途不受影響。
 
 ## 2. 設定(`wrangler.jsonc` 的 vars)
 
 | 變數 | 正式站的值 | 說明 |
 |---|---|---|
-| `APP_ORIGIN` | `https://loka.shunzz.com` | OAuth redirect、CSRF 同源檢查、本機登入開關都看它;**不能**是 localhost(否則 `/api/auth/dev` 會生效) |
+| `APP_ORIGIN` | `https://lokanote.shunzz.com` | OAuth redirect、CSRF 同源檢查、本機登入開關都看它;**不能**是 localhost(否則 `/api/auth/dev` 會生效) |
 | `ADMIN_EMAILS` | 允許登入的 email,逗號分隔 | 見第 0 節 |
 | `PRIVATE_POOL` | **不要設** | 沒設 = 公開模式 |
 
@@ -44,7 +44,7 @@
 
 | 名稱 | 要不要放 | 說明 |
 |---|---|---|
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 要 | Google Cloud Console 的 OAuth client 要加正式網域的 redirect URI:`https://loka.shunzz.com/api/auth/google/callback` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 要 | Google Cloud Console 的 OAuth client 要加正式網域的 redirect URI:`https://lokanote.shunzz.com/api/auth/google/callback` |
 | `SESSION_SECRET` | 要 | 新產一串長亂碼,不要沿用本機的 |
 | `INGEST_SECRET` | 要 | 家裡採集機推資料用的 bearer;家裡 `.env` 放同一把 |
 | `ANTHROPIC_API_KEY` | 看功能 | 有用到才放 |
@@ -53,7 +53,7 @@
 
 ## 4. 程式裡要改的地方
 
-- [ ] `index.html` 的 `og:image` 改成絕對網址 `https://loka.shunzz.com/og.png`(社群平台不吃相對路徑);要的話加 `og:url`、`<link rel="canonical">`。
+- [ ] `index.html` 的 `og:image` 改成絕對網址 `https://lokanote.shunzz.com/og.png`(社群平台不吃相對路徑);要的話加 `og:url`、`<link rel="canonical">`。
 - [ ] `public/og.png`:介紹頁文案有改就先 `node scripts/og.mjs` 重產。
 - [ ] `public/sw.js`:改過快取策略就把 `VERSION` 加一(目前 `v1`),舊快取才會清掉。第一次上線不用動。
 - [ ] `public/robots.txt`:目前允許 `/`、`/about`,擋 `/api/`、`/p/`;條款頁 `/legal/*` 要不要收錄可以順便決定。
@@ -73,7 +73,7 @@ npx wrangler deploy
 
 資料都是在家裡抓、經 `/api/ingest/*` 推上去(Worker 不抓外站)。房源採集的推入在公開模式是 404,不會誤推。
 
-1. 家裡 `.env`:`RENTMAP_API=https://loka.shunzz.com`、`INGEST_SECRET=`(跟第 3 節同一把)。
+1. 家裡 `.env`:`RENTMAP_API=https://lokanote.shunzz.com`、`INGEST_SECRET=`(跟第 3 節同一把)。
 2. 先 `npm run data:refresh -- --plan` 看會跑什麼。
 3. `npm run data:refresh`:依來源分三條線平行跑(TDX、政府資料、OSM),每項各自寫 log、結束印摘要;單項失敗用 `--only=<項目>` 重跑。
    - 順序沒有硬性依賴;通勤至少要 `bus`(公車網路),`tra.json`、`mrt-times.json` 已在 git 裡(隨部署上去)。
