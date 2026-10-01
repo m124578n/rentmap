@@ -1,4 +1,4 @@
-# rentmap(落腳筆記 Loka Note)
+# rentmap(落腳筆記 lokanote)
 
 租屋 × 搬家決策平台。從「我想搬家」到「搬完家」的一站式工具。
 

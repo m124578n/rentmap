@@ -27,7 +27,7 @@ export function Layout() {
       <header className="flex items-center justify-between border-b border-neutral-200 px-3 py-2 sm:px-4 sm:py-3 dark:border-neutral-800">
         <Link to="/" className="flex shrink-0 items-center gap-2 font-semibold whitespace-nowrap">
           <Home size={18} /> 落腳筆記
-          <span className="hidden text-xs font-normal text-neutral-400 sm:inline">Loka Note</span>
+          <span className="hidden text-xs font-normal text-neutral-400 sm:inline">lokanote</span>
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           {/* 手機:導覽在底部分頁列,頂欄只留主題與登出 */}
