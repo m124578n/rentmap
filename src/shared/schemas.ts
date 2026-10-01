@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BUILDING_TYPES, CITIES, DISTRICTS, KINDS, SOURCES, STAGES, type City } from "./constants";
+import { BUILDING_TYPES, CITIES, DEALS, DISTRICTS, KINDS, SOURCES, STAGES, type City, type Deal } from "./constants";
 
 /** 空字串當 undefined(HTML 表單送空欄位) */
 const optStr = z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().trim().max(500).optional());
@@ -48,7 +48,12 @@ const PropertyFields = z
     source: z.enum(SOURCES).default("manual"),
     source_url: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().url().max(1000).optional()),
     source_listing_id: optStr,
-    rent: z.preprocess((v) => Number(v), z.number().int().positive("租金要大於 0")),
+    /** 租屋:月租(必填);買房:不用 */
+    rent: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().int().positive("租金要大於 0").optional()),
+    /** 買房:總價(元,必填);租屋:不用 */
+    price: z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().int().positive("總價要大於 0").max(100_000_000_000).optional()),
+    deal: z.enum(DEALS).default("rent"),
+    land_ping: optNum,
     deposit_months: optNum,
     contact_name: optStr,
     contact_phone: optStr,
@@ -57,8 +62,13 @@ const PropertyFields = z
 
 const districtOk = (v: { city: City; district: string }) => DISTRICTS[v.city].includes(v.district);
 const districtErr = { message: "行政區不屬於該縣市", path: ["district"] };
+/** 租屋要月租、買房要總價 */
+const rentOk = (v: { deal: Deal; rent?: number }) => v.deal !== "rent" || (v.rent ?? 0) > 0;
+const priceOk = (v: { deal: Deal; price?: number }) => v.deal !== "buy" || (v.price ?? 0) > 0;
 
-export const PropertyInput = PropertyFields.refine(districtOk, districtErr);
+export const PropertyInput = PropertyFields.refine(districtOk, districtErr)
+  .refine(rentOk, { message: "請填月租", path: ["rent"] })
+  .refine(priceOk, { message: "請填總價", path: ["price"] });
 export type PropertyInput = z.infer<typeof PropertyInput>;
 
 /** 採集機推入 ingest 的格式:多了來源 id(必填)、照片、原始資料、來源端時間 */
@@ -69,7 +79,9 @@ export const ImportedListing = PropertyFields.extend({
   source_posted_at: optStr, // 來源顯示的發佈時間(原文字)
   source_updated_at: optStr,
   status: z.enum(["active", "removed"]).default("active"),
-}).refine(districtOk, districtErr);
+})
+  .refine(districtOk, districtErr)
+  .refine(rentOk, { message: "請填月租", path: ["rent"] });
 export type ImportedListing = z.infer<typeof ImportedListing>;
 
 export const StageInput = z.object({ stage: z.enum(STAGES), note: optStr });
@@ -108,7 +120,13 @@ export interface PropertySummary {
   /** 水電怎麼算(591:「水:臺水繳費 電:每度5元」) */
   utilities_note: string | null;
   has_internet: boolean | null;
+  /** 租屋 | 買房 */
+  deal: Deal;
+  /** 月租(買房為 null) */
   rent: number | null;
+  /** 買房總價(元;租屋為 null) */
+  price: number | null;
+  land_ping: number | null;
   source: string | null;
   source_url: string | null;
   listing_status: string | null;

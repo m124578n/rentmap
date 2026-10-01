@@ -167,6 +167,7 @@ export function parse591Detail(html: string, url: string): ImportedListing {
     mgmt_fee: d.rent_calculation_data?.manage_fee || (d.rent_calculation_data?.manage_fee_text === "無" ? 0 : undefined),
     utilities_note: utilitiesNote(d.rent_calculation_data),
     note: undefined,
+    deal: "rent",
     source: "591",
     source_url: `https://rent.591.com.tw/${id}`,
     source_listing_id: id,

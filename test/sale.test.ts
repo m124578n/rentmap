@@ -39,6 +39,20 @@ describe("買賣實價登錄", () => {
     expect(none).toEqual({ has_data: false, market: null });
   });
 
+  it("買房筆記:存總價、列表回 deal / price(rent 為 null)、行情矩陣比每坪單價", async () => {
+    const authed = (init: RequestInit = {}) => ({ ...init, headers: { Cookie: cookie, Origin: ORIGIN, "Content-Type": "application/json" } });
+    const base = { title: "西屯三房", city: "台中市", district: "西屯區", deal: "buy", building_type: "電梯大樓", size_ping: 30, building_age: 9, land_ping: 6.5 };
+    expect((await SELF.fetch(`${ORIGIN}/api/properties`, authed({ method: "POST", body: JSON.stringify(base) }))).status).toBe(400); // 沒總價
+    expect((await SELF.fetch(`${ORIGIN}/api/properties`, authed({ method: "POST", body: JSON.stringify({ ...base, deal: "rent" }) }))).status).toBe(400); // 租屋沒月租
+    const r = await SELF.fetch(`${ORIGIN}/api/properties`, authed({ method: "POST", body: JSON.stringify({ ...base, price: 19_500_000 }) }));
+    expect(r.status).toBe(201);
+    const { id } = (await r.json()) as { id: number };
+    const list = (await (await SELF.fetch(`${ORIGIN}/api/properties`, authed())).json()) as { items: { id: number; deal: string; rent: number | null; price: number | null; land_ping: number | null }[] };
+    expect(list.items.find((x) => x.id === id)).toMatchObject({ deal: "buy", rent: null, price: 19_500_000, land_ping: 6.5 });
+    const mk = (await (await SELF.fetch(`${ORIGIN}/api/market`, authed())).json()) as { items: Record<string, { median: number; diff_pct: number; sale?: boolean } | null> };
+    expect(mk.items[id]).toMatchObject({ sale: true, median: 600000, diff_pct: 8 });
+  });
+
   it("要登入;參數不對 400;prune", async () => {
     expect((await SELF.fetch(`${ORIGIN}/api/market/sale/at?city=x&district=y`)).status).toBe(401);
     expect((await at("city=台中市")).status).toBe(400);

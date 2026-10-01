@@ -10,6 +10,8 @@ import { ageOf, priceOf } from "@/features/listing/age";
 /** 地圖與列表共用的篩選條件。存 localStorage,重新整理不會掉。 */
 export interface Filters {
   kinds: string[]; // 空 = 全部;值:整層住家 / 獨立套房 / 分租套房 / 雅房 / 其他
+  /** 只看租屋 / 買房筆記;null = 都看 */
+  deal: "rent" | "buy" | null;
   rentMin: number | null;
   rentMax: number | null;
   districts: string[]; // 「台北市中正區」(縣市 + 行政區,不同縣市有同名的區);舊資料只有「中正區」也認得;空 = 全部
@@ -47,6 +49,7 @@ export type FitOf = (p: PropertySummary) => FitResult | null;
 
 export const EMPTY: Filters = {
   kinds: [],
+  deal: null,
   rentMin: null,
   rentMax: null,
   districts: [],
@@ -122,6 +125,7 @@ export function useFilters(): Filters {
 export function activeCount(f: Filters): number {
   let n = 0;
   if (f.kinds.length) n++;
+  if (f.deal) n++;
   if (f.rentMin != null || f.rentMax != null) n++;
   if (f.districts.length) n++;
   if (f.roomsMin != null) n++;
@@ -172,6 +176,7 @@ export function applyFilters(items: PropertySummary[], f: Filters, ctx?: Commute
       // 資料還沒到(undefined)先不濾,免得畫面閃空
       if (w === null || (w !== undefined && w > f.commuteMax)) return false;
     }
+    if (f.deal && (p.deal ?? "rent") !== f.deal) return false;
     if (f.kinds.length && !(p.kind && f.kinds.includes(p.kind))) return false;
     if (f.rentMin != null && (p.rent == null || p.rent < f.rentMin)) return false;
     if (f.rentMax != null && (p.rent == null || p.rent > f.rentMax)) return false;

@@ -20,6 +20,7 @@ import { coverageCities, hasCoverage } from "@shared/regions";
 import { CRIME_CATS, NUISANCE_CATS, POI_CATEGORIES, POI_CATS, poiLabel } from "@shared/poi";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { HAZARD_KINDS, HAZARD_LABEL, hazardSevere, hazardText } from "@shared/hazard";
+import { perPing, priceText, wan } from "@shared/price";
 
 /** 一格:畫面上顯示什麼 + 比大小用的數字(null = 沒資料,不參與) */
 interface Cell {
@@ -145,7 +146,8 @@ export function ComparePage() {
     {
       title: "價格",
       rows: [
-        { label: "租金", better: "low", cells: props.map((p) => ({ node: p.rent != null ? <b className="tabular-nums">{fmtMoney(p.rent)}</b> : dash, v: p.rent })) },
+        // 租屋看月租、買房看總價(混著比時兩種數字不能互比,v 只在同一種裡有意義)
+        { label: "月租 / 總價", better: "low", cells: props.map((p) => { const v = p.deal === "buy" ? p.price : p.rent; return { node: v != null ? <b className="tabular-nums">{priceText(p)}</b> : dash, v }; }) },
         {
           label: "比行情",
           better: "low",
@@ -157,7 +159,7 @@ export function ComparePage() {
                 <>
                   <MarketBadge b={b} />
                   <div className="text-[11px] text-neutral-500 tabular-nums">
-                    中位 {fmtMoney(b.median)}({b.count} 筆)
+                    {b.sale ? "每坪中位" : "中位"} {b.sale ? wan(b.median) : fmtMoney(b.median)}({b.count} 筆)
                   </div>
                 </>
               ),
@@ -169,8 +171,8 @@ export function ComparePage() {
           label: "每坪",
           better: "low",
           cells: props.map((p) => {
-            const v = p.rent != null && p.size_ping ? Math.round(p.rent / p.size_ping) : null;
-            return { node: v != null ? <span className="tabular-nums">{fmtMoney(v)}</span> : dash, v };
+            const v = perPing(p);
+            return { node: v != null ? <span className="tabular-nums">{p.deal === "buy" ? wan(v) : fmtMoney(v)}</span> : dash, v };
           }),
         },
         { label: "管理費", better: "low", cells: props.map((p) => ({ node: p.mgmt_fee != null ? fmtMoney(p.mgmt_fee) : dash, v: p.mgmt_fee })) },

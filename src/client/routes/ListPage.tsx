@@ -13,6 +13,7 @@ import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
 import { FilterBar } from "@/components/FilterBar";
 import { SOURCE_LABEL, STAGE_LABEL, type Source, type Stage } from "@shared/constants";
+import { priceText } from "@shared/price";
 
 export function ListPage() {
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
@@ -72,7 +73,7 @@ export function ListPage() {
                     <h2 className="font-medium">{p.title}</h2>
                     <span className="flex flex-col items-end gap-0.5">
                       <span className="whitespace-nowrap text-lg font-semibold text-emerald-700 dark:text-emerald-400">
-                        {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}
+                        {priceText(p)}
                       </span>
                       <MarketBadge b={market.data?.items[p.id]} />
                       <FitBadge f={fitOf?.(p)} />

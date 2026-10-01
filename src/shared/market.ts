@@ -77,7 +77,8 @@ export interface MarketResult {
   from: string;
   to: string;
 }
-export type MarketBrief = Pick<MarketResult, "median" | "diff_pct" | "count" | "enough" | "level">;
+/** sale = 買房筆記:median 是買賣實價登錄的每坪單價、diff_pct 是開價換算單價比行情 */
+export type MarketBrief = Pick<MarketResult, "median" | "diff_pct" | "count" | "enough" | "level"> & { sale?: boolean };
 
 /** GET /api/market:所有房源的行情摘要;items[propertyId],null = 算不出(沒房型 / 沒樣本) */
 export interface MarketMatrix {

@@ -19,7 +19,7 @@ export function MarketBadge({ b, className = "" }: { b: MarketBrief | null | und
         ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
         : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap tabular-nums ${tone} ${className}`} title={`實價登錄同區同房型中位數 ${fmt(b.median)}(${b.count} 筆${b.enough ? "" : ",樣本不足"})`}>
+    <span className={`rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap tabular-nums ${tone} ${className}`} title={b.sale ? `買賣實價登錄同區同型態每坪中位數 ${Math.round(b.median / 1e4)} 萬(${b.count} 筆${b.enough ? "" : ",樣本不足"})` : `實價登錄同區同房型中位數 ${fmt(b.median)}(${b.count} 筆${b.enough ? "" : ",樣本不足"})`}>
       比行情 {d > 0 ? "+" : ""}
       {d}%
     </span>

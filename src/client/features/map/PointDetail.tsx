@@ -16,6 +16,7 @@ import { SaleSection } from "@/features/market/SaleSection";
 import { PURPOSES, PURPOSE_LABEL, setPurpose, usePurpose } from "@/lib/purpose";
 import { normalizeCity } from "@shared/regions";
 import { usePrivatePool } from "@/lib/useAuth";
+import { priceText } from "@shared/price";
 
 export interface MapPoint {
   lat: number;
@@ -96,7 +97,7 @@ export function PointDetail({
         ))}
       </div>
 
-      {purpose === "rent" && addr.data && <SaveNote key={`s${key}`} lat={lat} lng={lng} addr={{ ...addr.data, city }} onSaved={onSelect} />}
+      {purpose !== "look" && addr.data && <SaveNote key={`s${key}${purpose}`} deal={purpose} lat={lat} lng={lng} addr={{ ...addr.data, city }} onSaved={onSelect} />}
 
       {purpose === "rent" && city && district && <PointMarketSection key={`m${key}`} city={city} district={district} />}
       {purpose === "buy" && city && district && <SaleSection key={`sale${key}`} city={city} district={district} />}
@@ -115,7 +116,7 @@ export function PointDetail({
                     className="rounded border border-neutral-200 px-1.5 py-0.5 text-xs hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
                     title={p.title}
                   >
-                    {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}
+                    {priceText(p)}
                     <span className="ml-1 text-neutral-500">
                       {p.kind ?? ""} {m}m
                     </span>

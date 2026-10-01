@@ -14,6 +14,8 @@
  */
 import type { TripBrief, TripKind } from "./trip";
 import { DRIVE_COST_PER_KM } from "./drive";
+import { MORTGAGE_DEFAULT, mortgage, type MortgageInput } from "./sale";
+import type { Deal } from "./constants";
 
 export const TPASS = 1200;
 export const INTERNET_EST = 500;
@@ -92,6 +94,9 @@ export const TRIP_FARE: Record<TripKind, number> = {
 
 export interface CostInput {
   rent: number | null;
+  /** 買房:用總價算房貸取代房租 */
+  deal?: Deal;
+  price?: number | null;
   kind?: string | null;
   size_ping: number | null;
   mgmt_fee: number | null;
@@ -105,9 +110,11 @@ export interface CostOpts {
   commute?: { go: TripBrief | null | undefined; back: TripBrief | null | undefined; place: string };
   /** 每週通勤幾天 */
   days?: number;
+  /** 買房的房貸條件(預設 MORTGAGE_DEFAULT) */
+  mortgage?: Partial<Omit<MortgageInput, "price">>;
 }
 export interface CostLine {
-  key: "rent" | "mgmt" | "electricity" | "water" | "internet" | "commute";
+  key: "rent" | "mortgage" | "mgmt" | "electricity" | "water" | "internet" | "commute";
   label: string;
   amount: number;
   note: string;
@@ -120,8 +127,17 @@ export interface MonthlyCost {
 }
 
 export function monthlyCost(p: CostInput, o: CostOpts = {}): MonthlyCost | null {
-  if (p.rent == null) return null;
-  const lines: CostLine[] = [{ key: "rent", label: "房租", amount: p.rent, note: "", estimated: false }];
+  const lines: CostLine[] = [];
+  if (p.deal === "buy") {
+    // 買房:房租換成房貸(本息平均攤還的估算;條件可在 CostOpts.mortgage 改)
+    if (p.price == null) return null;
+    const mo = { ...MORTGAGE_DEFAULT, ...o.mortgage };
+    const m = mortgage({ price: p.price, ...mo });
+    lines.push({ key: "mortgage", label: "房貸", amount: m.monthly, note: `自備 ${Math.round(mo.down * 100)}%、利率 ${mo.rate}%、${mo.years} 年`, estimated: true });
+  } else {
+    if (p.rent == null) return null;
+    lines.push({ key: "rent", label: "房租", amount: p.rent, note: "", estimated: false });
+  }
   lines.push(
     p.mgmt_fee != null
       ? { key: "mgmt", label: "管理費", amount: p.mgmt_fee, note: p.mgmt_fee ? "" : "無", estimated: false }

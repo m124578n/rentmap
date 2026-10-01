@@ -154,6 +154,7 @@ export function parseHousefunDetail(html: string, url: string): Omit<ImportedLis
     mgmt_fee: undefined,
     utilities_note: fields["其他費用"] ? `另付:${fields["其他費用"]}` : undefined,
     note: undefined,
+    deal: "rent",
     source: "hb",
     source_url: `https://rent.housefun.com.tw/rent/house/${id}/`,
     source_listing_id: id,

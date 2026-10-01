@@ -20,6 +20,9 @@ import { HazardSection } from "@/features/hazard/HazardSection";
 import { CrimeSection } from "@/features/crime/CrimeSection";
 import { garbageService } from "@shared/poi";
 import { invalidateProperties } from "@/lib/invalidate";
+import { priceText, wan } from "@shared/price";
+import { SaleSection } from "@/features/market/SaleSection";
+import { saleTypeOf } from "@shared/sale";
 
 interface Props {
   id: number;
@@ -62,7 +65,7 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
       {/* 頂端固定:往下滑也看得到價格、收藏、比較 */}
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-start justify-between gap-2 border-b border-neutral-100 bg-white/95 px-4 pt-4 pb-2 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95">
         <div className="min-w-0">
-          <div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{main ? `$${main.rent.toLocaleString()}` : "—"}</div>
+          <div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{main ? priceText({ deal: p.deal === "buy" ? "buy" : "rent", rent: main.rent, price: main.price }) : "—"}</div>
           <h1 className="font-semibold leading-snug">{p.title}</h1>
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-neutral-500">
             <span>
@@ -95,7 +98,16 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
 
       <FitSection p={summary} />
 
-      <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
+      {p.deal === "buy" ? (
+        <SaleSection
+          key={`sale${id}`}
+          city={p.city}
+          district={p.district}
+          initial={{ type: saleTypeOf(p.buildingType), size: p.sizePing, age: p.buildingAge, price: main?.price ?? null }}
+        />
+      ) : (
+        <MarketSection key={`m${id}`} propertyId={id} city={p.city} district={p.district} kind={p.kind ?? null} rent={main?.rent ?? null} />
+      )}
 
       {summary && <CostSection cost={costOf(summary)} />}
 
@@ -106,7 +118,9 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
       {pool && main && <PriceAgeSection history={price_history} postedAt={main.postedAt} firstSeenAt={main.firstSeenAt} lastSeenAt={main.lastSeenAt} status={main.status} />}
 
       <section className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-3">
-        <Row k="坪數" v={p.sizePing != null ? `${p.sizePing} 坪` : null} />
+        <Row k={p.deal === "buy" ? "建坪" : "坪數"} v={p.sizePing != null ? `${p.sizePing} 坪` : null} />
+        {p.deal === "buy" && <Row k="土地" v={p.landPing != null ? `${p.landPing} 坪` : null} />}
+        {p.deal === "buy" && main?.price != null && p.sizePing ? <Row k="每坪" v={wan(Math.round(main.price / p.sizePing))} /> : null}
         <Row k="格局" v={fmtLayout(p.rooms, p.livingRooms, p.bathrooms)} />
         <Row k="樓層" v={p.floor != null ? `${p.floor}${p.totalFloors != null ? ` / ${p.totalFloors}` : ""} F` : null} />
         <Row k="屋齡" v={p.buildingAge != null ? `${p.buildingAge} 年` : null} />

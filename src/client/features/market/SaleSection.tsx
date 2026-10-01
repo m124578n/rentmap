@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Landmark, Scale } from "lucide-react";
 import { MORTGAGE_DEFAULT, mortgage, SALE_TYPES, type SaleType } from "@shared/sale";
 import { api } from "@/lib/api";
+import { monthlyCost } from "@shared/cost";
 
 const wan = (n: number) => (n >= 1e8 ? `${(n / 1e8).toFixed(2)} 億` : `${Math.round(n / 1e4).toLocaleString()} 萬`);
 const fmt = (n: number) => `$${n.toLocaleString()}`;
@@ -13,14 +14,25 @@ const chip = (on: boolean) =>
  * 地址報告的「買房行情」:內政部買賣實價登錄同區同型態的每坪單價;填坪數就估總價,再接房貸試算。
  * 單價是政府公布的單價(車位分開計價時已扣),不含預售屋。
  */
-export function SaleSection({ city, district }: { city: string; district: string }) {
-  const [type, setType] = useState<SaleType>("電梯大樓");
-  const [size, setSize] = useState("");
+export function SaleSection({
+  city,
+  district,
+  initial,
+}: {
+  city: string;
+  district: string;
+  /** 買房筆記自己的條件(詳細頁用):型態、坪數、屋齡、總價 → 算「開價比行情」 */
+  initial?: { type: SaleType | null; size: number | null; age: number | null; price: number | null };
+}) {
+  const [type, setType] = useState<SaleType>(initial?.type ?? "電梯大樓");
+  const [size, setSize] = useState(initial?.size ? String(initial.size) : "");
   const [open, setOpen] = useState(false);
   const ping = Number(size) > 0 ? Number(size) : undefined;
+  const age = initial?.age ?? undefined;
+  const price = initial?.price ?? undefined;
   const q = useQuery({
-    queryKey: ["sale-at", city, district, type, ping],
-    queryFn: () => api.saleAt({ city, district, building_type: type, size_ping: ping }),
+    queryKey: ["sale-at", city, district, type, ping, age, price],
+    queryFn: () => api.saleAt({ city, district, building_type: type, size_ping: ping, building_age: age, price }),
     staleTime: 10 * 60_000,
   });
   const m = q.data?.market;
@@ -56,6 +68,15 @@ export function SaleSection({ city, district }: { city: string; district: string
               多數在 {wan(m.unit_p25)}–{wan(m.unit_p75)}
             </span>
           </p>
+          {m.diff_pct != null && (
+            <p className="mt-0.5">
+              這間每坪約 {wan(Math.round(price! / ping!))},
+              <span className={m.diff_pct >= 10 ? "text-red-700 dark:text-red-400" : m.diff_pct <= -10 ? "text-emerald-700 dark:text-emerald-400" : ""}>
+                比行情 {m.diff_pct > 0 ? "+" : ""}
+                {m.diff_pct}%
+              </span>
+            </p>
+          )}
           {m.est_total != null && (
             <p className="mt-0.5">
               {ping} 坪約 <b className="tabular-nums">{wan(m.est_total)}</b>
@@ -90,13 +111,14 @@ export function SaleSection({ city, district }: { city: string; district: string
           <p className="mt-1 text-[11px] text-neutral-400">內政部不動產買賣實價登錄,近一年;不含預售屋、親友等特殊交易與整批多棟。</p>
         </div>
       )}
-      <Mortgage defaultPrice={m?.est_total ?? null} />
+      {/* 筆記詳細頁已經有「每月支出」區塊,這裡只給房貸試算本身 */}
+      <Mortgage defaultPrice={price ?? m?.est_total ?? null} sizePing={ping ?? null} showTotal={!initial} />
     </section>
   );
 }
 
 /** 房貸試算:本息平均攤還(可設寬限期);總價預設用上面估的總價 */
-function Mortgage({ defaultPrice }: { defaultPrice: number | null }) {
+function Mortgage({ defaultPrice, sizePing, showTotal }: { defaultPrice: number | null; sizePing: number | null; showTotal: boolean }) {
   const [price, setPrice] = useState("");
   const [down, setDown] = useState(String(MORTGAGE_DEFAULT.down * 100));
   const [rate, setRate] = useState(String(MORTGAGE_DEFAULT.rate));
@@ -104,7 +126,11 @@ function Mortgage({ defaultPrice }: { defaultPrice: number | null }) {
   const [grace, setGrace] = useState("0");
   const total = Number(price) > 0 ? Number(price) * 1e4 : defaultPrice;
   const ok = total != null && Number(years) > 0 && Number(rate) >= 0 && Number(down) >= 0 && Number(down) < 100;
-  const r = ok ? mortgage({ price: total!, down: Number(down) / 100, rate: Number(rate), years: Number(years), grace: Number(grace) || 0 }) : null;
+  const terms = { down: Number(down) / 100, rate: Number(rate), years: Number(years), grace: Number(grace) || 0 };
+  const r = ok ? mortgage({ price: total!, ...terms }) : null;
+  // 每月支出(估):房貸 + 水電 + 網路(同一套 shared/cost.ts;管理費、通勤看筆記本身)
+  const cost = ok ? monthlyCost({ deal: "buy", price: total!, rent: null, size_ping: sizePing, mgmt_fee: null }, { mortgage: terms }) : null;
+  const extra = cost ? cost.lines.filter((l) => l.key === "electricity" || l.key === "water" || l.key === "internet").reduce((a, l) => a + l.amount, 0) : 0;
   const field = "flex items-center gap-1 text-neutral-500";
   return (
     <div className="mt-2 rounded border border-neutral-200 p-2 text-xs dark:border-neutral-700">
@@ -137,6 +163,12 @@ function Mortgage({ defaultPrice }: { defaultPrice: number | null }) {
           貸 {wan(r.loan)}、自備 {wan(r.downPayment)}:每月約 <b className="tabular-nums">{fmt(r.monthly)}</b>
           {r.graceMonthly != null && <span className="text-neutral-500">(寬限期內 {fmt(r.graceMonthly)})</span>}
           <span className="ml-1 text-neutral-500">· 總利息約 {wan(r.totalInterest)}</span>
+          {showTotal && extra > 0 && (
+            <span className="block text-neutral-600 dark:text-neutral-300">
+              加上水電、網路約 {fmt(extra)},每月約 <b className="tabular-nums">{fmt(r.monthly + extra)}</b>
+              <span className="text-neutral-500">(不含管理費、通勤;存成筆記後會一起算)</span>
+            </span>
+          )}
         </p>
       ) : (
         <p className="mt-1.5 text-neutral-500">填總價(或上面填坪數估總價)就會算每月房貸。</p>

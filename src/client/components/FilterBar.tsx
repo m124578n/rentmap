@@ -12,6 +12,7 @@ import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
 import { COMMUTE_SIDE_LABEL, type CommuteSide } from "@shared/trip";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 import { COMMUTE_MODES, COMMUTE_MODE_LABEL } from "@shared/drive";
+import { DEALS, DEAL_LABEL } from "@shared/constants";
 
 const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as const;
 
@@ -57,6 +58,11 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         <Chip on={f.priceDrop} onClick={() => setFilters({ priceDrop: !f.priceDrop })}>
           ↓ 降過價
         </Chip>
+        {DEALS.map((d) => (
+          <Chip key={d} on={f.deal === d} onClick={() => setFilters({ deal: f.deal === d ? null : d })}>
+            只看{DEAL_LABEL[d]}
+          </Chip>
+        ))}
         {KINDS.map((k) => (
           <Chip key={k} on={f.kinds.includes(k)} onClick={() => toggleIn("kinds", k)}>
             {k}

@@ -56,3 +56,15 @@ describe("monthly cost", () => {
     expect(computeFit(p, { ...r, budget_total: true }, {})!.fails).toEqual([]);
   });
 });
+
+describe("買房的每月支出", () => {
+  it("房租換成房貸(預設自備兩成、2.2%、30 年),其他照算", async () => {
+    const { monthlyCost } = await import("../../src/shared/cost");
+    const c = monthlyCost({ rent: null, deal: "buy", price: 10_000_000, size_ping: 30, mgmt_fee: 2500 })!;
+    expect(c.lines[0]).toMatchObject({ key: "mortgage", amount: 30376, estimated: true });
+    expect(c.lines.find((l) => l.key === "mgmt")!.amount).toBe(2500);
+    expect(monthlyCost({ rent: null, deal: "buy", price: null, size_ping: 30, mgmt_fee: null })).toBeNull();
+    const shorter = monthlyCost({ rent: null, deal: "buy", price: 10_000_000, size_ping: 30, mgmt_fee: 0 }, { mortgage: { years: 20 } })!;
+    expect(shorter.lines[0]!.amount).toBeGreaterThan(30376);
+  });
+});

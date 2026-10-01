@@ -31,6 +31,11 @@ export const STAGE_LABEL: Record<Stage, string> = {
   signed: "已簽約",
 };
 
+/** 筆記是租屋還是買房 */
+export const DEALS = ["rent", "buy"] as const;
+export type Deal = (typeof DEALS)[number];
+export const DEAL_LABEL: Record<Deal, string> = { rent: "租屋", buy: "買房" };
+
 export const BUILDING_TYPES = ["公寓", "電梯大樓", "華廈", "透天", "套房", "其他"] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
 

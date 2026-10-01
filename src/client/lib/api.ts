@@ -116,6 +116,8 @@ export interface PropertyDetail {
     lng: number | null;
     buildingType: string | null;
     kind: string | null;
+    deal: "rent" | "buy";
+    landPing: number | null;
     floor: number | null;
     totalFloors: number | null;
     buildingAge: number | null;
@@ -140,6 +142,8 @@ export interface PropertyDetail {
     source: string;
     sourceUrl: string | null;
     rent: number;
+    /** 買房:總價 */
+    price: number | null;
     depositMonths: number | null;
     photosJson: string | null;
     rawJson: string | null;

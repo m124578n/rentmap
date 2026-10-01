@@ -8,6 +8,7 @@ import { STAGES, STAGE_LABEL, type Stage } from "@shared/constants";
 import { useCommute } from "@/features/commute/useCommute";
 import { CommuteLines } from "@/features/commute/CommuteLines";
 import { ListingBadges } from "@/features/listing/ListingBadges";
+import { priceText } from "@shared/price";
 
 /** 找房看板:收藏的房源依狀態分欄,拖曳換狀態(原生 HTML5 DnD,手機用卡片上的「移到」選單)。 */
 export function BoardPage() {
@@ -121,7 +122,7 @@ function Card({ p, onDragStart, onMove, commute }: { p: PropertySummary; onDragS
         <Link to="/p/$id" params={{ id: String(p.id) }} className="min-w-0 font-medium leading-snug break-words hover:underline">
           {p.title}
         </Link>
-        <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">{p.rent != null ? `$${p.rent.toLocaleString()}` : "—"}</span>
+        <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">{priceText(p)}</span>
       </div>
       <p className="mt-0.5 text-xs text-neutral-500">
         {p.district}

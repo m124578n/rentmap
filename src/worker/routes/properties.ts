@@ -65,7 +65,11 @@ properties.get("/api/properties", async (c) => {
       mgmt_fee: p.mgmtFee,
       utilities_note: p.utilitiesNote,
       has_internet: p.hasInternet,
-      rent: sql<number | null>`(SELECT rent FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
+      deal: p.deal,
+      land_ping: p.landPing,
+      // 買房的 rent 存 0:回 null,總價看 price
+      rent: sql<number | null>`(CASE WHEN ${p.deal} = 'buy' THEN NULL ELSE (SELECT rent FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1) END)`,
+      price: sql<number | null>`(SELECT price FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       source: sql<string | null>`(SELECT source FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       source_url: sql<string | null>`(SELECT source_url FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
       listing_status: sql<string | null>`(SELECT status FROM listings WHERE property_id = ${p.id} ORDER BY id DESC LIMIT 1)`,
@@ -83,7 +87,7 @@ properties.get("/api/properties", async (c) => {
     .leftJoin(f, and(eq(f.propertyId, p.id), eq(f.userId, user.id)))
     .where(owner == null ? undefined : eq(p.createdBy, owner))
     .orderBy(desc(p.updatedAt));
-  const items: PropertySummary[] = rows.map(({ tags_json, price_json, ...r }) => ({ ...r, tags: safeTags(tags_json), price_history: parsePrice(price_json) }));
+  const items: PropertySummary[] = rows.map(({ tags_json, price_json, deal, ...r }) => ({ ...r, deal: deal === "buy" ? "buy" : "rent", tags: safeTags(tags_json), price_history: parsePrice(price_json) }));
   return c.json({ items });
 });
 
@@ -107,6 +111,8 @@ properties.post("/api/properties", async (c) => {
     .insert(schema.properties)
     .values({
       title: v.title,
+      deal: v.deal,
+      landPing: v.land_ping ?? null,
       city: v.city,
       district: v.district,
       road: v.road ?? null,
@@ -146,7 +152,8 @@ properties.post("/api/properties", async (c) => {
       source: v.source,
       sourceUrl: v.source_url ?? null,
       sourceListingId: v.source_listing_id ?? null,
-      rent: v.rent,
+      rent: v.deal === "buy" ? 0 : v.rent!,
+      price: v.deal === "buy" ? v.price! : null,
       depositMonths: v.deposit_months ?? null,
       contactName: keepContact ? (v.contact_name ?? null) : null,
       contactPhone: keepContact ? (v.contact_phone ?? null) : null,
@@ -157,7 +164,8 @@ properties.post("/api/properties", async (c) => {
       createdAt: now,
     })
     .returning({ id: schema.listings.id });
-  if (listing) await d.insert(schema.listingPriceHistory).values({ listingId: listing.id, rent: v.rent, seenAt: now });
+  // 價格紀錄:租屋記月租、買房記總價
+  if (listing) await d.insert(schema.listingPriceHistory).values({ listingId: listing.id, rent: v.deal === "buy" ? v.price! : v.rent!, seenAt: now });
 
   await d.insert(schema.favorites).values({ userId: user.id, propertyId: prop.id, stage: "saved", updatedAt: now });
   return c.json({ id: prop.id }, 201);

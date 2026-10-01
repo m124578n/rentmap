@@ -21,6 +21,8 @@ import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { isPrivatePool, ownerOf, ownerSql } from "../pool";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
+import { loadSalePools } from "./sale";
+import { computeSaleMarket, saleTypeOf } from "@shared/sale";
 
 export const market = new Hono<AppEnv>();
 market.use("/api/market", requireUser());
@@ -70,9 +72,13 @@ interface PropRow {
   building_age: number | null;
   has_elevator: number | null;
   rent: number | null;
+  deal: string;
+  building_type: string | null;
+  price: number | null;
 }
-const PROP_SQL = `SELECT p.id, p.city, p.district, p.kind, p.size_ping, p.rooms, p.building_age, p.has_elevator,
-                         (SELECT rent FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS rent
+const PROP_SQL = `SELECT p.id, p.city, p.district, p.kind, p.size_ping, p.rooms, p.building_age, p.has_elevator, p.deal, p.building_type,
+                         (SELECT rent FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS rent,
+                         (SELECT price FROM listings WHERE property_id = p.id ORDER BY id DESC LIMIT 1) AS price
                     FROM properties p`;
 
 function marketOf(pools: Map<string, RentStat[]>, p: PropRow) {
@@ -85,12 +91,26 @@ market.get("/api/market", async (c) => {
   const DB = c.env.DB;
   // 租金變動會寫價格紀錄,所以房源 + 價格紀錄 + 實價登錄三個一起當版本
   const owner = ownerOf(c);
-  const key = ["market", await tableSig(DB, "rent_stats", "id"), await propertiesSig(DB, owner), await tableSig(DB, "listing_price_history", "id")];
+  const key = ["market", await tableSig(DB, "rent_stats", "id"), await tableSig(DB, "sale_stats", "id"), await propertiesSig(DB, owner), await tableSig(DB, "listing_price_history", "id")];
   return cachedJson(c, key, async (): Promise<MarketMatrix> => {
     const pools = await loadPools(DB);
     const { results } = await DB.prepare(`${PROP_SQL} WHERE 1${ownerSql(owner, "p")}`).all<PropRow>();
     const items: MarketMatrix["items"] = {};
-    for (const p of results) items[p.id] = briefOf(marketOf(pools, p));
+    for (const p of results) {
+      if (p.deal !== "buy") {
+        items[p.id] = briefOf(marketOf(pools, p));
+        continue;
+      }
+      // 買房:跟買賣實價登錄比每坪單價(median 是每坪單價,sale: true)
+      const sp = await loadSalePools(DB, p.city);
+      const m = computeSaleMarket(
+        { building_type: saleTypeOf(p.building_type), size_ping: p.size_ping, building_age: p.building_age, price: p.price },
+        sp.byDistrict.get(p.district) ?? [],
+        sp.all,
+        { cleaned: true },
+      );
+      items[p.id] = m ? { median: m.unit_median, diff_pct: m.diff_pct, count: m.count, enough: m.enough, level: m.level, sale: true } : null;
+    }
     return { has_data: pools.size > 0, items };
   });
 });

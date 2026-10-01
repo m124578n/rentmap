@@ -5,7 +5,8 @@ import { ApiError, api } from "@/lib/api";
 import { PropertyInput } from "@shared/schemas";
 import { useRegion } from "@/lib/region";
 import { usePrivatePool } from "@/lib/useAuth";
-import { BUILDING_TYPES, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City } from "@shared/constants";
+import { usePurpose } from "@/lib/purpose";
+import { BUILDING_TYPES, DEALS, DEAL_LABEL, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City, type Deal } from "@shared/constants";
 import { invalidateProperties } from "@/lib/invalidate";
 import { parseImportHash, type ImportedFacts } from "@shared/bookmarklet";
 import { bookmarkletHref } from "@/lib/bookmarklet";
@@ -31,6 +32,9 @@ export function NewPage() {
     history.replaceState(null, "", window.location.pathname);
   }, [imported]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // 租屋 / 買房:預設跟著地址報告的用途(只看附近 → 租屋)
+  const purpose = usePurpose();
+  const [deal, setDeal] = useState<Deal>(purpose === "buy" ? "buy" : "rent");
 
   const create = useMutation({
     mutationFn: api.createProperty,
@@ -51,6 +55,13 @@ export function NewPage() {
     const fd = new FormData(e.currentTarget);
     const raw: Record<string, unknown> = Object.fromEntries(fd.entries());
     for (const k of BOOL_FIELDS) raw[k] = fd.has(k);
+    raw.deal = deal;
+    if (deal === "buy") {
+      // 總價用「萬」輸入,存元
+      raw.price = Number(raw.price_wan) > 0 ? Math.round(Number(raw.price_wan) * 10000) : undefined;
+      delete raw.rent;
+    }
+    delete raw.price_wan;
     const parsed = PropertyInput.safeParse(raw);
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
@@ -66,7 +77,19 @@ export function NewPage() {
     <form ref={formRef} onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4 p-4">
       <input type="hidden" name="lat" />
       <input type="hidden" name="lng" /> 
-      <h1 className="text-xl font-semibold">新增房源</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold">新增{DEAL_LABEL[deal]}筆記</h1>
+        {DEALS.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setDeal(d)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs ${deal === d ? "border-neutral-800 bg-neutral-800 text-white dark:border-neutral-200 dark:bg-neutral-200 dark:text-neutral-900" : "border-neutral-300 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"}`}
+          >
+            {DEAL_LABEL[d]}
+          </button>
+        ))}
+      </div>
       <p className="-mt-2 text-sm text-neutral-500">
         {pool ? (
           <>
@@ -117,19 +140,35 @@ export function NewPage() {
 
       <section className="card grid gap-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="租金 / 月" error={err("rent")}>
-            <input name="rent" type="number" min={1} className="input" required />
-          </Field>
-          <Field label="坪數">
-            <input name="size_ping" type="number" min={0} step="0.1" className="input" />
-          </Field>
+          {deal === "buy" ? (
+            <>
+              <Field label="總價(萬)" error={err("price")}>
+                <input key="price" name="price_wan" type="number" min={1} step="0.1" className="input" required />
+              </Field>
+              <Field label="建坪">
+                <input name="size_ping" type="number" min={0} step="0.1" className="input" />
+              </Field>
+              <Field label="土地(坪)">
+                <input name="land_ping" type="number" min={0} step="0.01" className="input" />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="租金 / 月" error={err("rent")}>
+                <input key="rent" name="rent" type="number" min={1} className="input" required />
+              </Field>
+              <Field label="坪數">
+                <input name="size_ping" type="number" min={0} step="0.1" className="input" />
+              </Field>
+            </>
+          )}
           <Field label="房">
             <input name="rooms" type="number" min={0} className="input" />
           </Field>
           <Field label="樓層">
             <input name="floor" type="number" min={0} className="input" />
           </Field>
-          <Field label="房型">
+          <Field label={deal === "buy" ? "房型(選填)" : "房型"}>
             <select name="kind" className="input" defaultValue="">
               <option value="">—</option>
               {KINDS.map((k) => (
@@ -146,9 +185,11 @@ export function NewPage() {
               <Field label="管理費 / 月">
                 <input name="mgmt_fee" type="number" min={0} className="input" />
               </Field>
-              <Field label="押金(月)">
-                <input name="deposit_months" type="number" min={0} step="0.5" className="input" />
-              </Field>
+              {deal === "rent" && (
+                <Field label="押金(月)">
+                  <input name="deposit_months" type="number" min={0} step="0.5" className="input" />
+                </Field>
+              )}
               <Field label="廳">
                 <input name="living_rooms" type="number" min={0} className="input" />
               </Field>

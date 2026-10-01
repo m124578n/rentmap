@@ -28,6 +28,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               routes/AboutPage 介紹頁(沒登入時任何網址都顯示它);每一頁在 router.tsx 用 lazyRouteComponent 各自一個 chunk
               features/bus/ 是房源面板的公車區塊(附近路線、通勤直達、班表),map/busLayer.ts 畫路線
               用途(lib/purpose.ts:租屋 / 買房 / 只看附近,存在瀏覽器)決定地址報告顯示租金行情或 features/market/SaleSection(買賣行情 + 房貸試算)
+              筆記有 deal(rent | buy):買房的總價在 listings.price、rent 存 0(API 回 null);價格顯示一律用 src/shared/price.ts(priceText / priceShort),不要直接印 rent
               features/market/ 是租金行情卡、features/fit/ 是需求與符合度(M6)、features/compare/ + routes/ComparePage 是比較表(M8)
               features/nearby/ 是生活機能(面板區塊,含垃圾車、嫌惡設施「注意」列;資料 src/shared/poi.ts、API routes/nearby.ts)
               features/hazard/ 是災害風險(淹水 / 液化;src/shared/hazard.ts、API routes/hazards.ts)

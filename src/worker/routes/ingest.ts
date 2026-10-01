@@ -147,7 +147,7 @@ export async function upsertListings(d: Db, input: ImportedListing[]): Promise<{
         d
           .update(schema.listings)
           .set({
-            rent: v.rent,
+            rent: v.rent!,
             depositMonths: v.deposit_months ?? ex.deposit_months,
             rawJson: v.raw_json ?? ex.raw_json,
             photosJson: v.photos.length ? JSON.stringify(v.photos) : ex.photos_json,
@@ -162,7 +162,7 @@ export async function upsertListings(d: Db, input: ImportedListing[]): Promise<{
           })
           .where(eq(schema.listings.id, ex.id)),
       );
-      if (ex.rent !== v.rent) stmts.push(d.insert(schema.listingPriceHistory).values({ listingId: ex.id, rent: v.rent, seenAt: now }));
+      if (ex.rent !== v.rent!) stmts.push(d.insert(schema.listingPriceHistory).values({ listingId: ex.id, rent: v.rent!, seenAt: now }));
       // 手動修正過的座標(manual)不被採集覆蓋
       const pv = propertyValues(v);
       if (ex.geocode_source === "manual") {
@@ -187,7 +187,7 @@ export async function upsertListings(d: Db, input: ImportedListing[]): Promise<{
         source: v.source,
         sourceUrl: v.source_url ?? null,
         sourceListingId: v.source_listing_id,
-        rent: v.rent,
+        rent: v.rent!,
         depositMonths: v.deposit_months ?? null,
         rawJson: v.raw_json ?? null,
         photosJson: v.photos.length ? JSON.stringify(v.photos) : null,
@@ -202,7 +202,7 @@ export async function upsertListings(d: Db, input: ImportedListing[]): Promise<{
         createdAt: now,
       }),
     );
-    stmts.push(d.insert(schema.listingPriceHistory).values({ listingId: sql`last_insert_rowid()`, rent: v.rent, seenAt: now }));
+    stmts.push(d.insert(schema.listingPriceHistory).values({ listingId: sql`last_insert_rowid()`, rent: v.rent!, seenAt: now }));
   }
   const results = stmts.length ? await d.batch(stmts as [Stmt, ...Stmt[]]) : [];
   const ids = plan.map((x) => (x.kind === "old" ? x.propertyId : (results[x.at] as { id: number }[])[0]!.id));

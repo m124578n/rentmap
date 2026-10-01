@@ -2,6 +2,7 @@ import * as maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type { PropertySummary } from "@shared/schemas";
 import { priceOf } from "@/features/listing/age";
+import { priceShort } from "@shared/price";
 
 /**
  * 房源價格標記 + 群集。
@@ -28,8 +29,7 @@ const STAGE_COLOR: Record<string, string> = {
 };
 
 export function priceLabel(rent: number | null) {
-  if (rent == null) return "—";
-  return rent >= 10000 ? `${(rent / 10000).toFixed(rent % 10000 === 0 ? 0 : 1)}萬` : `$${rent.toLocaleString()}`;
+  return priceShort({ rent });
 }
 
 interface Entry {
@@ -101,7 +101,7 @@ export class PriceMarkers {
       e.marker.setLngLat([p.lng, p.lat]);
       const color = colorOf?.(p) ?? (p.stage ? (STAGE_COLOR[p.stage] ?? NEUTRAL) : NEUTRAL);
       const drop = (priceOf(p)?.totalDelta ?? 0) < 0;
-      e.el.textContent = (drop ? "↓" : "") + priceLabel(p.rent);
+      e.el.textContent = (drop ? "↓" : "") + priceShort(p);
       e.el.classList.toggle("is-drop", drop);
       e.el.title = p.title;
       e.el.style.setProperty("--c", color);

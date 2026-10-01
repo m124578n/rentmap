@@ -25,6 +25,8 @@ export const properties = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     title: text("title").notNull(),
+    // 租屋 | 買房(買房的總價在 listings.price;rent 存 0,API 回 null)
+    deal: text("deal").notNull().default("rent"),
     city: text("city").notNull(),
     district: text("district").notNull(),
     road: text("road"),
@@ -38,6 +40,7 @@ export const properties = sqliteTable(
     totalFloors: integer("total_floors"),
     buildingAge: integer("building_age"),
     sizePing: real("size_ping"),
+    landPing: real("land_ping"), // 買房:土地持分坪數
     rooms: integer("rooms"),
     livingRooms: integer("living_rooms"),
     bathrooms: integer("bathrooms"),
@@ -71,7 +74,8 @@ export const listings = sqliteTable(
     source: text("source").notNull(), // 591 | rakuya | hb | fb | agent | manual
     sourceUrl: text("source_url"),
     sourceListingId: text("source_listing_id"),
-    rent: integer("rent").notNull(),
+    rent: integer("rent").notNull(), // 買房存 0(不改欄位定義以免重建表)
+    price: integer("price"), // 買房:總價(元)
     depositMonths: real("deposit_months"),
     rawJson: text("raw_json"),
     photosJson: text("photos_json"), // 來源的照片 URL 陣列(JSON)。只存連結不下載;整個系統不存任何檔案(決定:2026-09-22)

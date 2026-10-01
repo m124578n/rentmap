@@ -18,6 +18,11 @@ import { MIN_SAMPLES, quantile } from "./market";
 export const SALE_TYPES = ["公寓", "華廈", "電梯大樓", "透天"] as const;
 export type SaleType = (typeof SALE_TYPES)[number];
 
+/** 房源的建物型態 → 買賣行情的型態(套房、其他、沒填 → null,不限型態) */
+export function saleTypeOf(t: string | null | undefined): SaleType | null {
+  return t && (SALE_TYPES as readonly string[]).includes(t) ? (t as SaleType) : null;
+}
+
 export const SaleStatIn = z.object({
   serial: z.string().min(1).max(40),
   city: z.enum(ALL_CITIES as [CityName, ...CityName[]]),

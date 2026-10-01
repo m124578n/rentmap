@@ -8,6 +8,7 @@ import { STAGE_LABEL, type Stage } from "@shared/constants";
 import { DAY_LABEL, DAY_TYPES, type DayType } from "@shared/bus";
 import { bestTourOrder, TRIP_KIND_LABEL, type TourResponse, type Trip } from "@shared/trip";
 import { usePlaces } from "@/features/places/places";
+import { priceText } from "@shared/price";
 
 const MAX = 8;
 const hhmm = (min: number) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(Math.round(min) % 60).padStart(2, "0")}`;
@@ -93,7 +94,7 @@ export function TourPage() {
                   <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} disabled={!sel.has(p.id) && sel.size >= MAX} />
                   <span className="min-w-0 flex-1 truncate">{p.title}</span>
                   <span className="shrink-0 text-xs text-neutral-500">
-                    {p.district} · {p.rent != null ? `$${p.rent.toLocaleString()}` : "—"} · {STAGE_LABEL[p.stage as Stage]}
+                    {p.district} · {priceText(p)} · {STAGE_LABEL[p.stage as Stage]}
                   </span>
                 </label>
               </li>

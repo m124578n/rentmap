@@ -25,7 +25,7 @@ sale.use("/api/ingest/sale-stats/*", requireIngest());
 type Pools = { sig: string; byDistrict: Map<string, SaleStat[]>; all: SaleStat[] };
 const cache = new Map<string, Pools>();
 
-async function loadCity(DB: D1Database, city: string): Promise<Pools> {
+export async function loadSalePools(DB: D1Database, city: string): Promise<Pools> {
   const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(id) AS m FROM sale_stats WHERE city = ?").bind(city).first<{ n: number; m: number | null }>();
   const sig = `${head?.n ?? 0}#${head?.m ?? 0}`;
   const hit = cache.get(city);
@@ -60,7 +60,7 @@ sale.get("/api/market/sale/at", async (c) => {
   if (!parsed.success) return c.json({ error: "city, district required" }, 400);
   const v = parsed.data;
   const city = normalizeCity(v.city) ?? v.city;
-  const pools = await loadCity(c.env.DB, city);
+  const pools = await loadSalePools(c.env.DB, city);
   const market = computeSaleMarket(
     { building_type: v.building_type ?? null, size_ping: v.size_ping ?? null, building_age: v.building_age ?? null, price: v.price ?? null },
     pools.byDistrict.get(v.district) ?? [],
