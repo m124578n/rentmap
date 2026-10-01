@@ -2,7 +2,7 @@
 
 repo:https://github.com/m124578n/rentmap(本機資料夾仍叫 `rent-house`,不要改名,Claude 的專案記憶綁在路徑上)。
 
-設計與進度在 `docs/design/2026-09-20-architecture.md`。這份只放「怎麼工作」。
+設計與進度在 `docs/design/2026-09-20-architecture.md`(§10 列出之後的設計文件;付費方案、各區行情頁、SEO 見 `docs/design/2026-10-01-plans-and-public-pages.md`)。這份只放「怎麼工作」。
 
 **產品方向(2026-09-30 定案,先讀):`docs/business/2026-09-30-direction-notes-and-regions.md`。** 重點:
 - 產品名「落腳筆記」(英文 Loka Note,2026-10-01 定;舊名租屋筆記):房源由使用者自己帶進來(手動 / 瀏覽器書籤小工具),賣的是對地址的分析。**不再每天抓 591 / 好房**,排程已停用。

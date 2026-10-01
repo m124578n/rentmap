@@ -310,3 +310,16 @@ Prompt 要求輸出固定 JSON：`{ pros[], cons[], price_diff_reasons[], notes 
 - 登入用 Google OAuth，比照 menmap 實作；Phase 1 只有 `ADMIN_EMAILS` 白名單能登入。本機開發用 `DEV_USER_EMAIL` 免 Google。
 - 不存任何檔案（照片、錄音）：照片只留來源連結，看房紀錄純文字（2026-09-22）。
 - 目標範圍只有雙北（台北市、新北市）：實價登錄只匯入雙北，`mrt.json` 只取雙北路線，591 搜尋條件也只設雙北。
+
+---
+
+## 10. 之後的設計文件
+
+這份是 2026-09-20 的初版架構,之後的變更各自一份:
+
+- `2026-09-23-nearby-poi-design.md`:生活機能、嫌惡設施
+- `2026-09-30-open-a-region.md`:開新生活圈(範圍已從雙北擴到北北基桃、台中、台南、高雄)
+- `2026-10-01-cloud-tasks.md`:雲端代辦清單(各區資料狀態、測試、精簡 payload、治安排名、部署 runbook)
+- `2026-10-01-plans-and-public-pages.md`:付費方案與權限、公開的各區行情頁、SEO / AI 搜尋
+- `deploy-runbook.md`:部署步驟(還沒執行)
+- 產品方向、定價與法律:`../business/`
