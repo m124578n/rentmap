@@ -96,13 +96,15 @@ const NPA_KIND: Record<string, NpaCrimeRow["kind"]> = { 住宅竊盜: "house", �
 
 /**
  * 警政署「犯罪資料」CSV:type,oc_year,oc_data,oc_county,oc_region(全國;只留 regions.ts 有列的縣市)。
+ * 實際檔案(2026-10 看到的):第二列是中文表頭;oc_data 只有月日「0401」,年度在 oc_year「115」(也收 7 碼的完整日期,以防改版)。
  * 縣市用「臺」、區有時連縣市一起寫(「臺中市西屯區」),都整理成 regions.ts 的寫法。
  */
 export function parseNpaCrime(csv: string): NpaCrimeRow[] {
   const out: NpaCrimeRow[] = [];
   for (const line of csv.replace(/^\uFEFF/, "").split(/\r?\n/).slice(1)) {
-    const [type, , date, county, region] = cells(line).map((x) => x.replace(/^"|"$/g, ""));
-    const d = rocDate(date ?? "");
+    const [type, year, date, county, region] = cells(line).map((x) => x.replace(/^"|"$/g, ""));
+    const md = date ?? "";
+    const d = rocDate(/^\d{4}$/.test(md) && /^\d{2,3}$/.test(year ?? "") ? `${year}${md}` : md);
     const city = (county ?? "").replace(/臺/g, "台");
     if (!type || !d || !(city in CITY_INFO)) continue;
     const info = CITY_INFO[city as CityName];
