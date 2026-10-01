@@ -4,7 +4,7 @@
  * 〔〕是還沒填的地方(經營者、信箱);上線收費前請律師看過。
  */
 export const LEGAL_DOCS = {
-  terms: { title: "服務條款", version: "1.1", effective: "2026-10-01", changes: "服務內容加入買賣行情與房貸試算;不限租屋,買房或了解住家附近也適用" },
+  terms: { title: "服務條款", version: "1.2", effective: "2026-10-01", changes: "服務名稱改為「落腳筆記」;服務內容加入買賣行情與房貸試算,不限租屋" },
   privacy: { title: "隱私權政策", version: "1.0", effective: "2026-10-01", changes: "" },
   refund: { title: "付費與退款說明", version: "1.0", effective: "2026-10-01", changes: "" },
   sources: { title: "資料來源與免責聲明", version: "1.2", effective: "2026-10-01", changes: "資料來源加入內政部買賣實價登錄;估算說明加入房貸試算與買賣行情" },

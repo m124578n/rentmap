@@ -29,7 +29,7 @@ export function AboutPage() {
   const { user, enabled, dev, login, devLogin } = useAuth();
   useEffect(() => {
     const prev = document.title;
-    document.title = "租屋筆記|輸入地址,通勤、行情、生活機能與災害一次看完";
+    document.title = "落腳筆記|租屋、買房、搬家前,先看這個地址";
     return () => {
       document.title = prev;
     };
@@ -55,16 +55,16 @@ export function AboutPage() {
       <section className="grid items-center gap-8 py-10 sm:py-16 md:grid-cols-[1.1fr_1fr]">
         <div>
           <p className="mb-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-            {OPEN_REGIONS.map((r) => r.label).join("、")} · 找房筆記
+            {OPEN_REGIONS.map((r) => r.label).join("、")} · 落腳筆記
           </p>
           <h1 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
-            找房要查的東西,
+            租屋、買房、搬家前,
             <br />
-            <span className="text-emerald-600 dark:text-emerald-400">一張地圖看完。</span>
+            <span className="text-emerald-600 dark:text-emerald-400">先看這個地址。</span>
           </h1>
           <p className="mt-4 max-w-prose text-neutral-600 dark:text-neutral-400">
-            輸入一個地址,就幫你算好上下班怎麼搭(公車、捷運、台鐵,或騎車開車)、附近租金行情、每月實際要花多少,
-            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記(在租屋網站的物件頁用書籤一鍵帶入),再收藏、約看、排路線、並排比較。
+            輸入一個地址,就幫你算好上下班怎麼搭(公車、捷運、台鐵,或騎車開車)、附近的租金或房價行情、每月實際要花多少(房租或房貸),
+            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記,再收藏、約看、排路線、並排比較;只是想多了解自己住的地方,也一樣好用。
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {cta}
@@ -79,17 +79,17 @@ export function AboutPage() {
 
       {/* 功能 */}
       <section id="features" className="scroll-mt-4">
-        <h2 className="mb-1 text-xl font-semibold">每一間房,幫你查好這些</h2>
+        <h2 className="mb-1 text-xl font-semibold">每一個地址,幫你查好這些</h2>
         <p className="mb-5 text-sm text-neutral-500">資料都來自政府開放資料與 OpenStreetMap,在家裡的電腦定期更新。</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Feature icon={<Bus size={18} />} title="上下班通勤,分開算">
             公車 + 捷運 + YouBike,轉乘一次內。上班、下班可以設不同時段與星期,班距跟著時段變,走路也算紅綠燈。
           </Feature>
           <Feature icon={<Wallet size={18} />} title="每月實際支出">
-            房租之外,管理費、台電累進或房東每度電價、水費、網路、通勤票價(TPASS 封頂)一起加,預算可以比總支出。
+            房租或房貸(自備、利率、年限可調)之外,管理費、電費、水費、網路、通勤票價(TPASS 封頂)一起加,預算可以比總支出。
           </Feature>
           <Feature icon={<LineChart size={18} />} title="比行情貴還便宜">
-            內政部租賃實價登錄,同區同房型、坪數房數相近的成交價,看得出開價合不合理。
+            租屋看租賃實價登錄、買房看買賣實價登錄的每坪單價;同區同型態、坪數相近的成交價,看得出開價合不合理,還能直接試算房貸。
           </Feature>
           <Feature icon={<ShoppingBasket size={18} />} title="生活機能">
             超商、超市、餐飲、市場、公園、診所、運動、YouBike…走路 500m / 1km 內有幾個、最近的在哪。
@@ -101,13 +101,13 @@ export function AboutPage() {
             加油站、變電所、殯葬、快速道路、鐵道高架的最近距離;淹水潛勢、土壤液化、松山機場航空噪音。
           </Feature>
           <Feature icon={<Siren size={18} />} title="治安">
-            臺北市警察局的住宅、機車、汽車竊盜點位,看附近近三年幾件;雙北各區近一年件數與排名。
+            臺北市有住宅、機車、汽車竊盜點位,看附近近三年幾件;其他縣市看各區近一年件數與排名。
           </Feature>
           <Feature icon={<SlidersHorizontal size={18} />} title="需求符合度">
             設好預算、坪數、通勤上限、必要設備與權重,每間標綠黃紅,地圖也能照符合度上色。
           </Feature>
           <Feature icon={<Layers size={18} />} title="區域圖層">
-            還沒看到喜歡的房?先看區域:通勤時間網格、每坪租金、淹水與噪音範圍;地圖任一點右鍵也能看附近。
+            還沒鎖定房子?先看區域:通勤時間網格、淹水與噪音範圍;地圖任一點右鍵或輸入地址,就是一份報告。
           </Feature>
         </div>
       </section>
@@ -126,7 +126,7 @@ export function AboutPage() {
             約好的幾間排出最順的順序,每間幾點到、怎麼搭。
           </Step>
           <Step n={4} icon={<Columns3 size={16} />} title="並排比較">
-            2–4 間並排比租金、支出、通勤、機能、災害、治安。
+            2–4 間並排比價格、每月支出、通勤、機能、災害、治安。
           </Step>
         </ol>
       </section>
@@ -142,7 +142,7 @@ export function AboutPage() {
         <ul className="grid gap-1.5 text-sm text-neutral-600 sm:grid-cols-2 dark:text-neutral-400">
           <Source icon={<Bus size={14} />}>交通部 TDX:公車路線與班表、捷運站間時間、台鐵時刻、YouBike</Source>
           <Source icon={<Bike size={14} />}>各市政府:YouBike 站點、垃圾車清運點</Source>
-          <Source icon={<LineChart size={14} />}>內政部:不動產租賃實價登錄</Source>
+          <Source icon={<LineChart size={14} />}>內政部:不動產租賃與買賣實價登錄</Source>
           <Source icon={<ShieldAlert size={14} />}>經濟部水利署:淹水潛勢;臺北市、臺南市:土壤液化潛勢</Source>
           <Source icon={<Gauge size={14} />}>雙北環保局:航空噪音防制區</Source>
           <Source icon={<Siren size={14} />}>雙北警察局:竊盜點位與案件統計</Source>
@@ -151,12 +151,12 @@ export function AboutPage() {
       </section>
 
       <section className="mt-12 rounded-2xl bg-emerald-600 px-6 py-8 text-center text-white dark:bg-emerald-800">
-        <h2 className="text-xl font-semibold">開始找房</h2>
+        <h2 className="text-xl font-semibold">先看一個地址</h2>
         <p className="mt-1 text-sm text-emerald-50">可以加到手機主畫面,看房途中收訊不好也能打開收藏與路線。</p>
         <div className="mt-4 [&_.btn-primary]:bg-white [&_.btn-primary]:text-emerald-700 [&_.btn-primary:hover]:bg-emerald-50">{cta}</div>
       </section>
 
-      <p className="mt-8 text-center text-xs text-neutral-400">地圖 © CARTO © OpenStreetMap contributors</p>
+      <p className="mt-8 text-center text-xs text-neutral-400">落腳筆記 Loka Note · 地圖 © CARTO © OpenStreetMap contributors</p>
       <LegalLinks className="mt-2 justify-center" />
     </div>
   );
