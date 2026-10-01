@@ -4,6 +4,7 @@ import { ChevronDown, Siren } from "lucide-react";
 import { CRIME_CATS, poiLabel } from "@shared/poi";
 import { coverageCities, hasCoverage } from "@shared/regions";
 import { useRegion } from "@/lib/region";
+import { districtRank } from "@shared/crime";
 import { api } from "@/lib/api";
 
 /** public/crime-districts.json(collect -- crime 產生):雙北各區近一年竊盜件數 */
@@ -46,15 +47,8 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
   const key = `${city.replace("臺", "台")}|${district}`;
   const row = d?.items[key];
   const period = d?.periods?.[city.replace("臺", "台")] ?? d;
-  const rank = (k: "house" | "moto") => {
-    if (!d || !row?.[k]) return null;
-    // 排名只跟同一個生活圈的區比
-    const all = Object.entries(d.items)
-      .filter(([key]) => (region.cities as readonly string[]).includes(key.split("|")[0]!))
-      .map(([, x]) => x[k] ?? 0)
-      .sort((a, b) => b - a);
-    return { n: all.indexOf(row[k]!) + 1, of: all.length };
-  };
+  // 排名只跟同一個生活圈、有治安資料的縣市的區比(沒件數的區算 0;見 shared/crime.ts)
+  const rank = (k: "house" | "moto") => (d ? districtRank(d.items, region.cities, city, district, k) : null);
   const houseRank = rank("house");
   const cases = CRIME_CATS.flatMap((c) => (near.data?.items[c] ?? []).map((p) => ({ ...p, c }))).sort((a, b) => a.distance_m - b.distance_m);
 
