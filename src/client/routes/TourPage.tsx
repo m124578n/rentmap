@@ -77,7 +77,7 @@ export function TourPage() {
           <Route size={18} /> 看房路線
         </h1>
         <p className="text-neutral-600 dark:text-neutral-400">挑幾間約好的房,排出交通時間最短的順序,每間幾點到、怎麼搭。</p>
-        <PlanLock>看房路線是付費功能。</PlanLock>
+        <PlanLock>看房路線是完整版的功能。</PlanLock>
       </div>
     );
   return (

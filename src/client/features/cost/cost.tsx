@@ -62,7 +62,7 @@ export function CostSection({ cost }: { cost: MonthlyCost | null }) {
             <span className="tabular-nums">{fmt(cost.total)}</span>
           </li>
         </ul>
-        {!detail && <PlanLock className="mt-1">每一項怎麼算(房租或房貸、管理費、水電、網路、通勤票價)是付費功能。</PlanLock>}
+        {!detail && <PlanLock className="mt-1">每一項怎麼算(房租或房貸、管理費、水電、網路、通勤票價)是完整版的功能。</PlanLock>}
         <p className="mt-1 text-[11px] text-neutral-400">「≈」是估的:電費依台電累進或房東每度價、度數依房型估;通勤以 TPASS 1200 封頂。度數、通勤地點與天數可在「我的需求」改。</p>
       </div>
     </section>

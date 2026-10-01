@@ -61,7 +61,7 @@ billing.post("/api/ingest/plan/revoke", async (c) => {
   if (!user) return c.json({ error: "user not found" }, 404);
   const now = Date.now();
   const until = user.plan_until ? Date.parse(user.plan_until) - g.days * 86400_000 : now;
-  const plan: PlanKey = until > now ? effectivePlan(user.plan, user.plan_until) : "free";
+  const plan: PlanKey = until > now ? effectivePlan(user.plan, new Date(until).toISOString()) : "free";
   const untilIso = plan === "free" ? null : new Date(until).toISOString();
   try {
     await DB.batch([

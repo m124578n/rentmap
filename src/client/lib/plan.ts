@@ -13,6 +13,6 @@ export function usePlan(): PlanState {
 
 /** API 回 402(方案不含這個功能)時的說明;其他錯誤回 null */
 export function planError(e: unknown): string | null {
-  if (e instanceof ApiError && e.status === 402) return (e.body as PlanDenied | null)?.message ?? "這是付費方案的功能。";
+  if (e instanceof ApiError && e.status === 402) return (e.body as PlanDenied | null)?.message ?? "這是完整版的功能。";
   return null;
 }

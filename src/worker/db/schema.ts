@@ -15,7 +15,7 @@ export const users = sqliteTable(
     email: text("email"), // Google 驗證過的;只用於白名單與聯絡,不公開
     createdAt: text("created_at").notNull(),
     lastLoginAt: text("last_login_at").notNull(),
-    // 付費方案(src/shared/plan.ts):free | rent | buy;到期(plan_until 早於現在)就當免費。只由開通 API 寫,使用者改不到
+    // 付費方案(src/shared/plan.ts):free | pro;到期(plan_until 早於現在)就當免費。只由開通 API 寫,使用者改不到
     plan: text("plan").notNull().default("free"),
     planUntil: text("plan_until"),
   },

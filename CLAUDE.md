@@ -39,7 +39,7 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               routes/area.ts 是公開的「各區行情」頁(/area/<縣市>/<區>,不用登入,Worker 直接出 HTML 不載 SPA;彙總在 src/shared/area.ts)與動態 sitemap.xml;
               新增這類公開路徑要加進 wrangler.jsonc 的 assets.run_worker_first,不然會被 SPA 的 index.html 接走
-              plan.ts + src/shared/plan.ts 是付費方案(免費 / 租屋 / 買房,期間方案、不賣點數):**權限一律在 API 檢查**(planOf / deny → 402),
+              plan.ts + src/shared/plan.ts 是付費方案(免費 / 完整版 30・60・90 天,期間方案、不賣點數):**權限一律在 API 檢查**(planOf / deny → 402),
               前端 lib/plan.ts 的 usePlan + features/plan/PlanLock 只負責顯示;新增付費功能兩邊都要加。方案只由 routes/billing.ts(bearer)改,私人模式不限制
               routes/legal.ts 條款同意(consents 表;版本在 src/shared/legal.ts,全文在 client features/legal/docs.tsx,改內容要加版本號);routes/account.ts 匯出 / 刪除帳號
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
@@ -73,7 +73,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
 | `npm run collect -- tra [--dry] [--date=YYYY-MM-DD]` | 從 TDX 下載台鐵車站 + 某平日(預設下週三)的區間車時刻 → `public/tra.json`(**要 commit**;Worker 把台鐵併進捷運圖,站名前綴「台鐵」、350m 內可轉捷運)。台鐵改點才要重跑,原始檔快取 `data/tdx/tra-*.json`(要重抓先刪) |
-| `npm run collect -- grant <email> <rent30\|rent90\|buy90> <ref>` / `revoke <ref>` | 手動開通 / 取消方案(綠界串好前用;ref 是訂單編號或匯款備註,同一個 ref 只算一次;推到 `.env` 的 `RENTMAP_API`) |
+| `npm run collect -- grant <email> <pro30\|pro60\|pro90> <ref>` / `revoke <ref>` | 手動開通 / 取消方案(綠界串好前用;ref 是訂單編號或匯款備註,同一個 ref 只算一次;推到 `.env` 的 `RENTMAP_API`) |
 | `npm run collect -- sync --group=<taipei\|newtaipei\|recheck\|housefun>` | 每日同步,分組分時段(20:00 台北、21:00 新北含重抓 80 筆;housefun / recheck 組不排程);排程 `RentmapSync-*` 跑 `scripts/run_daily.ps1 -Group …`,本機模式會自己起 / 關 dev server。不帶 group = 全部一次跑(量大,只在手動需要時) |
 
 ## 驗證順序(省 token)

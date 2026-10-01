@@ -23,7 +23,7 @@ export function useCommute(side?: CommuteSide) {
   const list = places.data?.items ?? [];
   const sig = list.map((p) => `${p.id}@${p.lat},${p.lng}`).join("|");
   const mode = f.commuteMode;
-  // 下班時段是付費功能:免費方案不查(伺服器會回 402),畫面顯示鎖
+  // 下班時段是完整版的功能:免費方案不查(伺服器會回 402),畫面顯示鎖
   const locked = (side ?? f.commuteSide) === "back" && !usePlan().ent.commuteCustom;
   const q = useQuery({
     queryKey: ["commute", region.key, sig, when.day, when.time, when.dir, f.commuteBike],

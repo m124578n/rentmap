@@ -139,7 +139,7 @@ market.get("/api/market/at", async (c) => {
 
 /** 方案沒有租金成交明細:拿掉「最像的幾筆」(中位數、區間照給) */
 async function gateDetail(c: Context<AppEnv>, body: MarketResponse): Promise<MarketResponse> {
-  if ((await planOf(c)).ent.rentDetail || !body.market) return body;
+  if ((await planOf(c)).ent.marketDetail || !body.market) return body;
   return { ...body, market: { ...body.market, comparables: [] }, detail_locked: true };
 }
 

@@ -68,8 +68,8 @@ sale.get("/api/market/sale/at", async (c) => {
     pools.all,
     { cleaned: true },
   );
-  // 方案沒有買賣成交明細(買房方案才有):拿掉「最像的幾筆」
-  const locked = !!market && !(await planOf(c)).ent.saleDetail;
+  // 免費版沒有成交明細:拿掉「最像的幾筆」(中位數、區間照給)
+  const locked = !!market && !(await planOf(c)).ent.marketDetail;
   const body: SaleMarketResponse = { has_data: pools.all.length > 0, market: locked ? { ...market!, comparables: [] } : market, ...(locked ? { detail_locked: true } : {}) };
   return c.json(body);
 });

@@ -252,7 +252,7 @@ export function ComparePage() {
               ),
               better: "low",
               cells: props.map((p) =>
-                back.locked ? { node: <span className="text-[11px] text-neutral-400">付費方案</span>, v: null } : tripCell(back.matrix?.items[p.id]?.[pl.id], p.lat != null, back.isLoading),
+                back.locked ? { node: <span className="text-[11px] text-neutral-400">完整版</span>, v: null } : tripCell(back.matrix?.items[p.id]?.[pl.id], p.lat != null, back.isLoading),
               ),
             },
           ])

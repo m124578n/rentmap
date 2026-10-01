@@ -18,8 +18,7 @@ function features(k: PlanKey): string[] {
     ...(e.tour ? ["看房路線"] : []),
     ...(e.fit ? ["需求與符合度"] : []),
     ...(e.costDetail ? ["每月支出明細"] : ["每月支出總額"]),
-    ...(e.rentDetail ? ["租金成交明細(最像的幾筆)"] : []),
-    ...(e.saleDetail ? ["買賣成交明細(附近 / 最像的幾筆)"] : []),
+    ...(e.marketDetail ? ["租金、買賣成交明細(最像的幾筆)"] : []),
   ];
 }
 
@@ -36,21 +35,36 @@ function PlanSection() {
           {p.until && <span className="ml-1 text-xs text-neutral-500">到 {new Date(p.until).toLocaleDateString("zh-TW")}(到期自動回免費版,不會扣款)</span>}
         </p>
       )}
-      <div className="grid gap-2 sm:grid-cols-3">
-        {(["free", "rent", "buy"] as PlanKey[]).map((k) => {
-          const offers = OFFERS.filter((o) => o.plan === k);
-          return (
-            <div key={k} className={`rounded border p-2 text-xs ${p.enforced && p.plan === k ? "border-emerald-600" : "border-neutral-200 dark:border-neutral-700"}`}>
-              <p className="font-medium">{PLAN_LABEL[k]}</p>
-              <p className="mb-1 text-neutral-500">{offers.length ? offers.map((o) => `${o.days} 天 $${o.price}`).join(" / ") : "免費"}</p>
-              <ul className="grid gap-0.5 text-neutral-600 dark:text-neutral-400">
-                {features(k).map((f) => (
-                  <li key={f}>· {f}</li>
+      <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+        {(["free", "pro"] as PlanKey[]).map((k) => (
+          <div key={k} className={`rounded border p-2 text-xs ${p.enforced && p.plan === k ? "border-emerald-600" : "border-neutral-200 dark:border-neutral-700"}`}>
+            <p className="font-medium">{PLAN_LABEL[k]}</p>
+            {k === "free" ? (
+              <p className="mb-1 text-neutral-500">$0</p>
+            ) : (
+              <div className="my-1 grid grid-cols-3 gap-1.5">
+                {OFFERS.map((o) => (
+                  <div
+                    key={o.id}
+                    className={`relative rounded border p-1.5 text-center ${"best" in o && o.best ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950" : "border-neutral-200 dark:border-neutral-700"}`}
+                  >
+                    {"best" in o && o.best && (
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-1.5 text-[10px] whitespace-nowrap text-white">最划算</span>
+                    )}
+                    <p className="text-neutral-500">{o.days} 天</p>
+                    <p className="text-base font-semibold tabular-nums">${o.price}</p>
+                    <p className="text-[10px] text-neutral-500 tabular-nums">每天約 ${(o.price / o.days).toFixed(1)}</p>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          );
-        })}
+              </div>
+            )}
+            <ul className="grid gap-0.5 text-neutral-600 dark:text-neutral-400">
+              {features(k).map((f) => (
+                <li key={f}>· {f}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
       <p className="text-[11px] text-neutral-500">一次付清、不自動續約;付款後 7 天內可全額退款。線上付款準備中。</p>
     </section>

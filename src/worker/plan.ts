@@ -9,7 +9,7 @@ import type { AppEnv } from "./env";
 import { isPrivatePool } from "./pool";
 
 export async function planOf(c: Context<AppEnv>): Promise<PlanState> {
-  if (isPrivatePool(c.env)) return { plan: "buy", until: null, ent: UNLIMITED, enforced: false };
+  if (isPrivatePool(c.env)) return { plan: "pro", until: null, ent: UNLIMITED, enforced: false };
   const row = await c.env.DB.prepare("SELECT plan, plan_until FROM users WHERE id = ?")
     .bind(c.get("user").id)
     .first<{ plan: string; plan_until: string | null }>();
@@ -18,15 +18,14 @@ export async function planOf(c: Context<AppEnv>): Promise<PlanState> {
 }
 
 const MESSAGES: Record<keyof Entitlements, string> = {
-  notes: "免費版最多存 3 間筆記;付費方案不限。",
-  places: "免費版只能設 1 個地點;付費方案最多 5 個。",
+  notes: "免費版最多存 3 間筆記;完整版不限。",
+  places: "免費版只能設 1 個地點;完整版最多 5 個。",
   compare: "免費版最多比較 2 間。",
-  commuteCustom: "下班、自訂時段與 YouBike 是付費方案的功能;免費版算平日 08:00 上班。",
-  tour: "看房路線是付費方案的功能。",
-  fit: "需求與符合度是付費方案的功能。",
-  rentDetail: "租金行情的成交明細是付費方案的功能。",
-  saleDetail: "買賣行情的成交明細是買房方案的功能。",
-  costDetail: "每月支出明細是付費方案的功能。",
+  commuteCustom: "下班、自訂時段與 YouBike 是完整版的功能;免費版算平日 08:00 上班。",
+  tour: "看房路線是完整版的功能。",
+  fit: "需求與符合度是完整版的功能。",
+  marketDetail: "行情的成交明細(最像的幾筆)是完整版的功能。",
+  costDetail: "每月支出明細是完整版的功能。",
 };
 
 /** 402 Payment Required + 說明(前端顯示 message、帶去方案頁) */

@@ -208,7 +208,7 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
           </div>
         </Group>
 
-        {!fitOk && <PlanLock className="mb-2">需求與符合度是付費功能(可以先填填看,存不起來)。</PlanLock>}
+        {!fitOk && <PlanLock className="mb-2">需求與符合度是完整版的功能(可以先填填看,存不起來)。</PlanLock>}
         {save.error && <p className="mb-2 text-xs text-red-600">存不起來:{planError(save.error) ?? String(save.error)}</p>}
         <div className="mt-2 flex items-center justify-between">
           <button onClick={() => setR({ ...EMPTY_REQUIREMENTS, weights: r.weights })} className="text-xs text-neutral-500 underline">

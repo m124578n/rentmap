@@ -84,7 +84,7 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
                 />
               ))}
             </ul>
-            {full && <PlanLock className="mt-2">免費版只能設 {ent.places} 個地點;付費方案最多 5 個(公司 + 家人)。</PlanLock>}
+            {full && <PlanLock className="mt-2">免費版只能設 {ent.places} 個地點;完整版最多 5 個(公司 + 家人)。</PlanLock>}
             {mut.create.error && <p className="mt-2 text-xs text-red-600">{planError(mut.create.error) ?? "存不起來,再試一次"}</p>}
             <div className="mt-3 flex justify-between">
               <button className="btn-ghost" disabled={full} onClick={() => setDraft({ id: null, name: "", address: "", pin: null })}>

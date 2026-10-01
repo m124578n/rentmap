@@ -90,7 +90,7 @@ export function SaleSection({
             {!m.enough && <span className="text-amber-700 dark:text-amber-400"> · 樣本不足,僅供參考</span>}
           </p>
           {q.data.detail_locked ? (
-            <PlanLock className="mt-1">附近成交明細是買房方案的功能。</PlanLock>
+            <PlanLock className="mt-1">附近成交明細是完整版的功能。</PlanLock>
           ) : (
             <button onClick={() => setOpen(!open)} className="mt-1 flex items-center gap-0.5 text-[11px] text-emerald-700 underline dark:text-emerald-400">
               最像的 {m.comparables.length} 筆

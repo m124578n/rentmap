@@ -12,7 +12,7 @@
  *   npm run collect -- crime [--years=3] [--dry]           臺北市竊盜點位(門牌轉座標)+ 雙北各區件數 → 推入 / public/crime-districts.json(每季一次)
  *   npm run collect -- metro [--dry]                     下載捷運官方站間時間(TDX)→ public/mrt-times.json(進 git)
  *   npm run collect -- tra [--dry] [--date=YYYY-MM-DD]     下載台鐵車站與區間車時刻(TDX)→ public/tra.json(進 git)
- *   npm run collect -- grant <email> <rent30|rent90|buy90> <ref>   手動開通方案(收到匯款等;ref 是訂單編號,重送不會重複加)
+ *   npm run collect -- grant <email> <pro30|pro60|pro90> <ref>   手動開通方案(收到匯款等;ref 是訂單編號,重送不會重複加)
  *   npm run collect -- revoke <ref>                        退款:取消那一筆開通(扣回天數)
  *
  * 設定讀 .env:RENTMAP_API(預設 http://localhost:5173)、INGEST_SECRET;公車另讀 TDX_CLIENT_ID / TDX_CLIENT_SECRET。
@@ -144,7 +144,7 @@ async function main() {
     if (!SECRET) throw new Error(".env 沒有 INGEST_SECRET");
     const [email, offer, ref] = [arg, ...rest];
     const body = cmd === "grant" ? { email, offer, ref } : { ref: arg };
-    if (cmd === "grant" ? !email || !offer || !ref : !arg) throw new Error("用法:collect grant <email> <rent30|rent90|buy90> <ref>|collect revoke <ref>");
+    if (cmd === "grant" ? !email || !offer || !ref : !arg) throw new Error("用法:collect grant <email> <pro30|pro60|pro90> <ref>|collect revoke <ref>");
     const res = await fetch(`${API}/api/ingest/plan${cmd === "revoke" ? "/revoke" : ""}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SECRET}` },

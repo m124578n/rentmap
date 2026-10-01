@@ -90,7 +90,7 @@ export interface MarketResponse {
   market: MarketResult | null;
   /** 目前開價:系統裡還在刊登的同區同房型(不含這間),用同一套相似條件;comparables 不給(那是房源不是實價登錄) */
   asking: Omit<MarketResult, "comparables"> | null;
-  /** 方案不含成交明細:comparables 是空的(shared/plan.ts 的 rentDetail) */
+  /** 方案不含成交明細:comparables 是空的(shared/plan.ts 的 marketDetail) */
   detail_locked?: boolean;
 }
 

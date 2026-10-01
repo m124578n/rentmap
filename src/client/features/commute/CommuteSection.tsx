@@ -36,7 +36,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
   const go = useCommute("go");
   const back = useCommute("back");
   const f = useFilters();
-  // 免費方案只有上班(下班、自訂時段是付費功能)
+  // 免費方案只有上班(下班、自訂時段是完整版的功能)
   const sides: CommuteSide[] = usePlan().ent.commuteCustom ? ["go", "back"] : ["go"];
   const [openId, setOpenId] = useCommuteTarget();
   const [radius, setRadius] = useState(400);
@@ -118,7 +118,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
           })}
         </ul>
       )}
-      {list.length > 0 && sides.length === 1 && <PlanLock className="mt-1">免費版算平日 08:00 上班;下班、自訂時段與 YouBike 是付費功能。</PlanLock>}
+      {list.length > 0 && sides.length === 1 && <PlanLock className="mt-1">免費版算平日 08:00 上班;下班、自訂時段與 YouBike 是完整版的功能。</PlanLock>}
     </section>
   );
 }

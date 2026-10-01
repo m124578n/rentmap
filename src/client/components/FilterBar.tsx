@@ -170,7 +170,7 @@ function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800">
       {!custom ? (
-        <PlanLock>平日 08:00 上班(住處 → 地點);下班、自訂時段與 YouBike 是付費功能。</PlanLock>
+        <PlanLock>平日 08:00 上班(住處 → 地點);下班、自訂時段與 YouBike 是完整版的功能。</PlanLock>
       ) : (
         <div className="flex flex-wrap items-center gap-1">
           {(["go", "back"] as CommuteSide[]).map((s) => (

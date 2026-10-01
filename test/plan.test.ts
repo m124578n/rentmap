@@ -2,7 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { beforeAll, describe, expect, it } from "vitest";
 import app from "../src/worker/index";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import { effectivePlan, extendPlan, type PlanState } from "../src/shared/plan";
+import { OFFERS, effectivePlan, extendPlan, type PlanState } from "../src/shared/plan";
 
 // 方案權限只在公開模式生效(私人模式不限),所以跟 pool.test.ts 一樣換一份 env 直接呼叫 app.fetch
 const ORIGIN = "http://localhost:5173";
@@ -35,31 +35,28 @@ beforeAll(async () => {
 });
 
 describe("方案計算(純函式)", () => {
-  it("到期、沒有到期日、不認得的方案都算免費", () => {
+  it("到期、沒有到期日、不認得的方案(含舊的 rent / buy)都算免費", () => {
     const now = new Date("2026-10-01T00:00:00Z");
-    expect(effectivePlan("rent", "2026-10-02T00:00:00Z", now)).toBe("rent");
-    expect(effectivePlan("rent", "2026-09-30T00:00:00Z", now)).toBe("free");
-    expect(effectivePlan("buy", null, now)).toBe("free");
+    expect(effectivePlan("pro", "2026-10-02T00:00:00Z", now)).toBe("pro");
+    expect(effectivePlan("pro", "2026-09-30T00:00:00Z", now)).toBe("free");
+    expect(effectivePlan("pro", null, now)).toBe("free");
+    expect(effectivePlan("buy", "2099-01-01T00:00:00Z", now)).toBe("free");
     expect(effectivePlan("admin", "2099-01-01T00:00:00Z", now)).toBe("free");
   });
-  it("續買從原本到期日往後加;買房沒到期時買租屋不會降級", () => {
+  it("續買從原本到期日往後加;過期的不疊加", () => {
     const now = new Date("2026-10-01T00:00:00Z");
-    expect(extendPlan({ plan: "free", until: null }, { plan: "rent", days: 30 }, now)).toEqual({ plan: "rent", until: "2026-10-31T00:00:00.000Z" });
-    expect(extendPlan({ plan: "rent", until: "2026-10-11T00:00:00Z" }, { plan: "rent", days: 30 }, now).until).toBe("2026-11-10T00:00:00.000Z");
-    // 買房還沒到期又買租屋 30 天(149):不降級,但只換算成約 26 天買房(149 ÷ 每天 499/90),不是 30 天
-    const b = extendPlan({ plan: "buy", until: "2026-10-11T00:00:00Z" }, { plan: "rent", days: 30, price: 149 }, now);
-    expect(b.plan).toBe("buy");
-    const bDays = (Date.parse(b.until) - Date.parse("2026-10-01T00:00:00Z")) / 86400_000;
-    expect(bDays).toBeGreaterThan(10 + 26);
-    expect(bDays).toBeLessThan(10 + 27.5);
-    // 租屋剩 90 天時買買房 90 天:剩下的租屋折成約 63 天買房(349 對 499),不是 90 天
-    const u = extendPlan({ plan: "rent", until: "2026-12-30T00:00:00Z" }, { plan: "buy", days: 90, price: 499 }, now);
-    const uDays = (Date.parse(u.until) - Date.parse("2026-10-01T00:00:00Z")) / 86400_000;
-    expect(u.plan).toBe("buy");
-    expect(uDays).toBeGreaterThan(90 + 62);
-    expect(uDays).toBeLessThan(90 + 64);
-    // 過期的舊方案不疊加
-    expect(extendPlan({ plan: "rent", until: "2026-01-01T00:00:00Z" }, { plan: "rent", days: 30 }, now).until).toBe("2026-10-31T00:00:00.000Z");
+    expect(extendPlan({ plan: "free", until: null }, { days: 30 }, now)).toEqual({ plan: "pro", until: "2026-10-31T00:00:00.000Z" });
+    expect(extendPlan({ plan: "pro", until: "2026-10-11T00:00:00Z" }, { days: 90 }, now).until).toBe("2027-01-09T00:00:00.000Z");
+    expect(extendPlan({ plan: "pro", until: "2026-01-01T00:00:00Z" }, { days: 30 }, now).until).toBe("2026-10-31T00:00:00.000Z");
+  });
+  it("90 天每天最便宜;60 天(誘餌)每天不比 30 天便宜", () => {
+    const perDay = (id: string) => {
+      const o = OFFERS.find((x) => x.id === id)!;
+      return o.price / o.days;
+    };
+    expect(perDay("pro90")).toBeLessThan(perDay("pro30"));
+    expect(perDay("pro60")).toBeGreaterThanOrEqual(perDay("pro30"));
+    expect(OFFERS.filter((o) => "best" in o && o.best).map((o) => o.id)).toEqual(["pro90"]);
   });
 });
 
@@ -114,9 +111,9 @@ describe("免費版(公開模式)", () => {
 
   it("前端送什麼都改不了方案:沒有讓使用者改方案的 API", async () => {
     for (const [path, init] of [
-      ["/api/me", { method: "PUT", body: JSON.stringify({ plan: "buy" }) }],
-      ["/api/account", { method: "PATCH", body: JSON.stringify({ plan: "buy", plan_until: "2099-01-01" }) }],
-      ["/api/ingest/plan", json({ email: "u11@example.com", offer: "buy90", ref: "self" })],
+      ["/api/me", { method: "PUT", body: JSON.stringify({ plan: "pro" }) }],
+      ["/api/account", { method: "PATCH", body: JSON.stringify({ plan: "pro", plan_until: "2099-01-01" }) }],
+      ["/api/ingest/plan", json({ email: "u11@example.com", offer: "pro90", ref: "self" })],
     ] as const) {
       const r = await pub(path, 11, init);
       expect([401, 404, 405]).toContain(r.status);
@@ -127,18 +124,18 @@ describe("免費版(公開模式)", () => {
 
 describe("開通與取消(bearer)", () => {
   it("沒金鑰或金鑰錯 401;不認得的 email 404;參數不對 400", async () => {
-    expect((await pub("/api/ingest/plan", null, json({ email: "u12@example.com", offer: "rent30", ref: "x" }))).status).toBe(401);
-    expect((await ingest("/api/ingest/plan", { email: "u12@example.com", offer: "rent30", ref: "x" }, "wrong")).status).toBe(401);
-    expect((await ingest("/api/ingest/plan", { email: "nobody@example.com", offer: "rent30", ref: "x" })).status).toBe(404);
+    expect((await pub("/api/ingest/plan", null, json({ email: "u12@example.com", offer: "pro30", ref: "x" }))).status).toBe(401);
+    expect((await ingest("/api/ingest/plan", { email: "u12@example.com", offer: "pro30", ref: "x" }, "wrong")).status).toBe(401);
+    expect((await ingest("/api/ingest/plan", { email: "nobody@example.com", offer: "pro30", ref: "x" })).status).toBe(404);
     expect((await ingest("/api/ingest/plan", { email: "u12@example.com", offer: "forever", ref: "x" })).status).toBe(400);
   });
 
   it("開通後限制解除;同一個 ref 重送不重複加天數", async () => {
-    const r = await ingest("/api/ingest/plan", { email: "U12@example.com", offer: "rent30", ref: "order-1" });
+    const r = await ingest("/api/ingest/plan", { email: "U12@example.com", offer: "pro30", ref: "order-1" });
     expect(r.status).toBe(201);
     const first = await me(12);
-    expect(first).toMatchObject({ plan: "rent", ent: { notes: null, places: 5, tour: true, saleDetail: false } });
-    expect(await (await ingest("/api/ingest/plan", { email: "u12@example.com", offer: "rent30", ref: "order-1" })).json()).toEqual({ duplicate: true });
+    expect(first).toMatchObject({ plan: "pro", ent: { notes: null, places: 5, tour: true, marketDetail: true } });
+    expect(await (await ingest("/api/ingest/plan", { email: "u12@example.com", offer: "pro30", ref: "order-1" })).json()).toEqual({ duplicate: true });
     expect((await me(12)).until).toBe(first.until);
     for (let i = 1; i <= 4; i++) expect((await note(12, i)).status).toBe(201);
     expect((await place(12, 1)).status).toBe(201);
@@ -147,8 +144,9 @@ describe("開通與取消(bearer)", () => {
     const rm = (await (await pub("/api/market/at?city=台北市&district=大安區&kind=獨立套房", 12)).json()) as { detail_locked?: boolean; market: { comparables: unknown[] } };
     expect(rm.detail_locked).toBeUndefined();
     expect(rm.market.comparables.length).toBeGreaterThan(0);
-    const s = (await (await pub("/api/market/sale/at?city=台北市&district=大安區", 12)).json()) as { detail_locked?: boolean };
-    expect(s.detail_locked).toBe(true); // 買賣明細是買房方案
+    const s = (await (await pub("/api/market/sale/at?city=台北市&district=大安區", 12)).json()) as { detail_locked?: boolean; market: { comparables: unknown[] } };
+    expect(s.detail_locked).toBeUndefined();
+    expect(s.market.comparables.length).toBeGreaterThan(0);
   });
 
   it("退款取消:扣回天數回到免費;重送不扣兩次;多的筆記還看得到但不能再新增", async () => {
@@ -167,7 +165,7 @@ describe("開通與取消(bearer)", () => {
   });
 
   it("到期就自動回免費(不靠排程)", async () => {
-    await env.DB.prepare("UPDATE users SET plan = 'buy', plan_until = '2020-01-01T00:00:00Z' WHERE id = 13").run();
+    await env.DB.prepare("UPDATE users SET plan = 'pro', plan_until = '2020-01-01T00:00:00Z' WHERE id = 13").run();
     expect((await me(13)).plan).toBe("free");
   });
 });
