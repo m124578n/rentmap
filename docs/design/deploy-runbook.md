@@ -81,7 +81,16 @@ npx wrangler deploy
 2. 先 `npm run data:refresh -- --plan` 看會跑什麼。
 3. `npm run data:refresh`:依來源分三條線平行跑(TDX、政府資料、OSM),每項各自寫 log、結束印摘要;單項失敗用 `--only=<項目>` 重跑。
    - 順序沒有硬性依賴;通勤至少要 `bus`(公車網路),`tra.json`、`mrt-times.json` 已在 git 裡(隨部署上去)。
-   - 每項多久:以家裡實測為準(log 在 `data/logs/refresh-*`),第一次建議挑使用者不在用的時段跑。
+   - 每項多久(家裡 2026-09-30 / 10-01 實測,推到本機;推到正式站再加網路時間):
+     | 項目 | 下載原始檔 | 匯入 | 備註 |
+     |---|---|---|---|
+     | bus | 7 個縣市約 5 分鐘;被 TDX 429 時退避最多再 5 分鐘 | 北區 121k 站約 1 分鐘,其他區各 10–30 秒 | 原始檔快取 `data/tdx/`,一個月內重跑不下載 |
+     | tra、metro | 各 1–2 分鐘 | 只寫 `public/*.json` | 要 commit |
+     | rent、sale | 4 季 zip 約 5 分鐘(兩者共用) | rent 148k 筆約 1 分鐘;sale 155k 筆約 25 秒 | zip 快取 `data/lvr/` |
+     | hazards | 7 個縣市 7z 約 10 分鐘 + 台南液化 | build 2 分鐘、推 107k 多邊形約 1 分鐘 | |
+     | pois | Geofabrik 台灣檔 327 MB:20 分鐘到 2 小時(對方限速,昨晚 30–70 KB/s) | 抽取 1.5 分鐘、定位台中高雄 1 分鐘、四區匯入約 1 分鐘 | 檔案 25 天內不重抓 |
+     | crime | 台北市點位第一次要 Nominatim 轉座標 20–40 分鐘(之後有快取) | 幾秒 | 警政署全國資料靠內政部平台,它停機時雙北以外沿用上次 |
+     全部冷跑大約 1–3 小時,瓶頸是 Geofabrik 下載;第一次建議挑使用者不在用的時段跑。
 4. 跑完後,`tra.json`、`mrt-times.json`、`crime-districts.json` 若有變,commit 並重新 deploy(這三個檔是靜態檔,跟著程式上去)。
 5. 驗收:登入 → `/status`(資料狀態頁)切四個生活圈看有沒有紅的;地圖輸入一個地址看報告;不登入開 `/area`、`/sitemap.xml` 看各區行情有數字(實價登錄推上去之前各區都是 noindex、sitemap 只有介紹頁與條款)。
 
