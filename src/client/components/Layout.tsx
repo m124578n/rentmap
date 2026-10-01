@@ -13,6 +13,11 @@ import { RequirementsDialogHost } from "@/features/fit/RequirementsDialog";
 import { AboutPage } from "@/routes/AboutPage";
 import { LegalLinks } from "@/features/legal/LegalLinks";
 
+/** index.html 裡預先產生的介紹頁有留在畫面上(scripts/prerender.mjs 的行內 script 設的) */
+/** localStorage 的 key,跟 scripts/prerender.mjs 的行內 script 同一個名字 */
+const SIGNED_IN_HINT = "loka_in";
+const prerendered = (window as { __PRERENDERED__?: boolean }).__PRERENDERED__ === true;
+
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
   const { user, enabled, dev, loading, login, devLogin, logout, consentNeeded } = useAuth();
@@ -21,6 +26,17 @@ export function Layout() {
   const { theme, toggle } = useTheme();
   const params = new URLSearchParams(window.location.search);
   const loginErr = params.get("login");
+  // 「登入過」的旗標(localStorage,不是 session;隱私權政策只說用 session cookie,所以不用 cookie):
+  // 有它的話 index.html 一開始就把預先產生的介紹頁清掉,登入的人不會先閃一下介紹頁
+  useEffect(() => {
+    if (loading) return;
+    try {
+      if (user) localStorage.setItem(SIGNED_IN_HINT, "1");
+      else localStorage.removeItem(SIGNED_IN_HINT);
+    } catch {
+      // 無痕 / 封鎖儲存:頂多閃一下介紹頁
+    }
+  }, [user, loading]);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -86,7 +102,7 @@ export function Layout() {
               </button>
             ) : (
               <button onClick={login} className="btn-primary" disabled={!enabled}>
-                {enabled ? "Google 登入" : "尚未設定登入"}
+                {enabled || loading ? "Google 登入" : "尚未設定登入"}
               </button>
             ))
           )}
@@ -96,10 +112,11 @@ export function Layout() {
       <main className="min-h-0 flex-1 overflow-auto">
         {loginErr === "denied" && <p className="card m-4 border-red-300 text-red-700">這個 Google 帳號不在白名單裡。</p>}
         {loginErr === "failed" && <p className="card m-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
-        {loading ? (
-          <p className="p-4 text-neutral-500">載入中…</p>
-        ) : legal ? (
+        {legal ? (
           <Outlet />
+        ) : loading ? (
+          // 預先產生的介紹頁(scripts/prerender.mjs)還在畫面上時,等 /api/me 的這段先照畫介紹頁,不要閃「載入中」
+          prerendered ? <AboutPage /> : <p className="p-4 text-neutral-500">載入中…</p>
         ) : user && consentNeeded.length > 0 ? (
           <ConsentGate needed={consentNeeded} onLogout={logout} />
         ) : user ? (

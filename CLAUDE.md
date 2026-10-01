@@ -118,5 +118,5 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - maplibre v6 的 `map.isStyleLoaded()` 在任何 source 還在載入時也回 false:資料晚到時要等 `idle` 再畫(MapView 的 `whenReady`),直接 return 會永遠畫不上去。
 - 離線:`public/sw.js` 只在正式建置註冊(`vite preview` 才測得到,dev 沒有)。改了快取策略要把檔內 `VERSION` 加一,舊快取才會清掉。
 - 彙總 API(`/api/commute`、`/api/nearby/summary`、`/api/market`、`/api/hazards/summary`)走 `src/worker/cache.ts` 的 Cache API,key 帶資料版本(筆數 + 最大 version / id / updated_at)。**新增會影響結果的資料來源時要把它加進 key**,不然會回舊的;回應 header `x-cache: hit|miss`。`/api/properties` 用 ETag(304)。
-- 部署時把 `index.html` 的 `og:image` 改成正式網域的絕對網址(社群平台不吃相對路徑)。
+- SEO:`npm run build` 最後一步 `scripts/prerender.mjs` 用 Playwright 把介紹頁、條款頁預先產成 HTML(不跑 JS 的 AI 爬蟲才讀得到)並產 `sitemap.xml`;要有 Chromium(沙盒 `PW_CHROMIUM=/opt/pw-browsers/chromium`,只想快速建置 `SKIP_PRERENDER=1`)。正式網域 `lokanote.shunzz.com` 直接寫在 `index.html`(canonical、og:url、og:image、JSON-LD)與 prerender.mjs,換網域兩邊一起改。介紹頁的常見問題同一份資料出畫面與 FAQPage 結構化資料。
 - 型別:bindings 從 `worker-configuration.d.ts`(`npm run types` 產生)的 `Cloudflare.Env` 來,機密欄位在 `src/worker/env.ts` 用 `declare global` 補。

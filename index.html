@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>落腳筆記|租屋、買房、搬家前,先看這個地址</title>
     <meta name="description" content="落腳筆記:輸入地址就算好上下班通勤、附近租金與房價行情、每月支出(房租或房貸)、生活機能、淹水與治安;看中的房子存成筆記,收藏、排看房路線、並排比較。租屋、買房、搬家前都適用。" />
+    <!-- 網址都寫正式網域(社群平台、搜尋引擎不吃相對路徑);scripts/prerender.mjs 會把條款頁的 canonical / og:url 換成各自的網址 -->
+    <link rel="canonical" href="https://lokanote.shunzz.com/" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -18,10 +20,37 @@
     <meta property="og:site_name" content="落腳筆記 Loka Note" />
     <meta property="og:title" content="落腳筆記|租屋、買房、搬家前,先看這個地址" />
     <meta property="og:description" content="通勤、行情、每月支出、生活機能、淹水與治安,輸入地址就幫你查好。租屋、買房、搬家前都適用。" />
-    <meta property="og:image" content="/og.png" />
+    <meta property="og:url" content="https://lokanote.shunzz.com/" />
+    <meta property="og:image" content="https://lokanote.shunzz.com/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://lokanote.shunzz.com/#website",
+            "name": "落腳筆記",
+            "alternateName": ["Loka Note", "lokanote"],
+            "url": "https://lokanote.shunzz.com/",
+            "inLanguage": "zh-Hant-TW"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "落腳筆記",
+            "alternateName": "Loka Note",
+            "url": "https://lokanote.shunzz.com/",
+            "applicationCategory": "LifestyleApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "zh-Hant-TW",
+            "isPartOf": { "@id": "https://lokanote.shunzz.com/#website" },
+            "description": "輸入地址就算好上下班通勤、附近租金與房價行情、每月支出(房租或房貸)、生活機能、淹水與治安的找房筆記。租屋、買房、搬家前都適用。"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

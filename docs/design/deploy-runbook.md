@@ -53,10 +53,12 @@
 
 ## 4. 程式裡要改的地方
 
-- [ ] `index.html` 的 `og:image` 改成絕對網址 `https://lokanote.shunzz.com/og.png`(社群平台不吃相對路徑);要的話加 `og:url`、`<link rel="canonical">`。
+- [x] `index.html` 的 canonical、`og:url`、`og:image`、JSON-LD 已經寫正式網域 `https://lokanote.shunzz.com`(2026-10-01)。
+- [ ] `npm run build` 會跑 `scripts/prerender.mjs`(介紹頁、條款頁預先產 HTML + `sitemap.xml`),建置的機器要有 Playwright 的 Chromium。建完確認 `dist/client/index.html` 的 `#root` 裡有介紹頁文字。
+- [ ] 上線後:Google Search Console、Bing Webmaster Tools(ChatGPT 搜尋 / Copilot 用 Bing 的索引)驗證網域、提交 `https://lokanote.shunzz.com/sitemap.xml`。
 - [ ] `public/og.png`:介紹頁文案有改就先 `node scripts/og.mjs` 重產。
 - [ ] `public/sw.js`:改過快取策略就把 `VERSION` 加一(目前 `v1`),舊快取才會清掉。第一次上線不用動。
-- [ ] `public/robots.txt`:目前允許 `/`、`/about`,擋 `/api/`、`/p/`;條款頁 `/legal/*` 要不要收錄可以順便決定。
+- [ ] `public/robots.txt`:允許 `/`、`/about`、`/legal/`,擋 `/api/`、`/p/`,AI 爬蟲目前都不擋(要擋訓練用的見檔內註解)。
 
 ## 5. 建置與部署
 

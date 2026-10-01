@@ -26,7 +26,7 @@ import { LegalLinks } from "@/features/legal/LegalLinks";
  * 插圖是純 CSS / SVG,不放圖檔。
  */
 export function AboutPage() {
-  const { user, enabled, dev, login, devLogin } = useAuth();
+  const { user, enabled, dev, loading, login, devLogin } = useAuth();
   useEffect(() => {
     const prev = document.title;
     document.title = "落腳筆記|租屋、買房、搬家前,先看這個地址";
@@ -44,8 +44,9 @@ export function AboutPage() {
       本機登入
     </button>
   ) : (
+    // 載入中也顯示「用 Google 登入」:跟預先產生的 HTML 一致,不閃字(scripts/prerender.mjs)
     <button onClick={login} className="btn-primary px-5 py-2.5 text-base" disabled={!enabled}>
-      {enabled ? "用 Google 登入" : "尚未設定登入"}
+      {enabled || loading ? "用 Google 登入" : "尚未設定登入"}
     </button>
   );
 
@@ -150,6 +151,20 @@ export function AboutPage() {
         </ul>
       </section>
 
+      {/* 常見問題:畫面上的內容與 FAQPage 結構化資料同一份(搜尋引擎、AI 搜尋會直接引用問答) */}
+      <section className="mt-12">
+        <h2 className="mb-3 text-xl font-semibold">常見問題</h2>
+        <div className="grid gap-2">
+          {FAQ.map((f) => (
+            <details key={f.q} className="card group">
+              <summary className="cursor-pointer font-medium">{f.q}</summary>
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{f.a}</p>
+            </details>
+          ))}
+        </div>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqJsonLd() }} />
+      </section>
+
       <section className="mt-12 rounded-2xl bg-emerald-600 px-6 py-8 text-center text-white dark:bg-emerald-800">
         <h2 className="text-xl font-semibold">先看一個地址</h2>
         <p className="mt-1 text-sm text-emerald-50">可以加到手機主畫面,看房途中收訊不好也能打開收藏與路線。</p>
@@ -160,6 +175,42 @@ export function AboutPage() {
       <LegalLinks className="mt-2 justify-center" />
     </div>
   );
+}
+
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "落腳筆記是什麼?",
+    a: "輸入一個地址,就幫你查好上下班通勤時間、附近的租金與房價行情、每月實際支出(房租或房貸)、生活機能、淹水與治安。看中的房子可以存成筆記、收藏、排看房路線、並排比較。租屋、買房、搬家前,或只是想多了解自己住的地方都能用。",
+  },
+  {
+    q: "目前可以查哪些地方?",
+    a: `${OPEN_REGIONS.map((r) => r.label).join("、")}。以生活圈為單位,一次看一個生活圈。`,
+  },
+  {
+    q: "通勤時間怎麼算?",
+    a: "用交通部 TDX 的公車路線與班表、捷運站間時間、台鐵時刻,轉乘一次內,依出發時段估等車時間,走路與 YouBike 也算進去;也可以看騎車、開車大約多久。都是估計,出發前請再確認。",
+  },
+  {
+    q: "租金和房價行情從哪裡來?",
+    a: "內政部不動產租賃與買賣實價登錄。比較同一區、同建物型態、坪數相近的成交紀錄,看開價比行情高還低;買賣行情不含預售屋、親友等特殊交易與整批多棟的交易。",
+  },
+  {
+    q: "淹水、治安資料準嗎?",
+    a: "淹水潛勢來自經濟部水利署,土壤液化來自臺北市與臺南市政府,治安來自警察機關的統計。這些資料只看得出大概位置與趨勢,實際情形請以官方公告為準。",
+  },
+  {
+    q: "我存的筆記別人看得到嗎?",
+    a: "看不到,筆記只有你自己看得到。不存照片或檔案,原始刊登頁面只存網址;帳號可以隨時匯出或刪除。",
+  },
+];
+
+function faqJsonLd() {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+  };
+  return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
 function Feature({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
