@@ -6,7 +6,7 @@ import type { Requirements } from "@shared/fit";
 import type { StatusResponse } from "@shared/status";
 import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type NearbySummary, type NearbySummaryWire } from "@shared/poi";
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
-import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
+import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type DriveAtResponse, type DriveMatrix, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { ConsentNeed } from "@shared/legal";
 import type { SaleMarketResponse } from "@shared/sale";
 
@@ -72,6 +72,9 @@ export const api = {
 
   commute: (when: CommuteWhen, bike = true, region = "north", radius = 400) =>
     req<CommuteMatrix>(`/api/commute?radius=${radius}&region=${region}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
+  /** 機車 / 開車:道路圖最短時間(has_roads = false 時前端改用距離估) */
+  commuteDrive: (mode: "scooter" | "car", when: CommuteWhen, region = "north") => req<DriveMatrix>(`/api/commute/drive?mode=${mode}&region=${region}&${whenParams(when)}`),
+  driveAt: (lat: number, lng: number, when: CommuteWhen) => req<DriveAtResponse>(`/api/commute/drive/at?lat=${lat}&lng=${lng}&${whenParams(when)}`),
   commuteTrips: (q: { lat: number; lng: number; placeId: number; radius: number; when: CommuteWhen; bike: boolean }) =>
     req<TripsResponse>(`/api/commute/trips?lat=${q.lat}&lng=${q.lng}&place_id=${q.placeId}&radius=${q.radius}&${whenParams(q.when)}${q.bike ? "" : "&bike=0"}`),
 

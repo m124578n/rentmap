@@ -19,7 +19,7 @@ export const COMMUTE_DEFAULT: Record<CommuteSide, CommuteWhen> = {
 };
 export const whenParams = (w: CommuteWhen) => `day=${w.day}&time=${encodeURIComponent(w.time)}&dir=${w.dir}`;
 
-/** scooter / car 是前端用距離估的(shared/drive.ts),不是路網算的 */
+/** scooter / car:有道路圖時是 Worker 用道路圖算的最短時間(/api/commute/drive),沒有時前端用距離估(shared/drive.ts) */
 export type TripKind = "walk" | "bus" | "mrt" | "bus+bus" | "bus+mrt" | "mrt+bus" | "bike" | "bike+mrt" | "mrt+bike" | "scooter" | "car";
 export const TRIP_KIND_LABEL: Record<TripKind, string> = {
   walk: "步行",
@@ -109,6 +109,18 @@ export interface CommuteMatrix {
   has_bus: boolean;
   /** items[propertyId][placeId];null = 算不出(太遠、沒座標) */
   items: Record<string, Record<string, TripBrief | null>>;
+}
+
+/** GET /api/commute/drive:所有房源 × 我的地點,機車或開車(道路圖);has_roads = false 時 items 是空的,前端改用距離估 */
+export interface DriveMatrix extends CommuteMatrix {
+  has_roads: boolean;
+}
+
+/** GET /api/commute/drive/at:一個點到每個地點的機車 / 開車(面板用) */
+export interface DriveAtResponse {
+  when: CommuteWhen;
+  has_roads: boolean;
+  items: Record<string, { scooter: TripBrief | null; car: TripBrief | null }>;
 }
 
 /** 地圖「通勤」圖層:網格中心點到每個地點最快幾分(null = 搭不到);順序同 places */

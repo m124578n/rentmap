@@ -10,6 +10,7 @@
  *   npm run collect -- pois [--only=food,park] [--dry]    生活機能:OSM(Overpass)+ menmap 拉麵 → 推入(一個月一次)
  *   npm run collect -- hazards [--dry]                    災害潛勢(淹水、液化)多邊形 → 推入(先跑 python scripts/build_hazards.py)
  *   npm run collect -- crime [--years=3] [--dry]           臺北市竊盜點位(門牌轉座標)+ 雙北各區件數 → 推入 / public/crime-districts.json(每季一次)
+ *   npm run collect -- roads [--region=…] [--dry]          機車 / 開車道路圖 → 推入(先跑 python scripts/build_roads.py)
  *   npm run collect -- metro [--dry]                     下載捷運官方站間時間(TDX)→ public/mrt-times.json(進 git)
  *   npm run collect -- tra [--dry] [--date=YYYY-MM-DD]     下載台鐵車站與區間車時刻(TDX)→ public/tra.json(進 git)
  *   npm run collect -- grant <email> <pro30|pro60|pro90> <ref>   手動開通方案(收到匯款等;ref 是訂單編號,重送不會重複加)
@@ -120,6 +121,11 @@ async function main() {
     await runPois({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
     return;
   }
+  if (cmd === "roads") {
+    const { runRoads } = await import("./roads");
+    await runRoads({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
+    return;
+  }
   if (cmd === "hazards") {
     const { runHazards } = await import("./hazards");
     await runHazards({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
@@ -154,7 +160,7 @@ async function main() {
     if (!res.ok) process.exitCode = 1;
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect tra [--dry] | collect rent-stats [--dry] | collect sale-stats [--dry] | collect pois [--dry] | collect hazards [--dry] | collect crime [--dry] | collect grant <email> <offer> <ref> | collect revoke <ref>");
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect tra [--dry] | collect rent-stats [--dry] | collect sale-stats [--dry] | collect pois [--dry] | collect roads [--dry] | collect hazards [--dry] | collect crime [--dry] | collect grant <email> <offer> <ref> | collect revoke <ref>");
   process.exit(1);
 }
 

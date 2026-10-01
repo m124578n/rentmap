@@ -73,6 +73,8 @@ def main() -> None:
     args = sys.argv[1:]
     region = next((a[9:] for a in args if a.startswith("--region=")), None)
     download("--refresh" in args)
+    if "--download-only" in args:  # 道路圖步驟只要台灣檔
+        return
     spec = load_spec(region)
 
     # (key, value) → 類別;點類與線類分開

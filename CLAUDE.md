@@ -44,7 +44,8 @@ src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               routes/legal.ts 條款同意(consents 表;版本在 src/shared/legal.ts,全文在 client features/legal/docs.tsx,改內容要加版本號);routes/account.ts 匯出 / 刪除帳號
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
               transit/ 一個生活圈一份(loadBusNet / mrtGraph / loadBikes 都帶 region;房源與地點用 regionAt 依座標歸區);開新生活圈照 docs/design/2026-09-30-open-a-region.md
-              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段
+              transit/ 是通勤規劃(公車 + 捷運、轉乘一次內;依時段算等車、下班用 reverseNet 反向算):network.ts 公車網路整份進記憶體、mrt.ts 由 public/mrt.json 建捷運圖(站間時間用 public/mrt-times.json)、plan.ts 從目的地往回算、bike.ts 是 YouBike 騎乘段;
+              roads.ts 是機車 / 開車(道路圖整份進記憶體,最短時間在 src/shared/roads.ts;API 是 /api/commute/drive 與 /drive/at)
 src/shared/   Zod schema 與常數,前後端共用;**regions.ts 是生活圈與縣市定義(行政區、TDX / 實價登錄代碼、範圍、各縣市有哪些資料),新增縣市或判斷「某縣市有沒有某資料」一律走它**
 migrations/   D1 SQL(drizzle-kit 產生,不要手改)
 test/         vitest 跑在 workerd(@cloudflare/vitest-plugin)
@@ -71,6 +72,7 @@ collector/    家裡的採集 CLI(`npm run collect -- add <url> [--dry]`);source
 | `npm run collect -- pois [--region=north] [--only=food,park] [--dry] [--force]` | 生活機能(不給 `--region` = 所有已開放的生活圈依序跑):OSM 依生活圈一類一類抓(commit 只換該生活圈;平常先跑 `scripts/build_osm_pois.py` 離線抽,就不會打 Overpass) + menmap 拉麵 + 各市環保局垃圾車清運點(`--only=garbage`;台中、高雄要先跑 `scripts/locate_garbage.py`)+ YouBike 站點(`--only=youbike`)+ 嫌惡設施(加油站、變電所、快速道路、鐵道高架…)→ 每類覆蓋式推入 `pois`(一個月一次,全部約 15–20 分鐘;原始回應快取 `data/osm/`,中斷重跑會接著抓) |
 | `pip install py7zr pyshp pyproj` + `python scripts/build_hazards.py`,再 `npm run collect -- hazards [--dry] [--force]` | 災害潛勢(水利署淹水 7z SHP + 臺北市液化 GeoJSON + 雙北航空噪音防制區,依里公告對上里界 SHP)→ `data/hazard/hazards.json` → 覆蓋式推入 `hazard_zones`(資料幾年才更新一次;原始檔快取 `data/hazard/`) |
 | `npm run collect -- crime [--years=3] [--dry]` | 治安:臺北市警察局竊盜點位(住宅 / 機車 / 汽車)→ 巷或路段轉座標(Nominatim,快取 `data/geocode-cache.json`,第一次約 20–40 分鐘)→ 推入 `pois`(theft_*);雙北各區近一年件數 → `public/crime-districts.json`(**要 commit**)。每季一次,原始 CSV 快取 `data/crime/` |
+| `python scripts/build_roads.py` + `npm run collect -- roads [--region=…] [--dry]` | 機車 / 開車道路圖:從台灣 OSM 檔抽各生活圈車道,收縮成路口圖(北區約 23 萬路口、6.6 MB)→ `data/roads/{region}.bin` → base64 分段推進 `road_graphs`(段數齊才換版)。每月跟 pois 一起更新(`data:refresh` 的 roads 步驟) |
 | `npm run collect -- metro [--dry]` | 從 TDX 下載捷運官方站間時間 → `public/mrt-times.json`(進 git;路網有變才需要重跑。淡海、安坑輕軌 TDX 沒有,用距離估) |
 | `npm run collect -- tra [--dry] [--date=YYYY-MM-DD]` | 從 TDX 下載台鐵車站 + 某平日(預設下週三)的區間車時刻 → `public/tra.json`(**要 commit**;Worker 把台鐵併進捷運圖,站名前綴「台鐵」、350m 內可轉捷運)。台鐵改點才要重跑,原始檔快取 `data/tdx/tra-*.json`(要重抓先刪) |
 | `npm run collect -- grant <email> <pro30\|pro60\|pro90> <ref>` / `revoke <ref>` | 手動開通 / 取消方案(綠界串好前用;ref 是訂單編號或匯款備註,同一個 ref 只算一次;推到 `.env` 的 `RENTMAP_API`) |
@@ -110,6 +112,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
 - `.ps1` 一定要存成 **UTF-8 with BOM**:PowerShell 5.1 沒 BOM 會用 ANSI 讀,中文字串直接讓腳本語法錯誤(register_task.ps1 踩過)。
 - Overpass 常常連不上:生活機能預設走離線抽取,`python scripts/build_osm_pois.py`(`data:refresh` 的 pois 步驟會先跑)從 Geofabrik 的台灣 `.osm.pbf` 產 `data/osm/` 的快取檔,`collect -- pois` 就不會打 Overpass。類別 / 分塊 / 檔名由 `scripts/osm-spec.ts` 依 collector 的定義產生,不要兩邊各寫一份。
+- 機車 / 開車的道路圖格式在 `src/shared/roads.ts`(decodeRoads)與 `scripts/build_roads.py` 兩邊,改一邊要改另一邊;類別順序 `ROAD_CLASSES` 也要一致。時速是「類別時速 × 生活圈 / 尖峰係數」(`drive.ts` 的 `roadFactor`),國道與快速道路只乘係數平方根。
 - 災害多邊形是一個生活圈載一份(`loadZones(DB, region)`);新增讀 hazard_zones 的程式不要整張表載進記憶體。
 - 採集不要手動開兩份:覆蓋式匯入與解壓唯讀檔會互撞(2026-09-30 踩過)。一律走 `npm run data:refresh`,它有執行鎖。
 - TDX 同一天連跑公車 + 台鐵 + 捷運會 429:`collector/lib/tdx.ts` 的 `tdxGet` 會退避重試(最多約 5 分鐘),新的 TDX 採集一律用它,不要自己 fetch。

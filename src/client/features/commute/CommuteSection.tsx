@@ -335,10 +335,23 @@ function TripDetail({ trip }: { trip: Trip }) {
   );
 }
 
-/** 機車 / 開車(距離估,shared/drive.ts):大眾運輸之外的參考,中南部多半騎車 */
-function DriveLine({ lat, lng, place, when }: { lat: number; lng: number; place: { lat: number; lng: number }; when: CommuteWhen }) {
+/**
+ * 機車 / 開車:大眾運輸之外的參考,中南部多半騎車。有道路圖就用後端算的最短時間(/api/commute/drive/at,同一個點的各地點共用一次查詢),
+ * 沒有就用直線距離估(shared/drive.ts)。
+ */
+function DriveLine({ lat, lng, place, when }: { lat: number; lng: number; place: { id: number; lat: number; lng: number }; when: CommuteWhen }) {
   const region = useRegion();
   const m = haversine(lat, lng, place.lat, place.lng);
+  const q = useQuery({ queryKey: ["drive-at", lat, lng, when.day, when.time, when.dir], queryFn: () => api.driveAt(lat, lng, when), staleTime: 5 * 60_000, retry: false });
+  const r = q.data?.has_roads ? q.data.items[place.id] : undefined;
+  if (r && (r.scooter || r.car))
+    return (
+      <p className="px-1.5 pb-0.5 text-[11px] text-neutral-500" title={`OpenStreetMap 道路圖的最短時間(單行、國道機車禁行有算),依${isPeak(when) ? "尖峰" : "離峰"}平均時速;含牽車 / 停車,沒有即時路況,不是導航`}>
+        機車 {r.scooter ? `約 ${r.scooter.total_min} 分` : "—"} · 開車 {r.car ? `約 ${r.car.total_min} 分` : "—"} · {(r.scooter ?? r.car)!.km} km
+      </p>
+    );
+  // 跨生活圈(台北的房子 vs 高雄的地點)騎車開車都沒意義,不顯示
+  if (q.isLoading || m > 100_000) return null;
   return (
     <p className="px-1.5 pb-0.5 text-[11px] text-neutral-500" title={`直線 ${(m / 1000).toFixed(1)} km × 1.3 當道路距離,依${isPeak(when) ? "尖峰" : "離峰"}平均時速估;不是導航`}>
       機車約 {driveMin("scooter", m, when, region.key)} 分 · 開車約 {driveMin("car", m, when, region.key)} 分 · {roadKm(m)} km(估)

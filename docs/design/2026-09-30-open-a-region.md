@@ -27,7 +27,7 @@
 1. `src/shared/regions.ts`：`REGIONS.taichung` 的 `cities` 放 `["台中市"]`、`planned` 清空、`enabled: true`；有資料的項目加進 `CITY_INFO.台中市.coverage`。
 2. `npm run check`、`npm test`（`test/collector/regions.test.ts` 的開放清單要跟著改）。
 3. 本機開 dev，先跑 `node scripts/verify-regions.mjs taichung`（切到該生活圈、右鍵市中心出報告、截圖到 `data/verify-*.png`、列出頁面錯誤與面板文字）；再自己看一遍：地圖左上會出現「找哪裡」切換；切到台中確認：地圖範圍、行政區選單、地址搜尋、通勤（公車 + 機車估）、行情、生活機能。
-4. 機車時速：`src/shared/drive.ts` 的 `SPEED.taichung` 是估的，有實測再調。
+4. 機車 / 開車:道路圖(`scripts/build_roads.py` → `collect -- roads`)要涵蓋新的生活圈(外框在 `build_roads.py` 的 `REGIONS`,跟 `regions.ts` 一致);時速係數 `src/shared/drive.ts` 的 `SPEED.*` 是估的,有實測再調。
 
 ## 3. 已知要先處理的
 
@@ -82,7 +82,7 @@
 
 還沒做:
 
-- 機車時速 `SPEED.*` 是估的,沒有實測。
+- 機車 / 開車已改用道路圖(2026-10-01);各類道路時速與生活圈係數是估的,沒有實測。
 - ~~治安各區件數(雙北以外)~~:2026-10-01 內政部平台恢復後跑完,五個縣市的 `coverage` 已加 `crimeDistricts`。
 - 桃園、基隆的垃圾車;雙北、台南以外的液化;雙北以外的治安點位、航空噪音 → 沒有來源,介面標「沒有資料」。
 

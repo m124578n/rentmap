@@ -88,6 +88,9 @@ describe("免費版(公開模式)", () => {
     expect((await pub("/api/commute?time=09:00", 11)).status).toBe(402);
     expect((await pub("/api/commute", 11)).status).toBe(200);
     expect((await pub("/api/commute/grid?w=121.5&s=25&e=121.52&n=25.02&dir=from", 11)).status).toBe(402);
+    expect((await pub("/api/commute/drive?mode=scooter&dir=from&time=18:00", 11)).status).toBe(402);
+    expect((await pub("/api/commute/drive?mode=scooter", 11)).status).toBe(200);
+    expect((await pub("/api/commute/drive/at?lat=25&lng=121.5&dir=from&time=18:00", 11)).status).toBe(402);
   });
 
   it("行情只給中位數,成交明細拿掉(租屋、買賣)", async () => {
@@ -193,6 +196,8 @@ describe("沒登入一律擋(所有使用者 API)", () => {
     ["GET", "/api/commute"],
     ["GET", "/api/commute/trips?lat=25&lng=121&place_id=1"],
     ["GET", "/api/commute/grid?w=121.5&s=25&e=121.52&n=25.02"],
+    ["GET", "/api/commute/drive?mode=car"],
+    ["GET", "/api/commute/drive/at?lat=25&lng=121"],
     ["POST", "/api/tour"],
     ["GET", "/api/requirements"],
     ["PUT", "/api/requirements"],

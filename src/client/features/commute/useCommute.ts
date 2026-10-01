@@ -12,7 +12,8 @@ import { usePlan } from "@/lib/plan";
 /**
  * 所有房源 × 我的地點 的通勤;沒有地點就不查。
  *   大眾運輸:後端算(公車 + 捷運 + 台鐵,轉乘一次內)
- *   機車 / 開車:前端用距離估(shared/drive.ts),做成同一個形狀,篩選 / 排序 / 符合度 / 支出照用
+ *   機車 / 開車:後端用道路圖算最短時間(/api/commute/drive);還沒匯入道路圖時前端用距離估(shared/drive.ts)。
+ *   兩種都做成同一個形狀,篩選 / 排序 / 符合度 / 支出照用
  * side 省略 = 篩選列目前選的(上班 / 下班);時段設定改了會重查。
  */
 export function useCommute(side?: CommuteSide) {
@@ -31,11 +32,20 @@ export function useCommute(side?: CommuteSide) {
     enabled: list.length > 0 && mode === "transit" && !locked,
     staleTime: 5 * 60_000,
   });
-  const props = useQuery({ queryKey: ["properties"], queryFn: api.listProperties, enabled: list.length > 0 && mode !== "transit" && !locked });
+  const drive = useQuery({
+    queryKey: ["commute-drive", mode, region.key, sig, when.day, when.time, when.dir],
+    queryFn: () => api.commuteDrive(mode as "scooter" | "car", when, region.key),
+    enabled: list.length > 0 && mode !== "transit" && !locked,
+    staleTime: 5 * 60_000,
+  });
+  // 道路圖沒匯入(或查失敗)才需要房源座標自己估
+  const fallback = mode !== "transit" && !locked && (drive.isError || drive.data?.has_roads === false);
+  const props = useQuery({ queryKey: ["properties"], queryFn: api.listProperties, enabled: list.length > 0 && fallback });
   const matrix = useMemo((): CommuteMatrix | undefined => {
     if (locked) return undefined;
     if (mode === "transit") return q.data;
-    if (!props.data) return undefined;
+    if (drive.data?.has_roads) return drive.data;
+    if (!fallback || !props.data) return undefined;
     const items: CommuteMatrix["items"] = {};
     for (const p of props.data.items) {
       if (p.lat == null || p.lng == null) continue;
@@ -44,8 +54,8 @@ export function useCommute(side?: CommuteSide) {
       items[p.id] = row;
     }
     return { radius: 0, when, has_bus: true, items };
-  }, [locked, mode, q.data, props.data, sig, when.day, when.time, when.dir, region.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locked, mode, q.data, drive.data, fallback, props.data, sig, when.day, when.time, when.dir, region.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctx: CommuteCtx = useMemo(() => ({ matrix, placeIds: list.map((p) => p.id) }), [matrix, sig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const loading = !locked && (mode === "transit" ? q.isLoading : props.isLoading);
+  const loading = !locked && (mode === "transit" ? q.isLoading : drive.isLoading || (fallback && props.isLoading));
   return { places: list, placesLoaded: places.isSuccess, matrix, ctx, when, mode, locked, isLoading: loading && list.length > 0 };
 }

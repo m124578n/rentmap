@@ -357,3 +357,19 @@ export const hazardZones = sqliteTable(
   },
   (t) => [index("hazard_zones_kind_idx").on(t.kind)],
 );
+
+/**
+ * 機車 / 開車的道路圖(scripts/build_roads.py 產生、`collect -- roads` 推入;格式見 src/shared/roads.ts)。
+ * 一個生活圈一份二進位,base64 切成約 900KB 一段存(D1 單列有大小上限);commit 時刪掉同生活圈的其他 version。
+ */
+export const roadGraphs = sqliteTable(
+  "road_graphs",
+  {
+    region: text("region").notNull(),
+    version: text("version").notNull(),
+    chunk: integer("chunk").notNull(),
+    total: integer("total").notNull(),
+    data: text("data").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.region, t.version, t.chunk] })],
+);

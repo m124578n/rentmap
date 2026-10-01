@@ -1,6 +1,6 @@
 /**
- * 機車 / 開車通勤(初版估算,方向文件 §7-2):直線距離 × 繞路係數 ÷ 平均時速 + 牽車 / 找車位的固定時間。
- * 不接路徑引擎(Worker 不抓外站;之後要準再換),所以只給「大概幾分」,介面一律標「估」。
+ * 機車 / 開車通勤。有道路圖(shared/roads.ts,本機從 OSM 建、推進 D1)時由 Worker 算最短時間(/api/commute/drive);
+ * 這裡是沒有道路圖時的備用估算:直線距離 × 繞路係數 ÷ 平均時速 + 牽車 / 找車位的固定時間,介面標「估」。
  * 時速分尖峰 / 離峰,生活圈可以各自覆寫(中南部路比較空)。
  */
 import type { CommuteWhen, TripBrief } from "./trip";
@@ -21,7 +21,15 @@ const SPEED: Record<RegionKey, Record<DriveMode, [number, number]>> = {
   kaohsiung: { scooter: [28, 34], car: [25, 35] },
 };
 /** 出門牽車、到了停車走過去(分);開車多算找車位 */
-const OVERHEAD: Record<DriveMode, number> = { scooter: 4, car: 8 };
+export const OVERHEAD: Record<DriveMode, number> = { scooter: 4, car: 8 };
+
+/** 道路圖的類別時速(shared/roads.ts 的 CLASS_KMH)是以這個平均時速為準(中南部離峰) */
+const ROAD_REF_KMH: Record<DriveMode, number> = { scooter: 34, car: 36 };
+/** 道路圖的時間係數:生活圈 × 尖峰 / 離峰,跟上面的平均時速表同一套比例(北區、尖峰比較慢) */
+export function roadFactor(mode: DriveMode, when: Pick<CommuteWhen, "day" | "time">, region: RegionKey = "north") {
+  const [peak, off] = SPEED[region][mode];
+  return ROAD_REF_KMH[mode] / (isPeak(when) ? peak : off);
+}
 /** 每公里油錢(元,估):機車約 1、汽車約 3;不含停車費 */
 export const DRIVE_COST_PER_KM: Record<DriveMode, number> = { scooter: 1, car: 3 };
 

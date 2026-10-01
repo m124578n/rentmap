@@ -60,6 +60,14 @@ const STEPS = [
     // 台中、高雄的垃圾車清運點沒有座標:locate_garbage.py 用同一份台灣檔裡的門牌對出來(其他生活圈會直接跳過)
     cmds: ["python -m pip install -q osmium", `python scripts/build_osm_pois.py${regionArg}`, `python scripts/locate_garbage.py${regionArg}`, `npm run collect -- pois${regionArg}`],
   },
+  {
+    id: "roads",
+    lane: "osm",
+    everyDays: 30,
+    label: "機車 / 開車道路圖(OSM)",
+    // 用 pois 步驟下載的台灣檔(同一條線、排在它後面);沒有檔案時 build_osm_pois.py 會先下載
+    cmds: ["python -m pip install -q osmium", "python scripts/build_osm_pois.py --download-only", `python scripts/build_roads.py${regionArg}`, `npm run collect -- roads${regionArg}`],
+  },
   { id: "crime", lane: "osm", everyDays: 90, label: "治安(竊盜點位 + 各區件數)", cmds: ["npm run collect -- crime"], commit: ["public/crime-districts.json"] },
 ];
 

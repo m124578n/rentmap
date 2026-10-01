@@ -8,6 +8,10 @@
  * 省略就是平日 08:00 上班。等車依那個時段的班距,那段時間沒開的路線不算。
  *   GET /api/commute/grid?w=&s=&e=&n=&day=&time=&dir=
  *                                                畫面範圍切網格(最多約 2500 格),每格到每個地點最快幾分(地圖「通勤」圖層)
+ *   GET /api/commute/drive?mode=scooter|car&region=&day=&time=&dir=
+ *                                                所有房源 × 我的每個地點,機車或開車(道路圖最短時間,transit/roads.ts;沒匯入道路圖回 has_roads: false)
+ *   GET /api/commute/drive/at?lat=&lng=&day=&time=&dir=
+ *                                                一個點到每個地點的機車與開車(面板用)
  *   POST /api/tour  { points, start?, day, time, bike? }
  *                                                看房路線:每兩點之間(start → 各點、各點互相)的最快搭法,前端排順序
  * bike=0 不算 YouBike(預設會算:騎到目的地或捷運站旁的站,見 transit/bike.ts)。
@@ -31,6 +35,9 @@ import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 import { RAIL_VERSION } from "../transit/mrt";
 import { parseRegion, regionAt, regionTdx } from "@shared/regions";
 import { deny, planOf } from "../plan";
+import { briefOf, loadRoads, runRoads, snapNode } from "../transit/roads";
+import { COMMUTE_MODES, type DriveMode } from "@shared/drive";
+import type { DriveAtResponse, DriveMatrix } from "@shared/trip";
 
 export const commute = new Hono<AppEnv>();
 commute.use("/api/commute", requireUser());
@@ -119,6 +126,85 @@ commute.get("/api/commute", async (c) => {
     }
     return { radius, when, has_bus: net.version != null, items };
   });
+});
+
+/** 我的地點(方案內的前 N 個) */
+async function myPlaces(c: Parameters<typeof planOf>[0], max: number) {
+  return db(c.env.DB)
+    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+    .from(schema.myPlaces)
+    .where(eq(schema.myPlaces.userId, c.get("user").id))
+    .orderBy(asc(schema.myPlaces.id))
+    .limit(max);
+}
+
+commute.get("/api/commute/drive", async (c) => {
+  const mode = c.req.query("mode") as DriveMode;
+  if (!(COMMUTE_MODES as readonly string[]).includes(mode) || (mode as string) === "transit") return c.json({ error: "mode = scooter | car" }, 400);
+  const when = whenOf(c.req.query());
+  if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
+  const g = await commuteGate(c, when);
+  if ("denied" in g) return g.denied;
+  const places = await myPlaces(c, g.maxPlaces);
+  const region = parseRegion(c.req.query("region"));
+  const DB = c.env.DB;
+  const owner = ownerOf(c);
+  const key = [
+    "drive",
+    mode,
+    region,
+    places.map((p) => `${p.id}@${p.lat},${p.lng}`).join(";"),
+    when.day,
+    when.time,
+    when.dir,
+    await tableSig(DB, "road_graphs", "version", `WHERE region = '${region}'`),
+    await propertiesSig(DB, owner),
+  ];
+  return cachedJson(c, key, async (): Promise<DriveMatrix> => {
+    const net = await loadRoads(DB, region);
+    const items: DriveMatrix["items"] = {};
+    if (!net.g) return { radius: 0, when, has_bus: true, has_roads: false, items };
+    const props = (
+      await db(DB)
+        .select({ id: schema.properties.id, lat: schema.properties.lat, lng: schema.properties.lng })
+        .from(schema.properties)
+        .where(owner == null ? undefined : eq(schema.properties.createdBy, owner))
+    ).filter((p): p is { id: number; lat: number; lng: number } => p.lat != null && p.lng != null && regionAt(p.lat, p.lng) === region);
+    for (const p of props) items[p.id] = Object.fromEntries(places.map((pl) => [pl.id, null]));
+    for (const place of places) {
+      if (regionAt(place.lat, place.lng) !== region) continue;
+      // 一個地點一次最短路徑(從地點往外),每間房只查自己最近的路口
+      const run = runRoads(net, mode, when, region, place);
+      if (!run) continue;
+      for (const p of props) items[p.id]![place.id] = briefOf(net, run, p);
+    }
+    return { radius: 0, when, has_bus: true, has_roads: true, items };
+  });
+});
+
+commute.get("/api/commute/drive/at", async (c) => {
+  const lat = Number(c.req.query("lat"));
+  const lng = Number(c.req.query("lng"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat, lng required" }, 400);
+  const when = whenOf(c.req.query());
+  if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
+  const g = await commuteGate(c, when);
+  if ("denied" in g) return g.denied;
+  const places = await myPlaces(c, g.maxPlaces);
+  const region = parseRegion(regionAt(lat, lng));
+  const net = await loadRoads(c.env.DB, region);
+  const body: DriveAtResponse = { when, has_roads: !!net.g, items: {} };
+  for (const pl of places) body.items[pl.id] = { scooter: null, car: null };
+  if (!net.g) return c.json(body);
+  const here = places.filter((pl) => regionAt(pl.lat, pl.lng) === region);
+  for (const mode of ["scooter", "car"] as const) {
+    // 中心放在這個點(一次最短路徑就涵蓋所有地點),地點的路口都定案就停
+    const targets = here.map((pl) => snapNode(net, mode, pl)).filter((x): x is number => x != null);
+    const run = targets.length ? runRoads(net, mode, when, region, { lat, lng }, true, targets) : null;
+    if (!run) continue;
+    for (const pl of here) body.items[pl.id]![mode] = briefOf(net, run, pl);
+  }
+  return c.json(body);
 });
 
 commute.get("/api/commute/trips", async (c) => {
