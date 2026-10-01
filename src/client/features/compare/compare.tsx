@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { usePlan } from "@/lib/plan";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Columns3, Plus, Check, X } from "lucide-react";
 
@@ -44,8 +45,9 @@ export function useCompare(): number[] {
 /** 「加入比較」按鈕;在 <Link> 裡面也能按(擋掉導覽) */
 export function CompareToggle({ id, className = "" }: { id: number; className?: string }) {
   const list = useCompare();
+  const max = Math.min(COMPARE_MAX, usePlan().ent.compare);
   const on = list.includes(id);
-  const full = !on && list.length >= COMPARE_MAX;
+  const full = !on && list.length >= max;
   return (
     <button
       onClick={(e) => {
@@ -54,7 +56,7 @@ export function CompareToggle({ id, className = "" }: { id: number; className?: 
         if (!full) toggleCompare(id);
       }}
       disabled={full}
-      title={full ? `最多比較 ${COMPARE_MAX} 間` : on ? "從比較移除" : "加入比較"}
+      title={full ? `最多比較 ${max} 間${max < COMPARE_MAX ? "(免費版)" : ""}` : on ? "從比較移除" : "加入比較"}
       className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-xs ${
         on
           ? "border-sky-600 bg-sky-600 text-white"

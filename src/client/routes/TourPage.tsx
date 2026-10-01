@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { usePlan } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Bike, Bus, Footprints, MapPin, Route, TrainFront } from "lucide-react";
@@ -20,6 +22,7 @@ const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
  */
 export function TourPage() {
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
+  const tourOk = usePlan().ent.tour;
   const places = usePlaces();
   const favs = useMemo(
     () =>
@@ -67,6 +70,16 @@ export function TourPage() {
   };
 
   if (q.isLoading) return <p className="p-4 text-neutral-500">載入中…</p>;
+  if (!tourOk)
+    return (
+      <div className="card m-4 grid gap-2 text-sm">
+        <h1 className="flex items-center gap-1.5 text-lg font-semibold">
+          <Route size={18} /> 看房路線
+        </h1>
+        <p className="text-neutral-600 dark:text-neutral-400">挑幾間約好的房,排出交通時間最短的順序,每間幾點到、怎麼搭。</p>
+        <PlanLock>看房路線是付費功能。</PlanLock>
+      </div>
+    );
   return (
     <div className="mx-auto grid max-w-3xl gap-4 p-4 text-sm">
       <div>

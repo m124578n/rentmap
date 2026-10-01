@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Scale } from "lucide-react";
 import type { MarketBrief, MarketResponse, MarketResult } from "@shared/market";
@@ -111,11 +112,15 @@ function MarketView({ data, city, district, kind, rent }: { data: MarketResponse
           {m.per_ping_median != null && ` · 每坪中位 ${fmt(m.per_ping_median)}`}
           {!m.enough && <span className="text-amber-700 dark:text-amber-400"> · 樣本不足,僅供參考</span>}
         </p>
-        <button onClick={() => setOpen(!open)} className="mt-1 flex items-center gap-0.5 text-[11px] text-emerald-700 underline dark:text-emerald-400">
-          最像的 {m.comparables.length} 筆
-          <ChevronDown size={12} className={open ? "rotate-180" : ""} />
-        </button>
-        {open && (
+        {data.detail_locked ? (
+          <PlanLock className="mt-1">最像的幾筆成交明細是付費功能。</PlanLock>
+        ) : (
+          <button onClick={() => setOpen(!open)} className="mt-1 flex items-center gap-0.5 text-[11px] text-emerald-700 underline dark:text-emerald-400">
+            最像的 {m.comparables.length} 筆
+            <ChevronDown size={12} className={open ? "rotate-180" : ""} />
+          </button>
+        )}
+        {open && !data.detail_locked && (
           <table className="mt-1 w-full text-[11px] tabular-nums">
             <tbody>
               {m.comparables.map((c, i) => (

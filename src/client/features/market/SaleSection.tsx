@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Landmark, Scale } from "lucide-react";
 import { MORTGAGE_DEFAULT, mortgage, SALE_TYPES, type SaleType } from "@shared/sale";
@@ -88,11 +89,15 @@ export function SaleSection({
             {m.criteria.length ? ` · ${m.criteria.join("、")}` : ""} · {m.count} 筆({m.from.slice(0, 7)}~{m.to.slice(0, 7)})
             {!m.enough && <span className="text-amber-700 dark:text-amber-400"> · 樣本不足,僅供參考</span>}
           </p>
-          <button onClick={() => setOpen(!open)} className="mt-1 flex items-center gap-0.5 text-[11px] text-emerald-700 underline dark:text-emerald-400">
-            最像的 {m.comparables.length} 筆
-            <ChevronDown size={12} className={open ? "rotate-180" : ""} />
-          </button>
-          {open && (
+          {q.data.detail_locked ? (
+            <PlanLock className="mt-1">附近成交明細是買房方案的功能。</PlanLock>
+          ) : (
+            <button onClick={() => setOpen(!open)} className="mt-1 flex items-center gap-0.5 text-[11px] text-emerald-700 underline dark:text-emerald-400">
+              最像的 {m.comparables.length} 筆
+              <ChevronDown size={12} className={open ? "rotate-180" : ""} />
+            </button>
+          )}
+          {open && !q.data.detail_locked && (
             <table className="mt-1 w-full text-[11px] tabular-nums">
               <tbody>
                 {m.comparables.map((c, i) => (

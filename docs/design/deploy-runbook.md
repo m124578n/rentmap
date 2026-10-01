@@ -69,6 +69,8 @@ npx wrangler d1 migrations apply rentmap-db --remote   # 第一次:建所有表(
 npx wrangler deploy
 ```
 
+2026-10-01 加了 `0015`(方案:`users.plan` / `plan_until`、`plan_grants`)。開通方案用 `npm run collect -- grant <email> <offer> <ref>`(bearer 是 `INGEST_SECRET`,這把金鑰等於能開通任何人的方案,不要外流)。
+
 之後每次有新 migration:先 `--remote` 套 migration,再 deploy(反過來會讓新程式查不存在的欄位)。
 
 ## 6. 第一次資料匯入(從家裡推到正式站)

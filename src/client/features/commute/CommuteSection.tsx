@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePlan } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Bike, Bus, ChevronDown, ChevronUp, Footprints, Route, TrainFront } from "lucide-react";
 import { COMMUTE_SIDE_LABEL, TRIP_KIND_LABEL, type CommuteSide, type CommuteWhen, type Trip, type TripBrief, type TripLeg } from "@shared/trip";
@@ -34,12 +36,14 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
   const go = useCommute("go");
   const back = useCommute("back");
   const f = useFilters();
+  // 免費方案只有上班(下班、自訂時段是付費功能)
+  const sides: CommuteSide[] = usePlan().ent.commuteCustom ? ["go", "back"] : ["go"];
   const [openId, setOpenId] = useCommuteTarget();
   const [radius, setRadius] = useState(400);
   const [side, setSide] = useState<CommuteSide>(f.commuteSide);
   useEffect(() => setSide(f.commuteSide), [f.commuteSide]);
   const list = places.data?.items ?? [];
-  const pointRows = usePointBriefs(propertyId == null ? lat : null, lng, list, { go: whenOf(f, "go"), back: whenOf(f, "back") }, f.commuteBike);
+  const pointRows = usePointBriefs(propertyId == null ? lat : null, lng, list, { go: whenOf(f, "go"), back: whenOf(f, "back") }, f.commuteBike, sides);
   const rows = propertyId != null ? { go: go.matrix?.items[propertyId], back: back.matrix?.items[propertyId] } : pointRows;
   // 摘要:undefined = 還在算、null = 搭不到
   const briefOf = (s: CommuteSide, placeId: number) =>
@@ -83,7 +87,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
                 >
                   <span className="shrink-0 self-start rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{pl.name}</span>
                   <span className="grid min-w-0 flex-1 text-xs">
-                    {(["go", "back"] as CommuteSide[]).map((s) => (
+                    {sides.map((s) => (
                       <span key={s} className="truncate">
                         <span className="mr-1 text-neutral-500">{COMMUTE_SIDE_LABEL[s]}</span>
                         <BriefText b={briefOf(s, pl.id)} />
@@ -114,6 +118,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
           })}
         </ul>
       )}
+      {list.length > 0 && sides.length === 1 && <PlanLock className="mt-1">免費版算平日 08:00 上班;下班、自訂時段與 YouBike 是付費功能。</PlanLock>}
     </section>
   );
 }
@@ -125,8 +130,7 @@ const tripsQuery = (lat: number, lng: number, place: Place, radius: number, when
 });
 
 /** 任意點:每個地點 × 上下班各打一次 trips(和點開的搭法共用快取),取最快的當摘要;還沒算完的地點不放 */
-function usePointBriefs(lat: number | null, lng: number, places: Place[], when: Record<CommuteSide, CommuteWhen>, bike: boolean) {
-  const sides: CommuteSide[] = ["go", "back"];
+function usePointBriefs(lat: number | null, lng: number, places: Place[], when: Record<CommuteSide, CommuteWhen>, bike: boolean, sides: CommuteSide[]) {
   const qs = useQueries({
     queries: lat == null ? [] : sides.flatMap((s) => places.map((pl) => ({ ...tripsQuery(lat, lng, pl, 400, when[s], bike) }))),
   });
@@ -174,6 +178,7 @@ function Trips({
   onOverlay?: (o: BusOverlay | null) => void;
 }) {
   const bike = useFilters().commuteBike;
+  const custom = usePlan().ent.commuteCustom;
   const q = useQuery(tripsQuery(lat, lng, place, radius, when, bike));
   const [sel, setSel] = useState<number | null>(null);
   useEffect(() => setSel(null), [side, when.day, when.time]);
@@ -197,7 +202,7 @@ function Trips({
   return (
     <div className="mt-1 grid gap-1 border-l-2 border-blue-200 pl-1.5 dark:border-blue-900 [&>*]:min-w-0">
       <div className="flex flex-wrap items-center gap-1 text-[11px] text-neutral-500">
-        {(["go", "back"] as CommuteSide[]).map((s) => (
+        {(custom ? (["go", "back"] as CommuteSide[]) : (["go"] as CommuteSide[])).map((s) => (
           <button
             key={s}
             onClick={() => setSide(s)}

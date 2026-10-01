@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { planError } from "@/lib/plan";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
@@ -42,7 +43,7 @@ export function SaveNote({
     },
     onError: (e) => {
       const issues = e instanceof ApiError && e.status === 400 ? ((e.body as { issues?: { path: (string | number)[]; message: string }[] })?.issues ?? []) : [];
-      setErrors(issues.length ? Object.fromEntries(issues.map((i) => [String(i.path[0]), i.message])) : { _: "儲存失敗" });
+      setErrors(issues.length ? Object.fromEntries(issues.map((i) => [String(i.path[0]), i.message])) : { _: planError(e) ?? "儲存失敗" });
     },
   });
 

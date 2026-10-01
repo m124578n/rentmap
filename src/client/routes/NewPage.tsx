@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { planError } from "@/lib/plan";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ApiError, api } from "@/lib/api";
@@ -46,7 +47,7 @@ export function NewPage() {
       if (e instanceof ApiError && e.status === 400) {
         const issues = (e.body as { issues?: { path: (string | number)[]; message: string }[] })?.issues ?? [];
         setErrors(Object.fromEntries(issues.map((i) => [String(i.path[0]), i.message])));
-      } else setErrors({ _: "儲存失敗" });
+      } else setErrors({ _: planError(e) ?? "儲存失敗" });
     },
   });
 

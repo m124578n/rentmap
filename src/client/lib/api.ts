@@ -1,4 +1,5 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
+import type { PlanState } from "@shared/plan";
 import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
@@ -48,7 +49,7 @@ window.addEventListener(STALE_EVENT, () => (staleShown = true));
 window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
-  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[] }>("/api/me"),
+  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[]; plan: PlanState | null }>("/api/me"),
   deleteAccount: () => req<{ ok: true }>("/api/account", { method: "DELETE", body: JSON.stringify({ confirm: "刪除" }) }),
   consent: (docs: { doc: string; version: string }[]) => req<{ consent_needed: ConsentNeed[] }>("/api/consent", { method: "POST", body: JSON.stringify({ docs }) }),
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),

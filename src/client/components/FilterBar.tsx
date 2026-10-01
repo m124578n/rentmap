@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePlan } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
 import { Bus, ChevronDown, Route, SlidersHorizontal, X } from "lucide-react";
 import { api } from "@/lib/api";
@@ -161,40 +163,45 @@ function CommuteChip({ f, hasPlaces, places, open, onToggle }: { f: Filters; has
 
 /** 通勤條件:看上班或下班(各自的日子、出發時間)+ 上限分鐘 + 要算哪些地點(多個地點時每個都要在上限內) */
 function CommuteRow({ f, places }: { f: Filters; places: Place[] }) {
+  const custom = usePlan().ent.commuteCustom;
   const cur = f.commuteTimes[f.commuteSide];
   const setTime = (patch: Partial<{ day: DayType; time: string }>) =>
     setFilters({ commuteTimes: { ...f.commuteTimes, [f.commuteSide]: { ...cur, ...patch } } });
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800">
-      <div className="flex flex-wrap items-center gap-1">
-        {(["go", "back"] as CommuteSide[]).map((s) => (
-          <Chip key={s} small on={f.commuteSide === s} onClick={() => setFilters({ commuteSide: s })}>
-            {COMMUTE_SIDE_LABEL[s]} {DAY_LABEL[f.commuteTimes[s].day]} {f.commuteTimes[s].time}
-          </Chip>
-        ))}
-        <span className="text-neutral-400">{f.commuteSide === "go" ? "住處 → 地點" : "地點 → 住處"}</span>
-        <select className="input !w-auto !py-0.5 text-xs" value={cur.day} onChange={(e) => setTime({ day: e.target.value as DayType })} aria-label="日子">
-          {DAY_TYPES.map((d) => (
-            <option key={d} value={d}>
-              {DAY_LABEL[d]}
-            </option>
+      {!custom ? (
+        <PlanLock>平日 08:00 上班(住處 → 地點);下班、自訂時段與 YouBike 是付費功能。</PlanLock>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1">
+          {(["go", "back"] as CommuteSide[]).map((s) => (
+            <Chip key={s} small on={f.commuteSide === s} onClick={() => setFilters({ commuteSide: s })}>
+              {COMMUTE_SIDE_LABEL[s]} {DAY_LABEL[f.commuteTimes[s].day]} {f.commuteTimes[s].time}
+            </Chip>
           ))}
-        </select>
-        <input
-          type="time"
-          className="input !w-auto !py-0.5 text-xs"
-          value={cur.time}
-          step={600}
-          onChange={(e) => e.target.value && setTime({ time: e.target.value })}
-          aria-label="出發時間"
-        />
-        <span className="text-neutral-400">出發</span>
-        {f.commuteMode === "transit" && (
-          <label className="ml-1 flex items-center gap-1" title="騎 YouBike 到目的地、或騎到捷運站旁再轉捷運(騎 5km / 3km 內)">
-            <input type="checkbox" checked={f.commuteBike} onChange={(e) => setFilters({ commuteBike: e.target.checked })} /> 含 YouBike
-          </label>
-        )}
-      </div>
+          <span className="text-neutral-400">{f.commuteSide === "go" ? "住處 → 地點" : "地點 → 住處"}</span>
+          <select className="input !w-auto !py-0.5 text-xs" value={cur.day} onChange={(e) => setTime({ day: e.target.value as DayType })} aria-label="日子">
+            {DAY_TYPES.map((d) => (
+              <option key={d} value={d}>
+                {DAY_LABEL[d]}
+              </option>
+            ))}
+          </select>
+          <input
+            type="time"
+            className="input !w-auto !py-0.5 text-xs"
+            value={cur.time}
+            step={600}
+            onChange={(e) => e.target.value && setTime({ time: e.target.value })}
+            aria-label="出發時間"
+          />
+          <span className="text-neutral-400">出發</span>
+          {f.commuteMode === "transit" && (
+            <label className="ml-1 flex items-center gap-1" title="騎 YouBike 到目的地、或騎到捷運站旁再轉捷運(騎 5km / 3km 內)">
+              <input type="checkbox" checked={f.commuteBike} onChange={(e) => setFilters({ commuteBike: e.target.checked })} /> 含 YouBike
+            </label>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-1">
         <span className="text-neutral-500">方式</span>
         {COMMUTE_MODES.map((m) => (

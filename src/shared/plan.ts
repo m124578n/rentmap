@@ -100,13 +100,34 @@ export const GrantBody = z.object({
 });
 export type GrantBody = z.infer<typeof GrantBody>;
 
+/** 每個方案一天值多少(用該方案最長的那個品項算;不同方案之間換算剩餘天數用) */
+const PER_DAY: Record<Exclude<PlanKey, "free">, number> = Object.fromEntries(
+  (["rent", "buy"] as const).map((k) => {
+    const o = OFFERS.filter((x) => x.plan === k).sort((a, b) => b.days - a.days)[0]!;
+    return [k, o.price / o.days];
+  }),
+) as Record<Exclude<PlanKey, "free">, number>;
+const DAY = 86400_000;
+
 /**
- * 新到期日:同方案或從租屋升級,從「現在」和「原本到期日」較晚的那個往後加(續買不吃掉剩下的天數);
- * 從買房改買租屋方案:買房還沒到期就不降級,只延長買房(不讓人花錢變少功能)。
+ * 開通後的方案與到期日:
+ *   - 沒有有效方案:從現在起算
+ *   - 同方案續買:從原本到期日往後加(剩下的天數不會被吃掉)
+ *   - 不同方案:一律變成「比較高的那個」(不讓人花錢變少功能),天數照每天的價格換算,不能用便宜方案換到貴方案的天數:
+ *     租屋還沒到期就買買房 → 剩下的租屋天數折成買房天數 + 買房天數;
+ *     買房還沒到期又買租屋 → 租屋的天數折成買房天數加上去
  */
-export function extendPlan(cur: { plan: PlanKey; until: string | null }, offer: { plan: PlanKey; days: number }, now = new Date()) {
-  const active = cur.plan !== "free" && cur.until && Date.parse(cur.until) > now.getTime();
-  const from = active ? Math.max(Date.parse(cur.until!), now.getTime()) : now.getTime();
-  const plan: PlanKey = active && cur.plan === "buy" ? "buy" : offer.plan;
-  return { plan, until: new Date(from + offer.days * 86400_000).toISOString() };
+export function extendPlan(cur: { plan: PlanKey; until: string | null }, offer: { plan: PlanKey; days: number; price?: number }, now = new Date()) {
+  const t = now.getTime();
+  const curUntil = cur.until ? Date.parse(cur.until) : 0;
+  const active = cur.plan !== "free" && curUntil > t;
+  if (!active || offer.plan === "free") return { plan: offer.plan, until: new Date(t + offer.days * DAY).toISOString() };
+  const curPlan = cur.plan as Exclude<PlanKey, "free">;
+  const offPlan = offer.plan as Exclude<PlanKey, "free">;
+  if (curPlan === offPlan) return { plan: curPlan, until: new Date(curUntil + offer.days * DAY).toISOString() };
+  const target = curPlan === "buy" || offPlan === "buy" ? "buy" : curPlan;
+  const remainingDays = (curUntil - t) / DAY;
+  const offerPerDay = offer.price != null ? offer.price / offer.days : PER_DAY[offPlan];
+  const days = remainingDays * (PER_DAY[curPlan] / PER_DAY[target]) + offer.days * (offerPerDay / PER_DAY[target]);
+  return { plan: target, until: new Date(t + Math.floor(days * 24) * 3600_000).toISOString() };
 }

@@ -1,4 +1,6 @@
 import { useCallback } from "react";
+import { usePlan } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { Wallet } from "lucide-react";
 import type { PropertySummary } from "@shared/schemas";
 import type { Requirements } from "@shared/fit";
@@ -34,6 +36,7 @@ export function useMonthlyCost(r: Pick<Requirements, "cost_place_id" | "commute_
 
 /** 房源面板「每月支出(估)」:每一項金額與怎麼算的 */
 export function CostSection({ cost }: { cost: MonthlyCost | null }) {
+  const detail = usePlan().ent.costDetail;
   if (!cost) return null;
   return (
     <section className="text-sm">
@@ -42,7 +45,7 @@ export function CostSection({ cost }: { cost: MonthlyCost | null }) {
       </h2>
       <div className="rounded border border-neutral-200 p-2 dark:border-neutral-700">
         <ul className="grid gap-0.5 text-xs">
-          {cost.lines.map((l) => (
+          {(detail ? cost.lines : []).map((l) => (
             <li key={l.key} className="flex items-baseline justify-between gap-2">
               <span className="min-w-0 truncate">
                 <span className="text-neutral-600 dark:text-neutral-400">{l.label}</span>
@@ -59,6 +62,7 @@ export function CostSection({ cost }: { cost: MonthlyCost | null }) {
             <span className="tabular-nums">{fmt(cost.total)}</span>
           </li>
         </ul>
+        {!detail && <PlanLock className="mt-1">每一項怎麼算(房租或房貸、管理費、水電、網路、通勤票價)是付費功能。</PlanLock>}
         <p className="mt-1 text-[11px] text-neutral-400">「≈」是估的:電費依台電累進或房東每度價、度數依房型估;通勤以 TPASS 1200 封頂。度數、通勤地點與天數可在「我的需求」改。</p>
       </div>
     </section>

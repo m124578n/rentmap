@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import { usePlan } from "./plan";
 import type { PropertySummary } from "@shared/schemas";
 import type { DayType } from "@shared/bus";
 import { COMMUTE_DEFAULT, type CommuteMatrix, type CommuteSide, type CommuteWhen } from "@shared/trip";
@@ -112,12 +113,21 @@ export function whenOf(f: Filters, side: CommuteSide = f.commuteSide): CommuteWh
 }
 
 export function useFilters(): Filters {
-  return useSyncExternalStore(
+  const f = useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
     () => current,
+  );
+  // 方案沒有自訂通勤:只算平日 08:00 上班、不含 YouBike(伺服器也是這樣擋;存著的設定不動,升級後就回來)
+  const custom = usePlan().ent.commuteCustom;
+  return useMemo(
+    () =>
+      custom
+        ? f
+        : { ...f, commuteSide: "go", commuteBike: false, commuteTimes: { ...f.commuteTimes, go: { day: COMMUTE_DEFAULT.go.day, time: COMMUTE_DEFAULT.go.time } } },
+    [f, custom],
   );
 }
 

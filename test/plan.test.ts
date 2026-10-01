@@ -46,7 +46,18 @@ describe("方案計算(純函式)", () => {
     const now = new Date("2026-10-01T00:00:00Z");
     expect(extendPlan({ plan: "free", until: null }, { plan: "rent", days: 30 }, now)).toEqual({ plan: "rent", until: "2026-10-31T00:00:00.000Z" });
     expect(extendPlan({ plan: "rent", until: "2026-10-11T00:00:00Z" }, { plan: "rent", days: 30 }, now).until).toBe("2026-11-10T00:00:00.000Z");
-    expect(extendPlan({ plan: "buy", until: "2026-10-11T00:00:00Z" }, { plan: "rent", days: 30 }, now).plan).toBe("buy");
+    // 買房還沒到期又買租屋 30 天(149):不降級,但只換算成約 26 天買房(149 ÷ 每天 499/90),不是 30 天
+    const b = extendPlan({ plan: "buy", until: "2026-10-11T00:00:00Z" }, { plan: "rent", days: 30, price: 149 }, now);
+    expect(b.plan).toBe("buy");
+    const bDays = (Date.parse(b.until) - Date.parse("2026-10-01T00:00:00Z")) / 86400_000;
+    expect(bDays).toBeGreaterThan(10 + 26);
+    expect(bDays).toBeLessThan(10 + 27.5);
+    // 租屋剩 90 天時買買房 90 天:剩下的租屋折成約 63 天買房(349 對 499),不是 90 天
+    const u = extendPlan({ plan: "rent", until: "2026-12-30T00:00:00Z" }, { plan: "buy", days: 90, price: 499 }, now);
+    const uDays = (Date.parse(u.until) - Date.parse("2026-10-01T00:00:00Z")) / 86400_000;
+    expect(u.plan).toBe("buy");
+    expect(uDays).toBeGreaterThan(90 + 62);
+    expect(uDays).toBeLessThan(90 + 64);
     // 過期的舊方案不疊加
     expect(extendPlan({ plan: "rent", until: "2026-01-01T00:00:00Z" }, { plan: "rent", days: 30 }, now).until).toBe("2026-10-31T00:00:00.000Z");
   });

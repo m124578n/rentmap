@@ -1,4 +1,6 @@
 import { lazy, Suspense, useState } from "react";
+import { usePlan, planError } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { MapPin, Pencil, Search, Trash2, X } from "lucide-react";
 import type { Place } from "@shared/schemas";
 import { searchAddress, type GeoHit } from "./geocode";
@@ -25,6 +27,8 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
   const places = usePlaces();
   const items = places.data?.items ?? [];
   const mut = usePlaceMutations();
+  const ent = usePlan().ent;
+  const full = items.length >= ent.places;
   // 還沒有任何地點就直接進新增表單,名稱預設「公司」
   const [draft, setDraft] = useState<Draft | null>(() => null);
   const editing = draft ?? (places.isSuccess && items.length === 0 ? { id: null, name: "公司", address: "", pin: null } : null);
@@ -80,8 +84,10 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
                 />
               ))}
             </ul>
+            {full && <PlanLock className="mt-2">免費版只能設 {ent.places} 個地點;付費方案最多 5 個(公司 + 家人)。</PlanLock>}
+            {mut.create.error && <p className="mt-2 text-xs text-red-600">{planError(mut.create.error) ?? "存不起來,再試一次"}</p>}
             <div className="mt-3 flex justify-between">
-              <button className="btn-ghost" onClick={() => setDraft({ id: null, name: "", address: "", pin: null })}>
+              <button className="btn-ghost" disabled={full} onClick={() => setDraft({ id: null, name: "", address: "", pin: null })}>
                 + 新增地點
               </button>
               <button className="btn-primary" onClick={onClose}>

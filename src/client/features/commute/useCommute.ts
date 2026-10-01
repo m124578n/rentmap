@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useRegion } from "@/lib/region";
 import { useFilters, whenOf, type CommuteCtx } from "@/lib/filters";
 import { usePlaces } from "@/features/places/places";
+import { usePlan } from "@/lib/plan";
 
 /**
  * 所有房源 × 我的地點 的通勤;沒有地點就不查。
@@ -22,14 +23,17 @@ export function useCommute(side?: CommuteSide) {
   const list = places.data?.items ?? [];
   const sig = list.map((p) => `${p.id}@${p.lat},${p.lng}`).join("|");
   const mode = f.commuteMode;
+  // 下班時段是付費功能:免費方案不查(伺服器會回 402),畫面顯示鎖
+  const locked = (side ?? f.commuteSide) === "back" && !usePlan().ent.commuteCustom;
   const q = useQuery({
     queryKey: ["commute", region.key, sig, when.day, when.time, when.dir, f.commuteBike],
     queryFn: () => api.commute(when, f.commuteBike, region.key),
-    enabled: list.length > 0 && mode === "transit",
+    enabled: list.length > 0 && mode === "transit" && !locked,
     staleTime: 5 * 60_000,
   });
-  const props = useQuery({ queryKey: ["properties"], queryFn: api.listProperties, enabled: list.length > 0 && mode !== "transit" });
+  const props = useQuery({ queryKey: ["properties"], queryFn: api.listProperties, enabled: list.length > 0 && mode !== "transit" && !locked });
   const matrix = useMemo((): CommuteMatrix | undefined => {
+    if (locked) return undefined;
     if (mode === "transit") return q.data;
     if (!props.data) return undefined;
     const items: CommuteMatrix["items"] = {};
@@ -40,8 +44,8 @@ export function useCommute(side?: CommuteSide) {
       items[p.id] = row;
     }
     return { radius: 0, when, has_bus: true, items };
-  }, [mode, q.data, props.data, sig, when.day, when.time, when.dir, region.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locked, mode, q.data, props.data, sig, when.day, when.time, when.dir, region.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ctx: CommuteCtx = useMemo(() => ({ matrix, placeIds: list.map((p) => p.id) }), [matrix, sig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const loading = mode === "transit" ? q.isLoading : props.isLoading;
-  return { places: list, placesLoaded: places.isSuccess, matrix, ctx, when, mode, isLoading: loading && list.length > 0 };
+  const loading = !locked && (mode === "transit" ? q.isLoading : props.isLoading);
+  return { places: list, placesLoaded: places.isSuccess, matrix, ctx, when, mode, locked, isLoading: loading && list.length > 0 };
 }

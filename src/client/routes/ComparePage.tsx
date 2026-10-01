@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { PlanLock } from "@/features/plan/PlanLock";
+import { usePlan } from "@/lib/plan";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Columns3, ExternalLink, Star, X } from "lucide-react";
@@ -75,7 +77,13 @@ export function ComparePage() {
   const hazards = useQuery({ queryKey: ["hazard-summary"], queryFn: api.hazardSummary, staleTime: 60 * 60_000 });
   const nearby = useQuery({ queryKey: ["nearby-summary", 500], queryFn: () => api.nearbySummary(500), staleTime: 30 * 60_000 });
   const byId = new Map((q.data?.items ?? []).map((p) => [p.id, p]));
-  const props = ids.map((id) => byId.get(id)).filter((p): p is PropertySummary => !!p);
+  const ent = usePlan().ent;
+  // 方案上限(免費 2 間):多選的不顯示
+  const props = ids
+    .map((id) => byId.get(id))
+    .filter((p): p is PropertySummary => !!p)
+    .slice(0, ent.compare);
+  const hidden = ids.filter((id) => byId.has(id)).length - props.length;
 
   if (q.isLoading) return <p className="p-4 text-neutral-500">載入中…</p>;
   if (props.length < 2)
@@ -85,7 +93,7 @@ export function ComparePage() {
           <Columns3 size={16} /> 比較表
         </p>
         <p className="text-neutral-600 dark:text-neutral-400">
-          在列表或房源面板按「比較」,選 2–{COMPARE_MAX} 間就能並排比租金、行情、坪數、通勤…目前選了 {props.length} 間。
+          在列表或房源面板按「比較」,選 2–{Math.min(COMPARE_MAX, ent.compare)} 間就能並排比租金、行情、坪數、通勤…目前選了 {props.length} 間。
         </p>
         <Link to="/list" className="btn-primary mt-3 inline-flex">
           去列表挑
@@ -243,7 +251,9 @@ export function ComparePage() {
                 </>
               ),
               better: "low",
-              cells: props.map((p) => tripCell(back.matrix?.items[p.id]?.[pl.id], p.lat != null, back.isLoading)),
+              cells: props.map((p) =>
+                back.locked ? { node: <span className="text-[11px] text-neutral-400">付費方案</span>, v: null } : tripCell(back.matrix?.items[p.id]?.[pl.id], p.lat != null, back.isLoading),
+              ),
             },
           ])
         : [{ label: "通勤", cells: props.map(() => ({ node: <span className="text-neutral-400">先設「我的地點」</span> })) }],
@@ -371,6 +381,7 @@ export function ComparePage() {
           清空
         </button>
       </div>
+      {hidden > 0 && <PlanLock className="mb-2">免費版最多並排 {ent.compare} 間,另外 {hidden} 間沒顯示。</PlanLock>}
       <div className="overflow-x-auto rounded border border-neutral-200 dark:border-neutral-800">
         <table className="w-full min-w-[560px] border-collapse text-sm">
           <thead>

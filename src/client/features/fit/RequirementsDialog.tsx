@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePlan, planError } from "@/lib/plan";
+import { PlanLock } from "@/features/plan/PlanLock";
 import { X } from "lucide-react";
 import { EMPTY_REQUIREMENTS, FIT_DIM_LABEL, type FitDimKey, type Requirements } from "@shared/fit";
 import { KINDS } from "@shared/constants";
@@ -21,6 +23,7 @@ const WEIGHT_KEYS: FitDimKey[] = ["price", "market", "commute", "size", "age"];
 function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClose: () => void }) {
   const [r, setR] = useState<Requirements>(initial);
   const save = useSaveRequirements();
+  const fitOk = usePlan().ent.fit;
   const places = usePlaces();
   const region = useRegion();
   const set = (patch: Partial<Requirements>) => setR((x) => ({ ...x, ...patch }));
@@ -205,7 +208,8 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
           </div>
         </Group>
 
-        {save.error && <p className="mb-2 text-xs text-red-600">存不起來:{String(save.error)}</p>}
+        {!fitOk && <PlanLock className="mb-2">需求與符合度是付費功能(可以先填填看,存不起來)。</PlanLock>}
+        {save.error && <p className="mb-2 text-xs text-red-600">存不起來:{planError(save.error) ?? String(save.error)}</p>}
         <div className="mt-2 flex items-center justify-between">
           <button onClick={() => setR({ ...EMPTY_REQUIREMENTS, weights: r.weights })} className="text-xs text-neutral-500 underline">
             全部清除
@@ -214,7 +218,7 @@ function RequirementsDialog({ initial, onClose }: { initial: Requirements; onClo
             <button onClick={onClose} className="btn-ghost">
               取消
             </button>
-            <button onClick={() => save.mutate(r, { onSuccess: onClose })} disabled={save.isPending} className="btn-primary">
+            <button onClick={() => save.mutate(r, { onSuccess: onClose })} disabled={save.isPending || !fitOk} className="btn-primary">
               {save.isPending ? "儲存中…" : "儲存"}
             </button>
           </div>
