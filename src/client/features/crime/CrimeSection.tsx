@@ -4,18 +4,10 @@ import { ChevronDown, Siren } from "lucide-react";
 import { CRIME_CATS, poiLabel } from "@shared/poi";
 import { coverageCities, hasCoverage } from "@shared/regions";
 import { useRegion } from "@/lib/region";
-import { districtRank } from "@shared/crime";
+import { districtRank, type CrimeDistricts } from "@shared/crime";
 import { api } from "@/lib/api";
 
-/** public/crime-districts.json(collect -- crime 產生):雙北各區近一年竊盜件數 */
-export interface CrimeDistricts {
-  from: string;
-  to: string;
-  items: Record<string, Partial<Record<"house" | "moto" | "car" | "bike", number>>>;
-  ntpc_unknown: number;
-  /** 雙北以外的縣市(警政署全國資料)各自的統計期間 */
-  periods?: Record<string, { from: string; to: string }>;
-}
+export type { CrimeDistricts } from "@shared/crime";
 
 export function useCrimeDistricts() {
   return useQuery({

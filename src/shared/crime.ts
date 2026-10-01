@@ -2,6 +2,17 @@ import { CITY_INFO, hasCoverage, normalizeCity, type CityName } from "./regions"
 
 export type CrimeKind = "house" | "moto" | "car" | "bike";
 export type CrimeItems = Record<string, Partial<Record<CrimeKind, number>>>;
+export const CRIME_KIND_LABEL: Record<CrimeKind, string> = { house: "住宅", moto: "機車", car: "汽車", bike: "自行車" };
+
+/** public/crime-districts.json(collect -- crime 產生):各區近一年竊盜件數 */
+export interface CrimeDistricts {
+  from: string;
+  to: string;
+  items: CrimeItems;
+  ntpc_unknown: number;
+  /** 雙北以外的縣市(警政署全國資料)各自的統計期間 */
+  periods?: Record<string, { from: string; to: string }>;
+}
 
 /**
  * 這個區的件數在生活圈各區裡排第幾多。

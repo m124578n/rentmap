@@ -14,6 +14,7 @@ import { status } from "./routes/status";
 import { legal } from "./routes/legal";
 import { account } from "./routes/account";
 import { sale } from "./routes/sale";
+import { area } from "./routes/area";
 
 const app = new Hono<AppEnv>();
 
@@ -37,6 +38,8 @@ app.route("/", commute);
 app.route("/", market);
 // 買賣行情 /api/market/sale/at;匯入 /api/ingest/sale-stats
 app.route("/", sale);
+// 公開的各區行情頁 /area/*、/sitemap.xml(不用登入,Worker 直接出 HTML)
+app.route("/", area);
 // 找房需求(M6 符合度)
 app.route("/", requirements);
 // 生活機能 /api/nearby*;匯入 /api/ingest/pois*

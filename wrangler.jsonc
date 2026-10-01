@@ -8,7 +8,7 @@
   // 前端 SPA 靜態檔:vite build 產到 dist/client;找不到的路徑回 index.html 交給前端路由
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/area", "/area/*", "/sitemap.xml"]
   },
   // 非機密設定。機密(GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET / INGEST_SECRET / ANTHROPIC_API_KEY)
   // 雲端用 `wrangler secret put`,本機放 .dev.vars。

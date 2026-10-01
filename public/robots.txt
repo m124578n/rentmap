@@ -1,10 +1,11 @@
-# 介紹頁、條款頁可以收錄;房源、筆記都要登入,API 不收錄
+# 介紹頁、條款頁、各區行情(/area)可以收錄;sitemap.xml 由 Worker 產生;房源、筆記都要登入,API 不收錄
 # AI 搜尋(OAI-SearchBot、PerplexityBot、Claude-SearchBot…)和訓練用爬蟲(GPTBot、ClaudeBot、Google-Extended…)目前都不擋;
 # 要擋訓練用的,在下面加 `User-agent: GPTBot` + `Disallow: /` 之類(只擋訓練、不擋搜尋引用)
 User-agent: *
 Allow: /$
 Allow: /about
 Allow: /legal/
+Allow: /area
 Disallow: /api/
 Disallow: /p/
 

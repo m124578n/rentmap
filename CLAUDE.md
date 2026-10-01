@@ -37,6 +37,8 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               lib/bookmarklet.ts 產生網址,NewPage 讀 /new#import=… 預填(資料只在瀏覽器,不經伺服器)
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
+              routes/area.ts 是公開的「各區行情」頁(/area/<縣市>/<區>,不用登入,Worker 直接出 HTML 不載 SPA;彙總在 src/shared/area.ts)與動態 sitemap.xml;
+              新增這類公開路徑要加進 wrangler.jsonc 的 assets.run_worker_first,不然會被 SPA 的 index.html 接走
               routes/legal.ts 條款同意(consents 表;版本在 src/shared/legal.ts,全文在 client features/legal/docs.tsx,改內容要加版本號);routes/account.ts 匯出 / 刪除帳號
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
               transit/ 一個生活圈一份(loadBusNet / mrtGraph / loadBikes 都帶 region;房源與地點用 regionAt 依座標歸區);開新生活圈照 docs/design/2026-09-30-open-a-region.md
@@ -118,5 +120,5 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - maplibre v6 的 `map.isStyleLoaded()` 在任何 source 還在載入時也回 false:資料晚到時要等 `idle` 再畫(MapView 的 `whenReady`),直接 return 會永遠畫不上去。
 - 離線:`public/sw.js` 只在正式建置註冊(`vite preview` 才測得到,dev 沒有)。改了快取策略要把檔內 `VERSION` 加一,舊快取才會清掉。
 - 彙總 API(`/api/commute`、`/api/nearby/summary`、`/api/market`、`/api/hazards/summary`)走 `src/worker/cache.ts` 的 Cache API,key 帶資料版本(筆數 + 最大 version / id / updated_at)。**新增會影響結果的資料來源時要把它加進 key**,不然會回舊的;回應 header `x-cache: hit|miss`。`/api/properties` 用 ETag(304)。
-- SEO:`npm run build` 最後一步 `scripts/prerender.mjs` 用 Playwright 把介紹頁、條款頁預先產成 HTML(不跑 JS 的 AI 爬蟲才讀得到)並產 `sitemap.xml`;要有 Chromium(沙盒 `PW_CHROMIUM=/opt/pw-browsers/chromium`,只想快速建置 `SKIP_PRERENDER=1`)。正式網域 `lokanote.shunzz.com` 直接寫在 `index.html`(canonical、og:url、og:image、JSON-LD)與 prerender.mjs,換網域兩邊一起改。介紹頁的常見問題同一份資料出畫面與 FAQPage 結構化資料。
+- SEO:`npm run build` 最後一步 `scripts/prerender.mjs` 用 Playwright 把介紹頁、條款頁預先產成 HTML(不跑 JS 的 AI 爬蟲才讀得到);要有 Chromium(沙盒 `PW_CHROMIUM=/opt/pw-browsers/chromium`,只想快速建置 `SKIP_PRERENDER=1`)。正式網域 `lokanote.shunzz.com` 直接寫在 `index.html`(canonical、og:url、og:image、JSON-LD)與 prerender.mjs,換網域兩邊一起改。介紹頁的常見問題同一份資料出畫面與 FAQPage 結構化資料。`sitemap.xml` 與各區行情頁的網址用 `APP_ORIGIN`(本機就是 localhost);`public/llms.txt` 給 AI 搜尋看,新增公開頁要補。
 - 型別:bindings 從 `worker-configuration.d.ts`(`npm run types` 產生)的 `Cloudflare.Env` 來,機密欄位在 `src/worker/env.ts` 用 `declare global` 補。

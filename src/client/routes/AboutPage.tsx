@@ -81,7 +81,13 @@ export function AboutPage() {
       {/* 功能 */}
       <section id="features" className="scroll-mt-4">
         <h2 className="mb-1 text-xl font-semibold">每一個地址,幫你查好這些</h2>
-        <p className="mb-5 text-sm text-neutral-500">資料都來自政府開放資料與 OpenStreetMap,在家裡的電腦定期更新。</p>
+        <p className="mb-5 text-sm text-neutral-500">
+          資料都來自政府開放資料與 OpenStreetMap,在家裡的電腦定期更新。
+          {/* 一般 <a>(不是 router 的 Link):/area 是 Worker 直接出的公開頁,不在 SPA 裡 */}
+          <a href="/area" className="ml-1 text-emerald-700 underline dark:text-emerald-400">
+            先看各區租金、房價與治安 →
+          </a>
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Feature icon={<Bus size={18} />} title="上下班通勤,分開算">
             公車 + 捷運 + YouBike,轉乘一次內。上班、下班可以設不同時段與星期,班距跟著時段變,走路也算紅綠燈。
@@ -184,7 +190,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "目前可以查哪些地方?",
-    a: `${OPEN_REGIONS.map((r) => r.label).join("、")}。以生活圈為單位,一次看一個生活圈。`,
+    a: `${OPEN_REGIONS.map((r) => r.label).join("、")}。以生活圈為單位,一次看一個生活圈;各行政區的租金、房價與治安對照可以在「各區行情」(/area)直接看,不用登入。`,
   },
   {
     q: "通勤時間怎麼算?",

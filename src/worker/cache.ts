@@ -25,6 +25,14 @@ export async function tableSig(DB: D1Database, table: string, col: string, where
 
 /** 有快取就回;沒有就 compute、存起來再回。header x-cache: hit / miss 方便看 */
 export async function cachedJson(c: Context<AppEnv>, parts: (string | number)[], compute: () => Promise<unknown>) {
+  return cachedBody(c, parts, "application/json; charset=utf-8", "private, no-store", async () => JSON.stringify(await compute()));
+}
+
+/**
+ * 同上,任意內容(公開的各區行情頁用 HTML)。clientCache 是給瀏覽器 / CDN 的 Cache-Control
+ * (使用者相關的回應一律 private, no-store;公開頁可以 public)。
+ */
+export async function cachedBody(c: Context<AppEnv>, parts: (string | number)[], contentType: string, clientCache: string, compute: () => Promise<string>) {
   const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
   const key = new Request(`${ORIGIN}/${parts.map((p) => encodeURIComponent(String(p))).join("/")}`);
   if (cache) {
@@ -32,14 +40,14 @@ export async function cachedJson(c: Context<AppEnv>, parts: (string | number)[],
     if (hit) {
       const res = new Response(hit.body, hit);
       res.headers.set("x-cache", "hit");
-      res.headers.set("Cache-Control", "private, no-store");
+      res.headers.set("Cache-Control", clientCache);
       return res;
     }
   }
-  const body = JSON.stringify(await compute());
-  const headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `max-age=${TTL}` };
+  const body = await compute();
+  const headers = { "Content-Type": contentType, "Cache-Control": `max-age=${TTL}` };
   if (cache) c.executionCtx.waitUntil(cache.put(key, new Response(body, { headers })));
-  return new Response(body, { headers: { ...headers, "Cache-Control": "private, no-store", "x-cache": "miss" } });
+  return new Response(body, { headers: { ...headers, "Cache-Control": clientCache, "x-cache": "miss" } });
 }
 
 /** ETag 用的短雜湊 */

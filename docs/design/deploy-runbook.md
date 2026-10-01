@@ -54,7 +54,7 @@
 ## 4. 程式裡要改的地方
 
 - [x] `index.html` 的 canonical、`og:url`、`og:image`、JSON-LD 已經寫正式網域 `https://lokanote.shunzz.com`(2026-10-01)。
-- [ ] `npm run build` 會跑 `scripts/prerender.mjs`(介紹頁、條款頁預先產 HTML + `sitemap.xml`),建置的機器要有 Playwright 的 Chromium。建完確認 `dist/client/index.html` 的 `#root` 裡有介紹頁文字。
+- [ ] `npm run build` 會跑 `scripts/prerender.mjs`(介紹頁、條款頁預先產 HTML;`sitemap.xml` 由 Worker 動態產生),建置的機器要有 Playwright 的 Chromium。建完確認 `dist/client/index.html` 的 `#root` 裡有介紹頁文字。
 - [ ] 上線後:Google Search Console、Bing Webmaster Tools(ChatGPT 搜尋 / Copilot 用 Bing 的索引)驗證網域、提交 `https://lokanote.shunzz.com/sitemap.xml`。
 - [ ] `public/og.png`:介紹頁文案有改就先 `node scripts/og.mjs` 重產。
 - [ ] `public/sw.js`:改過快取策略就把 `VERSION` 加一(目前 `v1`),舊快取才會清掉。第一次上線不用動。
@@ -81,7 +81,7 @@ npx wrangler deploy
    - 順序沒有硬性依賴;通勤至少要 `bus`(公車網路),`tra.json`、`mrt-times.json` 已在 git 裡(隨部署上去)。
    - 每項多久:以家裡實測為準(log 在 `data/logs/refresh-*`),第一次建議挑使用者不在用的時段跑。
 4. 跑完後,`tra.json`、`mrt-times.json`、`crime-districts.json` 若有變,commit 並重新 deploy(這三個檔是靜態檔,跟著程式上去)。
-5. 驗收:登入 → `/status`(資料狀態頁)切四個生活圈看有沒有紅的;地圖輸入一個地址看報告。
+5. 驗收:登入 → `/status`(資料狀態頁)切四個生活圈看有沒有紅的;地圖輸入一個地址看報告;不登入開 `/area`、`/sitemap.xml` 看各區行情有數字(實價登錄推上去之前各區都是 noindex、sitemap 只有介紹頁與條款)。
 
 之後的定期更新:`npm run data:refresh -- --due`(只跑到期的)。
 

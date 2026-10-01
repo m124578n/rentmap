@@ -35,9 +35,10 @@ type Row = RentStat & { city: string; kind: string };
 let cache: { sig: string; pools: Map<string, RentStat[]> } | null = null;
 
 /** 同區同房型;district 傳 "*" 是同縣市同房型 */
-const poolKey = (city: string, district: string, kind: string) => `${city.replace("臺", "台")}|${district}|${kind}`;
+export const poolKey = (city: string, district: string, kind: string) => `${city.replace("臺", "台")}|${district}|${kind}`;
 
-async function loadPools(DB: D1Database) {
+/** 全部縣市的租金樣本池(已清過),key 是 poolKey;各區行情頁(routes/area.ts)也用 */
+export async function loadPools(DB: D1Database) {
   const head = await DB.prepare("SELECT COUNT(*) AS n, MAX(id) AS m FROM rent_stats").first<{ n: number; m: number | null }>();
   const sig = `${head?.n ?? 0}#${head?.m ?? 0}`;
   if (cache?.sig === sig) return cache.pools;

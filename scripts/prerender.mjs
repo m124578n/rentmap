@@ -2,7 +2,7 @@
  * 建置後把「沒登入時看到的頁面」預先產成 HTML(`npm run build` 的最後一步),讓不跑 JS 的爬蟲(多數 AI 搜尋)也讀得到內容:
  *   /             → dist/client/index.html(介紹頁;SPA 的其他網址也回這份)
  *   /legal/<doc>  → dist/client/legal/<doc>.html(條款頁從介紹頁底部的連結找,不另外列)
- * 再依同一份清單產 dist/client/sitemap.xml。
+ * sitemap.xml 由 Worker 動態產生(src/worker/routes/area.ts,含各區行情頁)。
  *
  * 做法:用 Node 起一個靜態伺服器服務 dist/client(找不到檔案回 index.html),Playwright 以「沒登入、正式站」的樣子開頁
  * (/api/me 換成 user=null,其他 /api 一律擋掉),抓 #root 的 HTML 塞回模板。
@@ -97,12 +97,3 @@ for (const p of pages) {
   await writeFile(file, fill(p.html, p.route, p.title));
   console.log(`prerender: ${p.route} → dist/client/${p.out}(${Math.round(p.html.length / 1024)} KB)`);
 }
-
-const today = new Date().toISOString().slice(0, 10);
-const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${pages.map((p) => `  <url><loc>${SITE}${p.route}</loc><lastmod>${today}</lastmod></url>`).join("\n")}
-</urlset>
-`;
-await writeFile(path.join(DIST, "sitemap.xml"), sitemap);
-console.log(`prerender: sitemap.xml(${pages.length} 個網址)`);
