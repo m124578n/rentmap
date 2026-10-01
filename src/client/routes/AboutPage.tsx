@@ -156,7 +156,7 @@ export function AboutPage() {
         <div className="mt-4 [&_.btn-primary]:bg-white [&_.btn-primary]:text-emerald-700 [&_.btn-primary:hover]:bg-emerald-50">{cta}</div>
       </section>
 
-      <p className="mt-8 text-center text-xs text-neutral-400">落腳筆記 lokanote · 地圖 © CARTO © OpenStreetMap contributors</p>
+      <p className="mt-8 text-center text-xs text-neutral-400">落腳筆記 Loka Note · 地圖 © CARTO © OpenStreetMap contributors</p>
       <LegalLinks className="mt-2 justify-center" />
     </div>
   );
