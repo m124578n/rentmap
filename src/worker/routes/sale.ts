@@ -16,6 +16,7 @@ import { cleanSalePool, computeSaleMarket, SALE_TYPES, SaleStatIn, type SaleMark
 import { normalizeCity } from "@shared/regions";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
+import { planOf } from "../plan";
 
 export const sale = new Hono<AppEnv>();
 sale.use("/api/market/sale/*", requireUser());
@@ -67,7 +68,9 @@ sale.get("/api/market/sale/at", async (c) => {
     pools.all,
     { cleaned: true },
   );
-  const body: SaleMarketResponse = { has_data: pools.all.length > 0, market };
+  // 方案沒有買賣成交明細(買房方案才有):拿掉「最像的幾筆」
+  const locked = !!market && !(await planOf(c)).ent.saleDetail;
+  const body: SaleMarketResponse = { has_data: pools.all.length > 0, market: locked ? { ...market!, comparables: [] } : market, ...(locked ? { detail_locked: true } : {}) };
   return c.json(body);
 });
 

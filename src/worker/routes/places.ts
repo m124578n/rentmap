@@ -11,6 +11,7 @@ import { PlaceInput, PlaceUpdate } from "@shared/schemas";
 import type { AppEnv } from "../env";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
+import { deny, planOf } from "../plan";
 
 export const places = new Hono<AppEnv>();
 places.use("/api/places", requireUser());
@@ -26,6 +27,9 @@ places.get("/api/places", async (c) => {
 places.post("/api/places", async (c) => {
   const parsed = PlaceInput.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
+  const { ent } = await planOf(c);
+  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM my_places WHERE user_id = ?").bind(c.get("user").id).first<{ n: number }>();
+  if ((n?.n ?? 0) >= ent.places) return deny(c, "places");
   const [row] = await db(c.env.DB)
     .insert(schema.myPlaces)
     .values({ ...parsed.data, address: parsed.data.address ?? null, userId: c.get("user").id, createdAt: nowIso() })

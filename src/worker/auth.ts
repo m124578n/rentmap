@@ -18,6 +18,7 @@ import type { AppEnv, Env } from "./env";
 import { db, nowIso, schema } from "./db";
 import { isPrivatePool } from "./pool";
 import { neededFor } from "./consent";
+import { planOf } from "./plan";
 
 export const SESSION_COOKIE = "rent_session";
 const STATE_COOKIE = "rent_oauth_state";
@@ -145,7 +146,10 @@ auth.get("/api/me", async (c) => {
   // private_pool:前端依此決定要不要顯示照片、聯絡人、開價圖層、刊登天數等(見 pool.ts)
   // consent_needed:還沒同意(或條款改版)的文件;非空時前端先擋同意畫面(routes/legal.ts)
   const consent_needed = user ? await neededFor(c.env.DB, user.id) : [];
-  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env), consent_needed });
+  // plan:目前方案與權限(前端只拿來顯示;真正的檢查在各 API,見 plan.ts)
+  if (user) c.set("user", user);
+  const plan = user ? await planOf(c) : null;
+  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env), consent_needed, plan });
 });
 
 // ---- 給其他路由用 ----

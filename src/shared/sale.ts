@@ -78,6 +78,8 @@ export interface SaleMarketResult {
 export interface SaleMarketResponse {
   has_data: boolean;
   market: SaleMarketResult | null;
+  /** 方案不含成交明細:comparables 是空的(shared/plan.ts 的 saleDetail) */
+  detail_locked?: boolean;
 }
 
 export function cleanSalePool(all: SaleStat[]) {

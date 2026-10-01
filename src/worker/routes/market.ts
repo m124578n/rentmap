@@ -13,13 +13,14 @@
  *
  * 樣本池:最新一筆資料往前一年、排除社宅包租代管與含車位,整份進記憶體(雙北一年約 2 萬筆),以筆數 + 最大 id 當快取鍵。
  */
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { briefOf, cleanPool, computeMarket, RentStatIn, type MarketMatrix, type MarketResponse, type MarketTarget, type RentStat } from "@shared/market";
 import { KINDS } from "@shared/constants";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { isPrivatePool, ownerOf, ownerSql } from "../pool";
+import { planOf } from "../plan";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
 import { loadSalePools } from "./sale";
 import { computeSaleMarket, saleTypeOf } from "@shared/sale";
@@ -133,8 +134,14 @@ market.get("/api/market/at", async (c) => {
   const t: MarketTarget = { kind: v.kind, size_ping: v.size_ping ?? null, rooms: v.rooms ?? null, building_age: null, has_elevator: null, rent: v.rent ?? null };
   const m = computeMarket(t, pools.get(poolKey(v.city, v.district, v.kind)) ?? [], pools.get(poolKey(v.city, "*", v.kind)) ?? [], { cleaned: true });
   const body: MarketResponse = { has_data: pools.size > 0, market: m, asking: null };
-  return c.json(body);
+  return c.json(await gateDetail(c, body));
 });
+
+/** 方案沒有租金成交明細:拿掉「最像的幾筆」(中位數、區間照給) */
+async function gateDetail(c: Context<AppEnv>, body: MarketResponse): Promise<MarketResponse> {
+  if ((await planOf(c)).ent.rentDetail || !body.market) return body;
+  return { ...body, market: { ...body.market, comparables: [] }, detail_locked: true };
+}
 
 /** 還在刊登的同縣市同房型房源 → 行情計算用的列(date = 最後看到的日期) */
 async function askingPools(DB: D1Database, p: PropRow) {
@@ -170,7 +177,7 @@ market.get("/api/properties/:id/market", async (c) => {
     }
   }
   const body: MarketResponse = { has_data: pools.size > 0, market: marketOf(pools, p), asking };
-  return c.json(body);
+  return c.json(await gateDetail(c, body));
 });
 
 // ---- 採集機推入 ----

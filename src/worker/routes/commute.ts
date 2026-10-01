@@ -30,10 +30,12 @@ import { EMPTY_BIKES, loadBikes } from "../transit/bike";
 import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 import { RAIL_VERSION } from "../transit/mrt";
 import { parseRegion, regionAt, regionTdx } from "@shared/regions";
+import { deny, planOf } from "../plan";
 
 export const commute = new Hono<AppEnv>();
 commute.use("/api/commute", requireUser());
 commute.use("/api/commute/*", requireUser());
+commute.use("/api/tour", requireUser());
 
 const radiusOf = (v: string | undefined) => Math.min(1000, Math.max(100, Number(v) || 400));
 
@@ -50,17 +52,31 @@ const whenOf = (q: Record<string, string>): CommuteWhen | null => {
   return r.success ? { ...r.data, time: r.data.time.padStart(5, "0") } : null;
 };
 
+/**
+ * 方案:免費只算平日 08:00 上班、不含 YouBike、只用最早建的 N 個地點(降級後多的地點不算,不刪)。
+ * 時段不是預設就 402(不偷偷改成預設,免得畫面顯示的時段跟算的不一樣)。
+ */
+async function commuteGate(c: Parameters<typeof planOf>[0], when: CommuteWhen) {
+  const { ent } = await planOf(c);
+  const d = COMMUTE_DEFAULT.go;
+  if (!ent.commuteCustom && (when.day !== d.day || when.time !== d.time || when.dir !== d.dir)) return { denied: deny(c, "commuteCustom") };
+  return { bikeOk: ent.commuteCustom, maxPlaces: ent.places };
+}
+
 commute.get("/api/commute", async (c) => {
   const radius = radiusOf(c.req.query("radius"));
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
+  const g = await commuteGate(c, when);
+  if ("denied" in g) return g.denied;
   const d = db(c.env.DB);
   const places = await d
     .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
-    .orderBy(asc(schema.myPlaces.id));
-  const bike = c.req.query("bike") !== "0";
+    .orderBy(asc(schema.myPlaces.id))
+    .limit(g.maxPlaces);
+  const bike = c.req.query("bike") !== "0" && g.bikeOk;
   const DB = c.env.DB;
   const owner = ownerOf(c);
   // 一次只算一個生活圈:那一區的公車 / 軌道 / YouBike 網路;不同區的地點與房源彼此不算(null)
@@ -112,14 +128,20 @@ commute.get("/api/commute/trips", async (c) => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isInteger(placeId)) return c.json({ error: "lat, lng, place_id required" }, 400);
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
-  const [place] = await db(c.env.DB)
-    .select({ name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+  const g = await commuteGate(c, when);
+  if ("denied" in g) return g.denied;
+  // 只能查方案內的地點(最早建的 N 個)
+  const allowed = await db(c.env.DB)
+    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
     .from(schema.myPlaces)
-    .where(and(eq(schema.myPlaces.id, placeId), eq(schema.myPlaces.userId, c.get("user").id)));
+    .where(eq(schema.myPlaces.userId, c.get("user").id))
+    .orderBy(asc(schema.myPlaces.id))
+    .limit(g.maxPlaces);
+  const place = allowed.find((p) => p.id === placeId);
   if (!place) return c.json({ error: "place not found" }, 404);
   const region = parseRegion(regionAt(place.lat, place.lng));
   const net = await loadBusNet(c.env.DB, region);
-  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
+  const bikes = c.req.query("bike") === "0" || !g.bikeOk ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
   const plan = buildPlan(net, place, when, bikes);
   const trips = candidates(plan, lat, lng, radiusOf(c.req.query("radius")), 3)
     .map((x) => buildTrip(plan, x))
@@ -136,6 +158,8 @@ commute.get("/api/commute/grid", async (c) => {
   if (![w, s, e, n].every(Number.isFinite) || e <= w || n <= s) return c.json({ error: "w, s, e, n required" }, 400);
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
+  const g = await commuteGate(c, when);
+  if ("denied" in g) return g.denied;
   // 格子邊長:至少 250m,畫面大就放大到不超過 GRID_MAX 格
   const kx = Math.cos((((s + n) / 2) * Math.PI) / 180);
   const minStep = 0.00225;
@@ -145,10 +169,11 @@ commute.get("/api/commute/grid", async (c) => {
     .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
-    .orderBy(asc(schema.myPlaces.id));
+    .orderBy(asc(schema.myPlaces.id))
+    .limit(g.maxPlaces);
   const region = parseRegion(regionAt((s + n) / 2, (w + e) / 2) ?? c.req.query("region"));
   const net = await loadBusNet(c.env.DB, region);
-  const bikes = c.req.query("bike") === "0" ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
+  const bikes = c.req.query("bike") === "0" || !g.bikeOk ? EMPTY_BIKES : await loadBikes(c.env.DB, region);
   const plans = places.map((pl) => buildPlan(net, pl, when, bikes));
   const cells: CommuteGrid["cells"] = [];
   for (let lat = Math.floor(s / step) * step + step / 2; lat < n; lat += step)
@@ -176,6 +201,7 @@ const TourBody = z.object({
  * 每個看房點當目的地建一次 plan(等車用同一個時段估),所以 8 間約 8 次。
  */
 commute.post("/api/tour", async (c) => {
+  if (!(await planOf(c)).ent.tour) return deny(c, "tour");
   const parsed = TourBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues.slice(0, 10) }, 400);
   const { points, start, day, time, bike } = parsed.data;

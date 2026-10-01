@@ -9,6 +9,7 @@ import { EMPTY_REQUIREMENTS, Requirements } from "@shared/fit";
 import type { AppEnv } from "../env";
 import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
+import { deny, planOf } from "../plan";
 
 export const requirements = new Hono<AppEnv>();
 requirements.use("/api/requirements", requireUser());
@@ -21,6 +22,7 @@ requirements.get("/api/requirements", async (c) => {
 });
 
 requirements.put("/api/requirements", async (c) => {
+  if (!(await planOf(c)).ent.fit) return deny(c, "fit");
   const parsed = Requirements.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues.slice(0, 20) }, 400);
   const json = JSON.stringify(parsed.data);

@@ -18,6 +18,7 @@ import { db, nowIso, schema } from "../db";
 import { requireUser } from "../auth";
 import { propertiesSig, shortHash, tableSig } from "../cache";
 import { isPrivatePool, ownerOf } from "../pool";
+import { deny, planOf } from "../plan";
 
 export const properties = new Hono<AppEnv>();
 properties.use("/api/properties", requireUser());
@@ -102,6 +103,12 @@ properties.post("/api/properties", async (c) => {
   const parsed = PropertyInput.safeParse(body);
   if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
   const v = parsed.data;
+  // 方案:筆記數上限(數自己建的;刪掉就能再存)。兩個請求同時送有可能多一間,影響小,不另外上鎖
+  const { ent } = await planOf(c);
+  if (ent.notes != null) {
+    const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM properties WHERE created_by = ?").bind(user.id).first<{ n: number }>();
+    if ((n?.n ?? 0) >= ent.notes) return deny(c, "notes");
+  }
   const now = nowIso();
   const d = db(c.env.DB);
   // 公開模式不存聯絡人(個資)

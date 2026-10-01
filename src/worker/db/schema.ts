@@ -15,8 +15,30 @@ export const users = sqliteTable(
     email: text("email"), // Google 驗證過的;只用於白名單與聯絡,不公開
     createdAt: text("created_at").notNull(),
     lastLoginAt: text("last_login_at").notNull(),
+    // 付費方案(src/shared/plan.ts):free | rent | buy;到期(plan_until 早於現在)就當免費。只由開通 API 寫,使用者改不到
+    plan: text("plan").notNull().default("free"),
+    planUntil: text("plan_until"),
   },
   (t) => [uniqueIndex("users_provider_uq").on(t.provider, t.providerId)],
+);
+
+/** 方案開通紀錄(對帳、退款用;ref 是訂單編號或匯款備註,同一個 ref 只開通一次) */
+export const planGrants = sqliteTable(
+  "plan_grants",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    offer: text("offer").notNull(),
+    plan: text("plan").notNull(),
+    days: integer("days").notNull(),
+    price: integer("price").notNull(),
+    ref: text("ref").notNull(),
+    untilAfter: text("until_after").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("plan_grants_ref_uq").on(t.ref), index("plan_grants_user_idx").on(t.userId)],
 );
 
 /** 實體物件。多個來源的刊登(listings)掛在同一個 property 下;Phase 1 一對一,去重留 Phase 3。 */
