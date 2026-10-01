@@ -122,6 +122,61 @@ export interface NearbySummary {
   nearest: Record<string, Partial<Record<PoiCat, number>>>;
 }
 
+/**
+ * /api/nearby/summary 實際傳的格式(省流量:1,900 間從 ~460 KB 降到約四分之一):
+ * 類別名稱只列一次(cats / near_cats),每間房一個數字陣列,順序對應 cats,尾端的 0 / null 省略。
+ * 前端用 decodeNearbySummary 還原成 NearbySummary。
+ */
+export interface NearbySummaryWire {
+  radius: number;
+  has_data: boolean;
+  cats: PoiCat[];
+  items: Record<string, number[]>;
+  near_cats: PoiCat[];
+  nearest: Record<string, (number | null)[]>;
+}
+
+export function encodeNearbySummary(s: NearbySummary): NearbySummaryWire {
+  const cats = POI_CATS.filter((c) => Object.values(s.items).some((x) => x[c]));
+  const nearCats = POI_CATS.filter((c) => Object.values(s.nearest).some((x) => x[c] != null));
+  const trim = <T>(a: T[], empty: (v: T) => boolean) => {
+    let n = a.length;
+    while (n > 0 && empty(a[n - 1]!)) n--;
+    return a.slice(0, n);
+  };
+  const items: NearbySummaryWire["items"] = {};
+  for (const [id, x] of Object.entries(s.items)) {
+    // 附近什麼都沒有也要列(空陣列):前端用「有沒有這個 id」分辨算過與沒算過
+    items[id] = trim(cats.map((c) => x[c] ?? 0), (v) => v === 0);
+  }
+  const nearest: NearbySummaryWire["nearest"] = {};
+  for (const [id, x] of Object.entries(s.nearest)) {
+    const row = trim(nearCats.map((c) => x[c] ?? null), (v) => v == null);
+    if (row.length) nearest[id] = row;
+  }
+  return { radius: s.radius, has_data: s.has_data, cats, items, near_cats: nearCats, nearest };
+}
+
+export function decodeNearbySummary(w: NearbySummaryWire): NearbySummary {
+  const items: NearbySummary["items"] = {};
+  for (const [id, row] of Object.entries(w.items)) {
+    const o: Partial<Record<PoiCat, number>> = {};
+    row.forEach((n, i) => {
+      if (n) o[w.cats[i]!] = n;
+    });
+    items[id] = o;
+  }
+  const nearest: NearbySummary["nearest"] = {};
+  for (const [id, row] of Object.entries(w.nearest)) {
+    const o: Partial<Record<PoiCat, number>> = {};
+    row.forEach((m, i) => {
+      if (m != null) o[w.near_cats[i]!] = m;
+    });
+    nearest[id] = o;
+  }
+  return { radius: w.radius, has_data: w.has_data, items, nearest };
+}
+
 /** 在 Google Maps 搜附近(餐飲 OSM 缺小店,給個全量的出口) */
 export const googleNearbyUrl = (q: string, lat: number, lng: number) =>
   `https://www.google.com/maps/search/${encodeURIComponent(q)}/@${lat.toFixed(6)},${lng.toFixed(6)},17z`;

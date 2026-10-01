@@ -15,7 +15,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { haversine, walkMin } from "@shared/bus";
-import { AVOIDABLE_CATS, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
+import { AVOIDABLE_CATS, encodeNearbySummary, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
@@ -147,7 +147,7 @@ nearby.get("/api/nearby/summary", async (c) => {
   const DB = c.env.DB;
   const owner = ownerOf(c);
   const key = ["nearby-summary", radius, await tableSig(DB, "pois", "version"), await propertiesSig(DB, owner)];
-  return cachedJson(c, key, () => nearbySummary(DB, radius, owner));
+  return cachedJson(c, ["v2", ...key], async () => encodeNearbySummary(await nearbySummary(DB, radius, owner)));
 });
 
 async function nearbySummary(DB: D1Database, radius: number, owner: number | null): Promise<NearbySummary> {

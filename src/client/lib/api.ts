@@ -3,7 +3,7 @@ import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/b
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { StatusResponse } from "@shared/status";
-import type { GarbageFit, NearbyResponse, NearbySummary } from "@shared/poi";
+import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type NearbySummary, type NearbySummaryWire } from "@shared/poi";
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
 import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { ConsentNeed } from "@shared/legal";
@@ -91,7 +91,7 @@ export const api = {
     req<TourResponse>("/api/tour", { method: "POST", body: JSON.stringify(body) }),
   status: (region = "north") => req<StatusResponse>(`/api/status?region=${region}`),
   commuteGrid: (b: Bbox, when: CommuteWhen, bike: boolean) => req<CommuteGrid>(`/api/commute/grid?${bboxParams(b)}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
-  nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
+  nearbySummary: async (radius = 500): Promise<NearbySummary> => decodeNearbySummary(await req<NearbySummaryWire>(`/api/nearby/summary?radius=${radius}`)),
 
   listPlaces: () => req<{ items: Place[] }>("/api/places"),
   createPlace: (input: PlaceInput) => req<{ place: Place }>("/api/places", { method: "POST", body: JSON.stringify(input) }),

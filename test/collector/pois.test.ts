@@ -184,3 +184,27 @@ describe("TDX 公共自行車(雙北以外)", () => {
     expect(PoiIn.safeParse(out[0]).success).toBe(true);
   });
 });
+
+describe("nearby summary 傳輸格式", () => {
+  it("壓縮再還原一樣;尾端 0 省略、空的房源留空陣列", async () => {
+    const { encodeNearbySummary, decodeNearbySummary } = await import("../../src/shared/poi");
+    const s = {
+      radius: 500,
+      has_data: true,
+      items: { "1": { convenience: 3, park: 1 }, "2": {}, "3": { food: 7 } },
+      nearest: { "1": { fuel: 120 }, "2": {}, "3": {} },
+    };
+    const w = encodeNearbySummary(s);
+    expect(w.items["2"]).toEqual([]);
+    expect(Object.keys(w.nearest)).toEqual(["1"]);
+    // 數量多時才看得出省:100 間 × 幾類
+    const big = { radius: 500, has_data: true, items: {} as Record<string, Record<string, number>>, nearest: {} as Record<string, Record<string, number>> };
+    for (let i = 0; i < 100; i++) {
+      big.items[i] = { convenience: 5 + (i % 3), supermarket: 1, food: 30 + i, park: 2, pharmacy: 3, clinic: 4, gym: 1 };
+      big.nearest[i] = i % 2 ? { fuel: 200 + i } : {};
+    }
+    const bw = encodeNearbySummary(big as never);
+    expect(JSON.stringify(bw).length).toBeLessThan(JSON.stringify(big).length * 0.4);
+    expect(decodeNearbySummary(w)).toEqual({ ...s, nearest: { "1": { fuel: 120 } } });
+  });
+});

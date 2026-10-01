@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { GarbageFit, NearbyResponse, NearbySummary, PoiIn } from "../src/shared/poi";
+import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type NearbySummaryWire, type PoiIn } from "../src/shared/poi";
 
 const ORIGIN = "http://localhost:5173";
 let cookie = "";
@@ -63,7 +63,7 @@ describe("pois ingest + nearby", () => {
     // 有名字的排前面
     expect(r.items.park!.map((x) => x.name)).toEqual(["p2", null]);
 
-    const s = (await (await SELF.fetch(`${ORIGIN}/api/nearby/summary?radius=1000`, authed())).json()) as NearbySummary;
+    const s = decodeNearbySummary((await (await SELF.fetch(`${ORIGIN}/api/nearby/summary?radius=1000`, authed())).json()) as NearbySummaryWire);
     expect(s.items[home]).toEqual({ convenience: 3, park: 2, food: 1 });
   });
 
@@ -112,7 +112,7 @@ describe("pois ingest + nearby", () => {
     const n = (await (await SELF.fetch(`${ORIGIN}/api/nearby?lat=${LAT}&lng=${LNG}`, authed())).json()) as NearbyResponse;
     expect(n.counts.highway).toBe(2);
     expect(n.items.highway!.map((x) => x.name)).toEqual(["國道1號", "環河快速道路"]);
-    const s = (await (await SELF.fetch(`${ORIGIN}/api/nearby/summary?radius=500`, authed())).json()) as NearbySummary;
+    const s = decodeNearbySummary((await (await SELF.fetch(`${ORIGIN}/api/nearby/summary?radius=500`, authed())).json()) as NearbySummaryWire);
     expect(s.nearest[home]).toMatchObject({ fuel: 100, highway: 222 });
     expect(s.nearest[home]!.convenience).toBeUndefined(); // 不是可避開的類別
   });
