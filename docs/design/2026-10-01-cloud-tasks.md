@@ -17,6 +17,8 @@
 
 ## 雲端可以做的(依序)
 
+> 2026-10-01 雲端進度:1–5 完成(狀態頁依生活圈 7749776、非北區整合測試 ac010d0、nearby summary 瘦身 1223a40、治安排名分母 5eca0fc、`deploy-runbook.md`);6、7 不用動。
+
 1. **狀態頁依生活圈**:`GET /api/status?region=` 目前不管 region,所有生活圈加總(`src/worker/routes/status.ts`);
    改成帶 `region` 時只算該生活圈(公車依縣市、生活機能 / 災害依生活圈外框 `regionBbox`、實價登錄依縣市、治安各區依縣市),
    `StatusPage` 顯示目前生活圈並可切換。測試:`test/` 加一個 Workers 測試,塞兩個生活圈的 pois 後各查一次。
