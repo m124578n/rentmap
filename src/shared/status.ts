@@ -18,5 +18,7 @@ export interface StatusItem {
 }
 export interface StatusResponse {
   now: string;
+  /** 這份統計是哪個生活圈的 */
+  region: import("./regions").RegionKey;
   items: StatusItem[];
 }

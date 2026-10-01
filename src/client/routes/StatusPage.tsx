@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import type { StatusItem } from "@shared/status";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { useRegion } from "@/lib/region";
+import { RegionPicker } from "@/features/report/RegionPicker";
 
 const GROUPS: StatusItem["group"][] = ["房源", "交通", "生活機能", "行情", "災害", "治安"];
 
@@ -19,9 +20,11 @@ function when(i: StatusItem) {
  * 房源看「最後一次看到」(每日同步有沒有在跑),實價登錄看最新的租賃日。
  */
 export function StatusPage() {
-  const q = useQuery({ queryKey: ["status"], queryFn: api.status, staleTime: 60_000 });
-  const crime = useCrimeDistricts();
   const region = useRegion();
+  const q = useQuery({ queryKey: ["status", region.key], queryFn: () => api.status(region.key), staleTime: 60_000 });
+  const crime = useCrimeDistricts();
+  // 治安各區件數:只數這個生活圈的縣市
+  const crimeDistricts = crime.data ? Object.keys(crime.data.items).filter((k) => (region.cities as readonly string[]).includes(k.split("|")[0]!)).length : 0;
   if (q.isLoading) return <p className="p-4 text-neutral-500">載入中…</p>;
   if (!q.data) return <p className="p-4 text-red-600">讀不到資料狀態</p>;
   const items = q.data.items;
@@ -33,6 +36,10 @@ export function StatusPage() {
           <Database size={18} /> 資料狀態
         </h1>
         <p className="text-xs text-neutral-500">各份資料最後更新時間;紅色的是過期或還沒匯入,在家那台跑右邊的指令。</p>
+        <div className="mt-2 flex items-center gap-2 text-xs">
+          <span className="text-neutral-500">目前看的是「{region.label}」</span>
+          <RegionPicker />
+        </div>
       </div>
 
       {stale.length > 0 ? (
@@ -77,7 +84,7 @@ export function StatusPage() {
                 {g === "治安" && crime.data && (
                   <tr className="border-t border-neutral-100 dark:border-neutral-800">
                     <td className="py-1 pr-2">各區件數({region.label})</td>
-                    <td className="py-1 pr-2 text-right tabular-nums">{Object.keys(crime.data.items).length} 區</td>
+                    <td className="py-1 pr-2 text-right tabular-nums">{crimeDistricts} 區</td>
                     <td className="py-1 pr-2 text-neutral-600 dark:text-neutral-400">
                       {crime.data.from} ~ {crime.data.to}
                     </td>

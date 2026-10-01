@@ -89,7 +89,7 @@ export const api = {
   hazardZones: (kind: HazardKind, b: Bbox) => req<HazardZones>(`/api/hazards/zones?kind=${kind}&${bboxParams(b)}`),
   tour: (body: { points: { lat: number; lng: number; name: string }[]; start: { lat: number; lng: number; name: string } | null; day: string; time: string }) =>
     req<TourResponse>("/api/tour", { method: "POST", body: JSON.stringify(body) }),
-  status: () => req<StatusResponse>("/api/status"),
+  status: (region = "north") => req<StatusResponse>(`/api/status?region=${region}`),
   commuteGrid: (b: Bbox, when: CommuteWhen, bike: boolean) => req<CommuteGrid>(`/api/commute/grid?${bboxParams(b)}&${whenParams(when)}${bike ? "" : "&bike=0"}`),
   nearbySummary: (radius = 500) => req<NearbySummary>(`/api/nearby/summary?radius=${radius}`),
 
