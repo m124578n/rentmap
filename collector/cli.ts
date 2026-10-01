@@ -6,6 +6,7 @@
  *   npm run collect -- sync [--group=taipei]             每日同步(collector/searches.json);不給 group 就全部
  *   npm run collect -- bus [--dry] [--refresh]           下載雙北公車(TDX)→ 覆蓋式推入(一個月一次就好)
  *   npm run collect -- rent-stats [--seasons=4] [--dry]  下載內政部租賃實價登錄(雙北、最近 N 季)→ 推入(每季公布後一次)
+ *   npm run collect -- sale-stats [--region=…] [--seasons=4] [--dry]  內政部買賣實價登錄 → sale_stats(買房行情)
  *   npm run collect -- pois [--only=food,park] [--dry]    生活機能:OSM(Overpass)+ menmap 拉麵 → 推入(一個月一次)
  *   npm run collect -- hazards [--dry]                    災害潛勢(淹水、液化)多邊形 → 推入(先跑 python scripts/build_hazards.py)
  *   npm run collect -- crime [--years=3] [--dry]           臺北市竊盜點位(門牌轉座標)+ 雙北各區件數 → 推入 / public/crime-districts.json(每季一次)
@@ -107,6 +108,11 @@ async function main() {
     await runRentStats({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
     return;
   }
+  if (cmd === "sale-stats") {
+    const { runSaleStats } = await import("./rentstats/sale");
+    await runSaleStats({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
+    return;
+  }
   if (cmd === "pois") {
     const { runPois } = await import("./pois/index");
     await runPois({ base: API, secret: SECRET, args: [arg, ...rest].filter((x): x is string => !!x) });
@@ -132,7 +138,7 @@ async function main() {
     await runMetro([arg, ...rest].filter((x): x is string => !!x));
     return;
   }
-  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect tra [--dry] | collect rent-stats [--dry] | collect pois [--dry] | collect hazards [--dry] | collect crime [--dry]");
+  console.log("用法:collect add <url> [--dry] | collect list <listUrl> [--pages=1-5] [--dry] | collect sync [--group=taipei|newtaipei|recheck|housefun] | collect bus [--dry] | collect metro [--dry] | collect tra [--dry] | collect rent-stats [--dry] | collect sale-stats [--dry] | collect pois [--dry] | collect hazards [--dry] | collect crime [--dry]");
   process.exit(1);
 }
 

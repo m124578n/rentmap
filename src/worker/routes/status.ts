@@ -96,6 +96,14 @@ status.get("/api/status", async (c) => {
     ),
   );
 
+  const ss = await DB.prepare("SELECT COUNT(*) AS n, MAX(date) AS d FROM sale_stats WHERE city IN (SELECT value FROM json_each(?))").bind(inCities).first<{ n: number; d: string | null }>();
+  items.push(
+    item(
+      { key: "sale_stats", group: "行情", label: "買賣實價登錄", count: ss?.n ?? 0, updated: ss?.d ?? null, every: "每季(約 1/4/7/10 月公布)", command: `npm run collect -- sale-stats --region=${region}`, note: "買房行情(每坪單價);日期是資料裡最新的交易日" },
+      150,
+    ),
+  );
+
   // 災害潛勢:圖資幾年才更新,不標過期
   const { results: hz } = await DB.prepare("SELECT kind, COUNT(*) AS n, MAX(version) AS v FROM hazard_zones WHERE city IN (SELECT value FROM json_each(?)) GROUP BY kind")
     .bind(inCities)

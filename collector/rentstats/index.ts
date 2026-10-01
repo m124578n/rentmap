@@ -66,7 +66,7 @@ export function readZipEntry(zip: Buffer, name: string): Buffer | null {
   return null;
 }
 
-async function loadSeason(season: string, refresh: boolean): Promise<Buffer | null> {
+export async function loadSeason(season: string, refresh: boolean): Promise<Buffer | null> {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   const file = path.join(CACHE_DIR, `${season}.zip`);
   if (fs.existsSync(file) && !refresh) return fs.readFileSync(file);

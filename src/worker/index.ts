@@ -13,6 +13,7 @@ import { hazards } from "./routes/hazards";
 import { status } from "./routes/status";
 import { legal } from "./routes/legal";
 import { account } from "./routes/account";
+import { sale } from "./routes/sale";
 
 const app = new Hono<AppEnv>();
 
@@ -34,6 +35,8 @@ app.route("/", places);
 app.route("/", commute);
 // 租金行情(實價登錄)/api/market、/api/properties/:id/market;匯入 /api/ingest/rent-stats
 app.route("/", market);
+// 買賣行情 /api/market/sale/at;匯入 /api/ingest/sale-stats
+app.route("/", sale);
 // 找房需求(M6 符合度)
 app.route("/", requirements);
 // 生活機能 /api/nearby*;匯入 /api/ingest/pois*

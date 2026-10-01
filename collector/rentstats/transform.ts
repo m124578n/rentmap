@@ -7,6 +7,7 @@
  * 「租賃住宅服務」是社會住宅包租代管 / 代管的標 social(有租金上限,實測比一般案件低 20–50%,行情預設不算)。
  */
 import type { RentStatIn } from "../../src/shared/market";
+import type { SaleStatIn } from "../../src/shared/sale";
 
 /** 簡單 CSV(支援雙引號欄位) */
 /** 房 / 廳 / 衛偶爾有登錄錯誤的離譜值(>20):當成沒填,不要讓一筆髒資料擋掉整批匯入(Zod 上限 50) */
@@ -187,6 +188,123 @@ export function transformRent(city: RentStatIn["city"], csv: string): { items: R
       has_mgmt: yes(r[idx.mgmt]),
       has_parking: target.includes("車位"),
       social: r[idx.service]!.startsWith("社會住宅"),
+    });
+  }
+  return { items, skipped };
+}
+
+// ---- 買賣({代碼}_lvr_land_a.csv)----
+
+const SALE_TYPE: [RegExp, SaleStatIn["building_type"]][] = [
+  [/^住宅大樓/, "電梯大樓"],
+  [/^華廈/, "華廈"],
+  [/^公寓/, "公寓"],
+  [/^透天/, "透天"],
+];
+/** 備註裡寫了這些的不是一般市場交易(親友、急售、瑕疵、增建、法拍…),行情不收 */
+const SALE_SPECIAL = /親友|員工|特殊關係|關係人|含多個門牌|急買急賣|急售|瑕疵|凶宅|債權債務|政府機關|法拍|拍賣|含增建|未登記建物|毛胚|受債權|共有人|持分/;
+
+export type SaleSkipReason = "欄位數不符" | "非房地" | "非住宅" | "特殊交易" | "日期" | "多棟" | "價格或面積不合理";
+
+/**
+ * 實價登錄買賣 CSV → SaleStatIn。只收「房地(土地+建物)」(可含車位)、一棟、住宅型態;
+ * 單價用政府的「單價元平方公尺」換成每坪(車位有分開計價時政府已扣掉),面積扣掉車位面積。
+ * 欄名依內政部欄位說明;偶有寫法差異(車位面積有沒有括號)用模式比對。
+ */
+export function transformSale(city: SaleStatIn["city"], csv: string): { items: SaleStatIn[]; skipped: Partial<Record<SaleSkipReason, number>> } {
+  const rows = parseCsv(csv);
+  const head = rows[0] ?? [];
+  const col = (re: RegExp, required = true) => {
+    const i = head.findIndex((h) => re.test(h.trim()));
+    if (i < 0 && required) throw new Error(`實價登錄買賣 CSV 少了欄位 ${re}(格式改了?)`);
+    return i;
+  };
+  const idx = {
+    district: col(/^鄉鎮市區$/),
+    target: col(/^交易標的$/),
+    addr: col(/^土地位置建物門牌$/),
+    date: col(/^交易年月日$/),
+    pieces: col(/^交易筆棟數$/),
+    floor: col(/^移轉層次$/),
+    total: col(/^總樓層數$/),
+    btype: col(/^建物型態$/),
+    use: col(/^主要用途$/),
+    built: col(/^建築完成年月$/),
+    area: col(/^建物移轉總面積/),
+    rooms: col(/^建物現況格局-房$/),
+    mgmt: col(/^有無管理組織$/),
+    price: col(/^總價元$/),
+    unit: col(/^單價元/),
+    parkArea: col(/^車位移轉總面積/),
+    parkPrice: col(/^車位總價元$/),
+    note: col(/^備註$/),
+    serial: col(/^編號$/),
+    elev: col(/^電梯$/, false),
+  };
+  const items: SaleStatIn[] = [];
+  const skipped: Partial<Record<SaleSkipReason, number>> = {};
+  const skip = (r: SaleSkipReason) => void (skipped[r] = (skipped[r] ?? 0) + 1);
+  for (const r of rows.slice(2)) {
+    if (r.length !== head.length) {
+      skip("欄位數不符");
+      continue;
+    }
+    const target = r[idx.target]!;
+    if (!target.startsWith("房地")) {
+      skip("非房地");
+      continue;
+    }
+    const type = SALE_TYPE.find(([re]) => re.test(r[idx.btype]!.trim()))?.[1];
+    if (!type || NON_RESIDENTIAL_USE.test(r[idx.use]!)) {
+      skip("非住宅");
+      continue;
+    }
+    if (SALE_SPECIAL.test(r[idx.note]!)) {
+      skip("特殊交易");
+      continue;
+    }
+    // 「土地2建物1車位1」:建物超過 1 棟(整批買)不算
+    const buildings = Number(/建物(\d+)/.exec(halfDigits(r[idx.pieces]!))?.[1] ?? 1);
+    if (buildings !== 1) {
+      skip("多棟");
+      continue;
+    }
+    const date = rocDate(r[idx.date]!);
+    if (!date) {
+      skip("日期");
+      continue;
+    }
+    const price = int(r[idx.price]);
+    const unitM2 = Number(r[idx.unit]);
+    const m2 = Number(r[idx.area]) - (Number(r[idx.parkArea]) || 0);
+    const size = Number.isFinite(m2) && m2 > 0 ? Math.round(m2 * 0.3025 * 10) / 10 : null;
+    const unit = Number.isFinite(unitM2) && unitM2 > 0 ? Math.round(unitM2 * 3.30579) : null;
+    if (!price || price < 300_000 || price > 2_000_000_000 || (size != null && (size < 3 || size > 2000))) {
+      skip("價格或面積不合理");
+      continue;
+    }
+    const district = r[idx.district]!.trim();
+    const built = rocDate(r[idx.built]!.padStart(7, "0"));
+    const age = built ? Math.max(0, Number(date.slice(0, 4)) - Number(built.slice(0, 4))) : null;
+    const parkPrice = int(r[idx.parkPrice]);
+    items.push({
+      serial: r[idx.serial]!.trim(),
+      city,
+      district,
+      road: roadOf(r[idx.addr]!, district),
+      building_type: type,
+      floor: parseFloor(r[idx.floor]!),
+      total_floors: cnNum(halfDigits(r[idx.total]!.replace(/層$/, ""))) ?? int(r[idx.total]),
+      building_age: age != null && age <= 150 ? age : null,
+      size_ping: size,
+      price,
+      unit_price: unit,
+      rooms: sane(int(r[idx.rooms])),
+      has_parking: target.includes("車位"),
+      parking_price: parkPrice,
+      date,
+      has_elevator: idx.elev >= 0 ? yes(r[idx.elev]) : type === "電梯大樓" || type === "華廈" ? true : type === "公寓" ? false : null,
+      has_mgmt: yes(r[idx.mgmt]),
     });
   }
   return { items, skipped };

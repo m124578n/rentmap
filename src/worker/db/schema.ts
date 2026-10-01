@@ -209,6 +209,35 @@ export const userRequirements = sqliteTable("user_requirements", {
 });
 
 /**
+ * 內政部不動產買賣實價登錄(住宅房地、一棟,參考資料)。`collect -- sale-stats` 匯入,serial = 實價登錄編號(重匯同一筆覆蓋)。
+ * 行情計算見 src/shared/sale.ts;unit_price 是每坪單價(政府公布的單價換算,車位分開計價時已扣)。
+ */
+export const saleStats = sqliteTable(
+  "sale_stats",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    serial: text("serial").notNull(),
+    city: text("city").notNull(),
+    district: text("district").notNull(),
+    road: text("road"),
+    buildingType: text("building_type").notNull(), // 公寓 | 華廈 | 電梯大樓 | 透天
+    floor: integer("floor"),
+    totalFloors: integer("total_floors"),
+    buildingAge: integer("building_age"),
+    sizePing: real("size_ping"),
+    price: integer("price").notNull(),
+    unitPrice: integer("unit_price"),
+    rooms: integer("rooms"),
+    hasParking: integer("has_parking").notNull(),
+    parkingPrice: integer("parking_price"),
+    date: text("date").notNull(),
+    hasElevator: integer("has_elevator"),
+    hasMgmt: integer("has_mgmt"),
+  },
+  (t) => [uniqueIndex("sale_stats_serial_idx").on(t.serial), index("sale_stats_area_idx").on(t.city, t.district, t.buildingType), index("sale_stats_date_idx").on(t.date)],
+);
+
+/**
  * 條款同意紀錄(服務條款、隱私權政策…每次同意一列,不覆蓋):退款或個資爭議時要查「誰在什麼時候、從哪個 IP 同意了哪一版」。
  * 目前版本見 src/shared/legal.ts。
  */

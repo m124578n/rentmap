@@ -4,10 +4,10 @@
  * 〔〕是還沒填的地方(經營者、信箱);上線收費前請律師看過。
  */
 export const LEGAL_DOCS = {
-  terms: { title: "服務條款", version: "1.0", effective: "2026-10-01", changes: "" },
+  terms: { title: "服務條款", version: "1.1", effective: "2026-10-01", changes: "服務內容加入買賣行情與房貸試算;不限租屋,買房或了解住家附近也適用" },
   privacy: { title: "隱私權政策", version: "1.0", effective: "2026-10-01", changes: "" },
   refund: { title: "付費與退款說明", version: "1.0", effective: "2026-10-01", changes: "" },
-  sources: { title: "資料來源與免責聲明", version: "1.1", effective: "2026-10-01", changes: "資料來源加入臺南市土壤液化潛勢(地調中心)、臺中市 / 臺南市 / 高雄市垃圾車清運點、各市政府門牌位置資料(經 OpenStreetMap)" },
+  sources: { title: "資料來源與免責聲明", version: "1.2", effective: "2026-10-01", changes: "資料來源加入內政部買賣實價登錄;估算說明加入房貸試算與買賣行情" },
 } as const;
 export type LegalDoc = keyof typeof LEGAL_DOCS;
 export const LEGAL_DOC_KEYS = Object.keys(LEGAL_DOCS) as LegalDoc[];

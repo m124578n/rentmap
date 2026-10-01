@@ -7,6 +7,7 @@ import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type NearbyS
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
 import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { ConsentNeed } from "@shared/legal";
+import type { SaleMarketResponse } from "@shared/sale";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -75,6 +76,9 @@ export const api = {
 
   market: () => req<MarketMatrix>("/api/market"),
   propertyMarket: (id: number) => req<MarketResponse>(`/api/properties/${id}/market`),
+  /** 任一地址的買賣行情(每坪單價、估總價) */
+  saleAt: (q: { city: string; district: string; building_type?: string; size_ping?: number; building_age?: number; price?: number }) =>
+    req<SaleMarketResponse>(`/api/market/sale/at?${new URLSearchParams(Object.entries(q).flatMap(([k, v]) => (v == null || v === "" ? [] : [[k, String(v)]])))}`),
   /** 任一地址的行情(還沒存成房源) */
   marketAt: (q: { city: string; district: string; kind: string; size_ping?: number; rent?: number }) =>
     req<MarketResponse>(`/api/market/at?${new URLSearchParams(Object.entries(q).flatMap(([k, v]) => (v == null ? [] : [[k, String(v)]])))}`),

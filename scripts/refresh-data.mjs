@@ -42,6 +42,8 @@ const STEPS = [
   { id: "tra", lane: "tdx", everyDays: 180, label: "台鐵區間車時刻(TDX)", cmds: ["npm run collect -- tra"], commit: ["public/tra.json"] },
   { id: "metro", lane: "tdx", everyDays: 180, label: "捷運站間時間(TDX)", cmds: ["npm run collect -- metro"], commit: ["public/mrt-times.json"] },
   { id: "rent", lane: "gov", everyDays: 90, label: "租賃實價登錄(內政部)", cmds: [`npm run collect -- rent-stats${regionArg}`] },
+  // 買賣跟租賃同一個季度檔(data/lvr 快取共用),排在租賃後面就不會重下載
+  { id: "sale", lane: "gov", everyDays: 90, label: "買賣實價登錄(內政部)", cmds: [`npm run collect -- sale-stats${regionArg}`] },
   {
     id: "hazards",
     lane: "gov",

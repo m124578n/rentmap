@@ -12,6 +12,8 @@ import { CrimeSection } from "@/features/crime/CrimeSection";
 import { reverseGeocode } from "@/features/places/geocode";
 import { PointMarketSection } from "@/features/market/MarketSection";
 import { SaveNote } from "@/features/report/SaveNote";
+import { SaleSection } from "@/features/market/SaleSection";
+import { PURPOSES, PURPOSE_LABEL, setPurpose, usePurpose } from "@/lib/purpose";
 import { normalizeCity } from "@shared/regions";
 import { usePrivatePool } from "@/lib/useAuth";
 
@@ -61,6 +63,7 @@ export function PointDetail({
   const key = `${lat},${lng}`;
   // 公開版「附近的房源」只有自己的筆記,沒有就不顯示這塊
   const pool = usePrivatePool();
+  const purpose = usePurpose();
   const city = normalizeCity(addr.data?.city) ?? "";
   const district = addr.data?.district ?? "";
 
@@ -78,9 +81,25 @@ export function PointDetail({
         </button>
       </div>
 
-      {addr.data && <SaveNote key={`s${key}`} lat={lat} lng={lng} addr={{ ...addr.data, city }} onSaved={onSelect} />}
+      {/* 用途:租屋 / 買房 / 只看附近(記在這台瀏覽器);報告本身一樣,只換行情卡與能不能存成租屋筆記 */}
+      <div className="flex flex-wrap items-center gap-1 text-xs" role="radiogroup" aria-label="用途">
+        {PURPOSES.map((p) => (
+          <button
+            key={p}
+            role="radio"
+            aria-checked={purpose === p}
+            onClick={() => setPurpose(p)}
+            className={`rounded-full border px-2.5 py-0.5 ${purpose === p ? "border-neutral-800 bg-neutral-800 text-white dark:border-neutral-200 dark:bg-neutral-200 dark:text-neutral-900" : "border-neutral-300 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"}`}
+          >
+            {PURPOSE_LABEL[p]}
+          </button>
+        ))}
+      </div>
 
-      {city && district && <PointMarketSection key={`m${key}`} city={city} district={district} />}
+      {purpose === "rent" && addr.data && <SaveNote key={`s${key}`} lat={lat} lng={lng} addr={{ ...addr.data, city }} onSaved={onSelect} />}
+
+      {purpose === "rent" && city && district && <PointMarketSection key={`m${key}`} city={city} district={district} />}
+      {purpose === "buy" && city && district && <SaleSection key={`sale${key}`} city={city} district={district} />}
 
       {(pool || near.length > 0) && (
         <section className="text-sm">
