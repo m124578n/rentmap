@@ -106,6 +106,15 @@ export interface NearbyPoi {
   days: number | null;
 }
 /** GET /api/nearby */
+/** GET /api/nearby/box:畫面範圍內某一類的點(地圖「生活機能」圖層);範圍太大回 too_big */
+export interface PoiBoxResponse {
+  cat: PoiCat;
+  too_big: boolean;
+  /** 超過上限只回前 N 個 */
+  truncated: boolean;
+  items: { name: string | null; subtype: string | null; lat: number; lng: number; note: string | null }[];
+}
+
 export interface NearbyResponse {
   radius: number;
   has_data: boolean;

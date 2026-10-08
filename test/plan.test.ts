@@ -206,6 +206,7 @@ describe("沒登入一律擋(所有使用者 API)", () => {
     ["GET", "/api/market/sale/at?city=台北市&district=大安區"],
     ["GET", "/api/nearby?lat=25&lng=121"],
     ["GET", "/api/nearby/summary"],
+    ["GET", "/api/nearby/box?w=121.54&s=25.03&e=121.56&n=25.05&cat=convenience"],
     ["GET", "/api/hazards?lat=25&lng=121"],
     ["GET", "/api/hazards/summary"],
     ["GET", "/api/bus/nearby?lat=25&lng=121"],

@@ -40,17 +40,26 @@ export function NearbySection({
   const [more, setMore] = useState(false);
   const q = useQuery({ queryKey: ["nearby", lat, lng, radius], queryFn: () => api.nearby({ lat, lng, radius }), staleTime: 30 * 60_000 });
   const items = open ? (q.data?.items[open] ?? []) : [];
+  // 地圖上畫半徑內「全部」(清單仍列最近幾個);垃圾車本來就回 30 個
+  const all = useQuery({
+    queryKey: ["nearby-all", lat, lng, radius, open],
+    queryFn: () => api.nearby({ lat, lng, radius, all: open! }),
+    enabled: !!open && (q.data?.counts[open] ?? 0) > items.length,
+    staleTime: 30 * 60_000,
+  });
+  const onMap = open ? (all.data?.items[open] ?? items) : [];
 
   useEffect(() => {
     if (!onOverlay) return;
-    if (!open || !items.length) return onOverlay(null);
+    if (!open || !onMap.length) return onOverlay(null);
     onOverlay({
       lines: [{ coords: circle(lat, lng, radius), kind: "walk", color: "#6b7280" }],
-      stops: items.map((p) => ({ name: p.name ?? POI_SUBTYPE_LABEL[p.subtype ?? ""] ?? poiLabel(open), lat: p.lat, lng: p.lng, role: "transfer" as const })),
-      focus: [[lng, lat], ...items.map((p): [number, number] => [p.lng, p.lat])],
+      stops: onMap.map((p) => ({ name: p.name ?? POI_SUBTYPE_LABEL[p.subtype ?? ""] ?? poiLabel(open), lat: p.lat, lng: p.lng, role: "transfer" as const })),
+      // 畫面框住整個半徑(點很多時不要被最遠的一個拉太遠)
+      focus: [[lng, lat], ...circle(lat, lng, radius)],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, q.data, onOverlay]);
+  }, [open, q.data, all.data, onOverlay]);
   useEffect(() => () => onOverlay?.(null), [onOverlay]);
 
   if (!q.data) return null;

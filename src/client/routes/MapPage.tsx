@@ -23,7 +23,9 @@ import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 import { COMMUTE_LEGEND, commuteColor, HEAT_LABEL, HEAT_MODES, useHeat, type HeatMode, type Viewport } from "@/features/map/heat";
-import { Layers } from "lucide-react";
+import { Layers, Store } from "lucide-react";
+import { POI_LAYER_CATS, poiColor, usePoiLayer } from "@/features/map/poiLayer";
+import { poiLabel, type PoiCat } from "@shared/poi";
 
 const PANEL_W = 400;
 
@@ -85,6 +87,9 @@ export function MapPage() {
   const [hideMarkers, setHideMarkers] = useState(false);
   const shownOnMap = heatMode !== "none" && hideMarkers ? NO_ITEMS : items;
   const heat = useHeat(heatMode, view, items);
+  const [poiCat, setPoiCat] = usePoiCat();
+  const poi = usePoiLayer(poiCat, view);
+  const poiLayer = useMemo(() => (poi.fc && poiCat ? { fc: poi.fc, color: poiColor(poiCat) } : null), [poi.fc, poiCat]);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
   const panelOpen = selectedId != null || point != null;
   const panel = (onOverlay: (o: BusOverlay | null) => void) =>
@@ -98,7 +103,7 @@ export function MapPage() {
   const colorControls = modes.length > 1 && (
     <div className={BOX}>
       <div className="flex flex-wrap gap-1">
-        <span className="self-center text-neutral-500">標記顏色</span>
+        <span className="self-center text-neutral-500 dark:text-neutral-300">標記顏色</span>
         {modes.map((m) => (
           <button key={m} onClick={() => setColorMode(m)} className={chip(colorMode === m)}>
             {m === "stage" ? "找房狀態" : m === "commute" ? "通勤時間" : "需求符合度"}
@@ -120,9 +125,9 @@ export function MapPage() {
   const heatControls = (
   <div className={BOX}>
     <label className="flex items-center gap-1">
-      <Layers size={13} className="text-neutral-500" />
-      <span className="text-neutral-500">區域圖層</span>
-      <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-transparent px-1 py-0.5 dark:border-neutral-700">
+      <Layers size={13} className="text-neutral-500 dark:text-neutral-300" />
+      <span className="text-neutral-500 dark:text-neutral-300">區域圖層</span>
+      <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-white px-1 py-0.5 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100">
         {HEAT_MODES.filter((m) => m !== "rent" || pool).map((m) => (
           <option key={m} value={m}>
             {HEAT_LABEL[m]}
@@ -137,7 +142,26 @@ export function MapPage() {
       </label>
     )}
     {heat.legend.length > 0 && <Legend items={heat.legend} square />}
-    {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500">{heat.note}</p>}
+    {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{heat.note}</p>}
+    <label className="mt-1 flex items-center gap-1">
+      <Store size={13} className="text-neutral-500 dark:text-neutral-300" />
+      <span className="text-neutral-500 dark:text-neutral-300">生活機能</span>
+      <select
+        value={poiCat ?? ""}
+        onChange={(e) => setPoiCat((e.target.value || null) as PoiCat | null)}
+        className="rounded border border-neutral-200 bg-white px-1 py-0.5 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+      >
+        <option value="">不顯示</option>
+        {POI_LAYER_CATS.map((c) => (
+          <option key={c} value={c}>
+            {poiLabel(c)}
+          </option>
+        ))}
+      </select>
+      {poiCat && <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: poiColor(poiCat) }} />}
+      {poi.loading && <span className="text-neutral-400">載入中…</span>}
+    </label>
+    {poi.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{poi.note}</p>}
   </div>
   );
 
@@ -173,6 +197,7 @@ export function MapPage() {
             view={region.view}
             fitWithin={regionBbox(region.key)}
             heat={heat.fc}
+            poiLayer={poiLayer}
             onViewport={setView}
           />
 
@@ -277,6 +302,32 @@ function Legend({ items, square = false }: { items: [string, string][]; square?:
       ))}
     </div>
   );
+}
+
+const POI_KEY = "rentmap.poiLayer";
+
+/** 生活機能圖層的類別:這台瀏覽器的偏好 */
+function usePoiCat(): [PoiCat | null, (c: PoiCat | null) => void] {
+  const [cat, setCat] = useState<PoiCat | null>(() => {
+    try {
+      const v = localStorage.getItem(POI_KEY) as PoiCat | null;
+      return v && POI_LAYER_CATS.includes(v) ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  return [
+    cat,
+    (c) => {
+      setCat(c);
+      try {
+        if (c) localStorage.setItem(POI_KEY, c);
+        else localStorage.removeItem(POI_KEY);
+      } catch {
+        /* 私密模式,忽略 */
+      }
+    },
+  ];
 }
 
 const HEAT_KEY = "rentmap.heatLayer";

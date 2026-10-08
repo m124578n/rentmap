@@ -7,6 +7,7 @@ import { localizeBasemap, STYLE, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 import { setHeat } from "./heatLayer";
+import { setPoiLayer } from "./poiLayer";
 import { PriceMarkers } from "./priceMarkers";
 import type { Viewport } from "./heat";
 import type { FeatureCollection } from "geojson";
@@ -38,6 +39,8 @@ interface Props {
   fitWithin?: [number, number, number, number];
   /** 區域圖層(通勤網格、災害多邊形…) */
   heat?: FeatureCollection | null;
+  /** 生活機能圖層(畫面範圍內某一類的點) */
+  poiLayer?: { fc: FeatureCollection; color: string } | null;
   /** 畫面移動結束(區域圖層依範圍抓資料) */
   onViewport?: (v: Viewport) => void;
 }
@@ -46,16 +49,24 @@ interface Props {
  * style 好了就做,否則等 idle 再做。maplibre v6 的 isStyleLoaded() 在任何 source(捷運、圖層)還在載入時也是 false,
  * 直接略過的話資料晚到就永遠畫不上去。fn 要能重複呼叫(load / 換主題也會畫)。回傳取消。
  */
+/** 樣式(style.json)本身載好了沒:加 source / layer 只需要這個,不用等圖磚。isStyleLoaded() 在任何圖磚還在載時都回 false */
+const styleReady = (map: maplibregl.Map) => !!(map as unknown as { style?: { _loaded?: boolean } }).style?._loaded || map.isStyleLoaded();
+
 function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefined {
-  if (map.isStyleLoaded()) {
+  if (styleReady(map)) {
     fn();
     return;
   }
   const run = () => {
-    if (map.isStyleLoaded()) fn();
+    if (!styleReady(map)) return;
+    map.off("styledata", run);
+    map.off("idle", run);
+    fn();
   };
-  map.once("idle", run);
+  map.on("styledata", run);
+  map.on("idle", run);
   return () => {
+    map.off("styledata", run);
     map.off("idle", run);
   };
 }
@@ -64,7 +75,7 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, onViewport, view, fitWithin }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, poiLayer = null, onViewport, view, fitWithin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -83,6 +94,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const pointMarkerRef = useRef<maplibregl.Marker | null>(null);
   const heatRef = useRef(heat);
   heatRef.current = heat;
+  const poiRef = useRef(poiLayer);
+  poiRef.current = poiLayer;
   const onViewportRef = useRef(onViewport);
   onViewportRef.current = onViewport;
   padRef.current = padLeft;
@@ -115,6 +128,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
       if (heatRef.current) setHeat(map, heatRef.current);
+      if (poiRef.current) setPoiLayer(map, poiRef.current, themeRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
       emitView();
     });
@@ -157,13 +171,14 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   // 主題切換:換底圖,styledata 後重套在地化與捷運圖層
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !styleReady(map)) return;
     map.setStyle(STYLE[theme]);
     map.once("styledata", () => {
       localizeBasemap(map);
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
       if (heatRef.current) setHeat(map, heatRef.current);
+      if (poiRef.current) setPoiLayer(map, poiRef.current, theme);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
   }, [theme]);
@@ -187,6 +202,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     return whenReady(map, () => setHeat(map, heatRef.current));
   }, [heat]);
 
+  // 生活機能圖層
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    return whenReady(map, () => setPoiLayer(map, poiRef.current, themeRef.current));
+  }, [poiLayer]);
+
   // 捷運資料到了才加圖層
   useEffect(() => {
     const map = mapRef.current;
@@ -197,17 +219,20 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   // 公車路線:畫上去並把整條(通勤模式是上下車那段)框進畫面
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    setBusOverlay(map, busOverlay, themeRef.current);
-    const pts = busOverlay ? overlayPoints(busOverlay) : null;
-    if (!pts || pts.length < 2) return;
-    const b = new maplibregl.LngLatBounds();
-    for (const p of pts) b.extend(p);
-    const narrow = window.innerWidth < 640;
-    map.fitBounds(b, {
-      padding: narrow ? { top: 40, bottom: padBottomRef.current + 20, left: 30, right: 30 } : { top: 60, bottom: 60, left: padRef.current + 60, right: 60 },
-      maxZoom: 16,
-      duration: 500,
+    if (!map) return;
+    // 圖磚還在載時也要畫(以前直接 return,點了生活機能 / 路線常常沒反應)
+    return whenReady(map, () => {
+      setBusOverlay(map, busOverlay, themeRef.current);
+      const pts = busOverlay ? overlayPoints(busOverlay) : null;
+      if (!pts || pts.length < 2) return;
+      const b = new maplibregl.LngLatBounds();
+      for (const p of pts) b.extend(p);
+      const narrow = window.innerWidth < 640;
+      map.fitBounds(b, {
+        padding: narrow ? { top: 40, bottom: padBottomRef.current + 20, left: 30, right: 30 } : { top: 60, bottom: 60, left: padRef.current + 60, right: 60 },
+        maxZoom: 16,
+        duration: 500,
+      });
     });
   }, [busOverlay]);
 

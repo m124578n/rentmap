@@ -2,7 +2,8 @@
  * 生活機能(附近地點)
  *
  * 查詢(需登入):
- *   GET /api/nearby?lat=&lng=&radius=500      半徑內每類幾個 + 每類最近 5 個(面板用)
+ *   GET /api/nearby?lat=&lng=&radius=500      半徑內每類幾個 + 每類最近 5 個(面板用);&all=<類別> 那一類回半徑內全部(地圖標點用,上限 500)
+ *   GET /api/nearby/box?w=&s=&e=&n=&cat=     畫面範圍內某一類的點(地圖「生活機能」圖層;範圍超過約 4km 見方回 too_big)
  *   GET /api/nearby/summary?radius=500         每間房源半徑內每類幾個(比較表、列表用)
  *   GET /api/garbage/fit?max=300&after=19:00   每間房源:走 max 公尺內有沒有 after 以後、平日至少 3 天有收的垃圾車(房東寫了代收就算有)
  *
@@ -15,7 +16,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { haversine, walkMin } from "@shared/bus";
-import { AVOIDABLE_CATS, encodeNearbySummary, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiCat } from "@shared/poi";
+import { AVOIDABLE_CATS, encodeNearbySummary, garbageService, PoiIn, POI_CATEGORIES, POI_CATS, weekdayCount, type GarbageFit, type NearbyPoi, type NearbyResponse, type NearbySummary, type PoiBoxResponse, type PoiCat } from "@shared/poi";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
@@ -94,6 +95,8 @@ function around(grid: Map<string, Poi[]>, lat: number, lng: number, radius: numb
 const num = (v: string | undefined) => (v == null || v === "" ? NaN : Number(v));
 const radiusOf = (v: string | undefined) => Math.min(1500, Math.max(100, num(v) || 500));
 const KEEP = 5;
+/** &all=<類別>:那一類回半徑內全部(1km 內超商、餐飲可能上百) */
+const ALL_MAX = 500;
 /** 垃圾車列多一點:不同時間的點都要看得到 */
 const KEEP_BY: Partial<Record<PoiCat, number>> = { garbage: 30 }; // 同一地點常有午、晚兩班,前端再依地點合併
 
@@ -102,6 +105,7 @@ nearby.get("/api/nearby", async (c) => {
   const lng = num(c.req.query("lng"));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = radiusOf(c.req.query("radius"));
+  const all = c.req.query("all") as PoiCat | undefined;
   const { grid, n } = await loadGrid(c.env.DB, regionOf(lat, lng));
   // Google 評分只在私人模式給(公開版拉麵只留店名與位置)
   const rated = isPrivatePool(c.env);
@@ -137,8 +141,32 @@ nearby.get("/api/nearby", async (c) => {
     }
     body.counts[cat] = list.length;
     // 有名字的優先(沒名字的公園 / 遊戲場常是社區角落),再依距離
-    body.items[cat] = list.sort((a, b) => Number(!a.name) - Number(!b.name) || a.distance_m - b.distance_m).slice(0, KEEP_BY[cat] ?? KEEP);
+    body.items[cat] = list.sort((a, b) => Number(!a.name) - Number(!b.name) || a.distance_m - b.distance_m).slice(0, cat === all ? ALL_MAX : (KEEP_BY[cat] ?? KEEP));
   }
+  return c.json(body);
+});
+
+/** 地圖圖層:畫面範圍內某一類(只在放大到街區時查;範圍太大回 too_big,前端提示放大) */
+const BOX_MAX_DEG = 0.04;
+const BOX_MAX_ITEMS = 1500;
+nearby.get("/api/nearby/box", async (c) => {
+  const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => num(c.req.query(k)));
+  const cat = c.req.query("cat") as PoiCat;
+  if (![w, s, e, n].every((x) => Number.isFinite(x)) || e! <= w! || n! <= s!) return c.json({ error: "w, s, e, n required" }, 400);
+  if (!(POI_CATS as readonly string[]).includes(cat)) return c.json({ error: "cat invalid" }, 400);
+  const body: PoiBoxResponse = { cat, too_big: false, truncated: false, items: [] };
+  if (e! - w! > BOX_MAX_DEG * 1.6 || n! - s! > BOX_MAX_DEG) return c.json({ ...body, too_big: true });
+  const { grid } = await loadGrid(c.env.DB, regionOf((s! + n!) / 2, (w! + e!) / 2));
+  for (let y = Math.floor(s! / CELL); y <= Math.floor(n! / CELL); y++)
+    for (let x = Math.floor(w! / CELL); x <= Math.floor(e! / CELL); x++)
+      for (const p of grid.get(cellKey(y, x)) ?? []) {
+        if (p.category !== cat || p.lat < s! || p.lat > n! || p.lng < w! || p.lng > e!) continue;
+        if (body.items.length >= BOX_MAX_ITEMS) {
+          body.truncated = true;
+          return c.json(body);
+        }
+        body.items.push({ name: p.name, subtype: p.subtype, lat: p.lat, lng: p.lng, note: p.note });
+      }
   return c.json(body);
 });
 

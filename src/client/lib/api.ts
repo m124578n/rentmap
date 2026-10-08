@@ -4,7 +4,7 @@ import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/b
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { StatusResponse } from "@shared/status";
-import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type NearbySummary, type NearbySummaryWire } from "@shared/poi";
+import { decodeNearbySummary, type GarbageFit, type NearbyResponse, type PoiBoxResponse, type NearbySummary, type NearbySummaryWire } from "@shared/poi";
 import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@shared/hazard";
 import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type DriveAtResponse, type DriveMatrix, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { ConsentNeed } from "@shared/legal";
@@ -90,7 +90,9 @@ export const api = {
   getRequirements: () => req<{ requirements: Requirements }>("/api/requirements"),
   putRequirements: (r: Requirements) => req<{ requirements: Requirements }>("/api/requirements", { method: "PUT", body: JSON.stringify(r) }),
 
-  nearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyResponse>(`/api/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
+  nearby: (q: { lat: number; lng: number; radius: number; all?: string }) =>
+    req<NearbyResponse>(`/api/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}${q.all ? `&all=${q.all}` : ""}`),
+  poiBox: (b: Bbox, cat: string) => req<PoiBoxResponse>(`/api/nearby/box?${bboxParams(b)}&cat=${cat}`),
   garbageFit: (maxM: number, after: string) => req<GarbageFit>(`/api/garbage/fit?max=${maxM}&after=${encodeURIComponent(after)}`),
   hazards: (lat: number, lng: number, city: string) => req<HazardResponse>(`/api/hazards?lat=${lat}&lng=${lng}&city=${encodeURIComponent(city)}`),
   hazardSummary: () => req<HazardSummary>("/api/hazards/summary"),

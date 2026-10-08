@@ -10,6 +10,17 @@
   color-scheme: dark;
 }
 
+/* 原生下拉的選項清單:select 用透明背景時,Windows 的 Chrome 會把展開的清單畫成白底、字卻沿用淺色(暗色模式幾乎看不到)。
+   選項一律給實色背景與字色。 */
+select option {
+  background-color: #fff;
+  color: #171717;
+}
+:root[data-theme="dark"] select option {
+  background-color: #171717;
+  color: #f5f5f5;
+}
+
 html,
 body,
 #root {
