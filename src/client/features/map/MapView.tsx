@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "./maplibreWorker";
 import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";

@@ -108,6 +108,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - `@cloudflare/vitest-plugin` 需要 vitest 4.x,不能升 5。
 - `tsc -b` 偶爾吃到舊的 `.tsbuildinfo` 報假錯,刪掉重跑。
 - maplibre-gl v6 在 Vite 8 dev 模式要 `optimizeDeps.exclude`,否則 worker 載不到、圖磚全空(已設在 vite.config.ts)。
+- maplibre-gl v6 的 worker 在**正式建置**也要特別處理:Vite 不會把 `maplibre-gl-worker.mjs` 複製出來,找不到又被 SPA 規則回成 index.html,地圖全白且沒有錯誤訊息(2026-10-08 正式站踩過)。`features/map/maplibreWorker.ts` 用 `?worker&url` 打包並 `setWorkerUrl`,畫地圖的元件要先 import 它。dev 測不出來,要用 `npm run build` + `npx vite preview` 驗。
 - `import * as maplibregl from "maplibre-gl"`(v6 沒有 default export);GeoJSON 型別從 `geojson` 套件 import。
 - 樂屋被 Cloudflare 擋死(連 headed 真 Chrome + 人工點驗證都過不了),不要再花時間試自動化;見 spike 文件。
 - `.ps1` 一定要存成 **UTF-8 with BOM**:PowerShell 5.1 沒 BOM 會用 ANSI 讀,中文字串直接讓腳本語法錯誤(register_task.ps1 踩過)。

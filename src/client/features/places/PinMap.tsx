@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "@/features/map/maplibreWorker";
 import { localizeBasemap, STYLE } from "@/features/map/basemap";
 import { useRegion } from "@/lib/region";
 import { useTheme } from "@/lib/useTheme";
