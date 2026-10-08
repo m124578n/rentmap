@@ -10,15 +10,17 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/area", "/area/*", "/sitemap.xml"]
   },
-  // 非機密設定。機密(GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET / INGEST_SECRET / ANTHROPIC_API_KEY)
-  // 雲端用 `wrangler secret put`,本機放 .dev.vars。
+  // 正式網域(shunzz.com 的 DNS 在 Cloudflare;憑證自動發)
+  "routes": [{ "pattern": "lokanote.shunzz.com", "custom_domain": true }],
+  // 非機密設定(正式站的值)。本機 dev 由 .dev.vars 覆寫 APP_ORIGIN=http://localhost:5173。
+  // 機密(GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET / INGEST_SECRET)雲端用 `wrangler secret put`,本機放 .dev.vars。
+  // 正式站不設 PRIVATE_POOL(= 公開模式)、不設 DEV_USER_EMAIL。
   "vars": {
-    "APP_ORIGIN": "http://localhost:5173",
+    "APP_ORIGIN": "https://lokanote.shunzz.com",
     "ADMIN_EMAILS": "m23568n@gmail.com"
   },
-  // database_id 先留佔位:本機 dev 走 .wrangler/state 的本地 SQLite,不會碰遠端。
-  // 正式的 id 等使用者同意部署後 `wrangler d1 create rentmap-db` 再填。
+  // 本機 dev 走 .wrangler/state 的本地 SQLite(不會碰遠端);正式站是 2026-10-08 建的 rentmap-db(亞太)。
   "d1_databases": [
-    { "binding": "DB", "database_name": "rentmap-db", "database_id": "local-placeholder", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "rentmap-db", "database_id": "cbd48da7-f3b2-400b-92f8-04429a1dc8b5", "migrations_dir": "migrations" }
   ]
 }
