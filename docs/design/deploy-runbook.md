@@ -2,7 +2,8 @@
 
 > **2026-10-08 第一次部署(使用者同意)**:D1 `rentmap-db`(亞太,id 已填進 `wrangler.jsonc`)、migration 0000–0016 已套、
 > Worker 已部署到 `https://lokanote.shunzz.com`(custom domain)、`SESSION_SECRET` / `INGEST_SECRET` 已設(正式站的 ingest 金鑰在家裡 `.env.production`,不進 git)。
-> 還沒做:Google OAuth(本機沒有那組 client 的值,要使用者提供)、資料匯入(免費方案 D1 每天只能寫 10 萬列,開放資料約 92 萬列,要先升 Workers Paid)。
+> Google OAuth:2026-10-08 使用者另建一組 client(redirect 已含正式站與 localhost),已設成 secret。
+> 還沒做:資料匯入(免費方案 D1 每天只能寫 10 萬列,開放資料約 92 萬列,要先升 Workers Paid)。
 > 現在是 Workers 免費方案:通勤 / 道路圖這類吃 CPU 的請求可能失敗。
 > `wrangler.jsonc` 的 `vars` 現在是正式站的值,本機 dev 靠 `.dev.vars` 的 `APP_ORIGIN=http://localhost:5173` 覆寫。
 

@@ -62,3 +62,6 @@ __pycache__/
 # ---- 採集資料（正本在家裡，不進 git）----
 data/
 !data/.gitkeep
+
+# Google OAuth 下載的金鑰檔,不要進 git
+client_secret_*.json
