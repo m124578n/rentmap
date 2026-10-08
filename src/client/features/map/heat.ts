@@ -4,6 +4,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import type { PropertySummary } from "@shared/schemas";
 import { HAZARD_LABEL, hazardText, type HazardKind } from "@shared/hazard";
 import { coverageCities } from "@shared/regions";
+import { useRegion } from "@/lib/region";
 import { COMMUTE_SIDE_LABEL } from "@shared/trip";
 import { api, type Bbox } from "@/lib/api";
 import { useFilters, whenOf } from "@/lib/filters";
@@ -81,6 +82,7 @@ export interface HeatResult {
 }
 
 export function useHeat(mode: HeatMode, view: Viewport | null, items: PropertySummary[]): HeatResult {
+  const region = useRegion();
   const f = useFilters();
   const places = usePlaces();
   const nPlaces = places.data?.items.length ?? 0;
@@ -96,7 +98,8 @@ export function useHeat(mode: HeatMode, view: Viewport | null, items: PropertySu
     placeholderData: keepPreviousData,
   });
   const zones = useQuery({
-    queryKey: ["hazard-zones", mode, mode === "airnoise" ? null : box],
+    // 航空噪音整份給(不看範圍),但伺服器依畫面中心決定哪個生活圈:key 要帶生活圈,不然切區後還是上一區的
+    queryKey: ["hazard-zones", mode, mode === "airnoise" ? region.key : box],
     queryFn: () => api.hazardZones(mode as HazardKind, box!),
     enabled: isHazard && box != null,
     staleTime: 60 * 60_000,
@@ -163,7 +166,13 @@ export function useHeat(mode: HeatMode, view: Viewport | null, items: PropertySu
       features: (z?.features ?? []).map((ft) => ({ ...ft, properties: { color: hazardColor(k, ft.properties.level) } })),
     };
     const note =
-      k === "liquefaction" ? `只有${coverageCities("liquefaction")}有資料` : k === "airnoise" ? "環保局依「里」公告的航空噪音防制區(松山機場)" : "水利署淹水潛勢(防洪設施正常運作下的模擬)";
+      k === "liquefaction"
+        ? `只有${coverageCities("liquefaction")}有資料`
+        : k === "airnoise"
+          ? coverageCities("airnoise", region.key)
+            ? `${coverageCities("airnoise", region.key)}環保局依「里」公告的航空噪音防制區`
+            : "這一區沒有航空噪音防制區的資料"
+          : "水利署淹水潛勢(防洪設施正常運作下的模擬)";
     return { fc, legend, note, loading: zones.isFetching };
-  }, [mode, grid.data, grid.isFetching, zones.data, zones.isFetching, items, nPlaces, f.commuteSide]);
+  }, [mode, grid.data, grid.isFetching, zones.data, zones.isFetching, items, nPlaces, f.commuteSide, region.key]);
 }

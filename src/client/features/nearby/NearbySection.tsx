@@ -1,3 +1,4 @@
+import { Pending } from "@/components/Pending";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Star, Store } from "lucide-react";
@@ -89,7 +90,7 @@ export function NearbySection({
         </div>
       </div>
       {!d.has_data ? (
-        <p className="text-xs text-neutral-500">還沒匯入生活機能資料(家裡跑 npm run collect -- pois)。</p>
+        <Pending what="生活機能資料" cmd="npm run collect -- pois" />
       ) : (
         <>
           <div className="flex flex-wrap gap-1">

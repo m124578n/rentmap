@@ -1,3 +1,4 @@
+import { Pending } from "@/components/Pending";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 import { HAZARD_KINDS, HAZARD_LABEL, HAZARD_NOTE, hazardSevere, hazardText, type HazardKind } from "@shared/hazard";
@@ -20,7 +21,7 @@ export function HazardSection({ lat, lng, city }: { lat: number; lng: number; ci
         <ShieldAlert size={14} /> 災害風險
       </h2>
       {!d.has_data ? (
-        <p className="text-xs text-neutral-500">還沒匯入災害潛勢圖資(家裡跑 python scripts/build_hazards.py 再 npm run collect -- hazards)。</p>
+        <Pending what="災害潛勢圖資" cmd="python scripts/build_hazards.py && npm run collect -- hazards" />
       ) : (
         <ul className="grid gap-0.5 text-xs">
           {HAZARD_KINDS.map((k) => {

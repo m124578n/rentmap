@@ -2,15 +2,31 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PlaceUpdate } from "@shared/schemas";
 import { api } from "@/lib/api";
+import { usePlan } from "@/lib/plan";
 
 /** 我的地點(公司、爸媽家…) */
 export function usePlaces() {
   return useQuery({ queryKey: ["places"], queryFn: api.listPlaces, staleTime: 5 * 60_000 });
 }
 
+/**
+ * 通勤算得到的地點:方案內最早建的 N 個(伺服器也只算這幾個,見 routes/commute.ts 的 maxPlaces)。
+ * 降回免費後多的地點還留著、清單看得到,但通勤不算它;前端也要用同一份,不然篩選、上色會把每間都當成「搭不到」。
+ */
+export function useCommutePlaces() {
+  const q = usePlaces();
+  const max = usePlan().ent.places;
+  const items = q.data ? [...q.data.items].sort((a, b) => a.id - b.id).slice(0, max) : undefined;
+  return { ...q, data: items ? { ...q.data!, items } : undefined, hidden: q.data ? q.data.items.length - (items?.length ?? 0) : 0 };
+}
+
 export function usePlaceMutations() {
   const qc = useQueryClient();
-  const done = () => qc.invalidateQueries({ queryKey: ["places"] });
+  // 面板的機車 / 開車(drive-at)的 key 沒有地點,要一起清
+  const done = () => {
+    qc.invalidateQueries({ queryKey: ["places"] });
+    qc.invalidateQueries({ queryKey: ["drive-at"] });
+  };
   return {
     create: useMutation({ mutationFn: api.createPlace, onSuccess: done }),
     update: useMutation({ mutationFn: ({ id, ...input }: PlaceUpdate & { id: number }) => api.updatePlace(id, input), onSuccess: done }),

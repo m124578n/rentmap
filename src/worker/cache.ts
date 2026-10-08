@@ -3,6 +3,7 @@
  * 快取鍵帶「資料版本」:房源筆數 + 最後更新、來源資料的筆數 + version……資料一變鍵就變,不會回舊的,也不用手動清。
  * 命中就不用把整份公車網路 / 生活機能 / 實價登錄載進記憶體(冷啟動那 0.5–2 秒)。
  * 使用者自己的資料(我的地點)要放進 key;回應只存在伺服器端的快取,不會被別人拿到。
+ * 鍵的開頭是部署版本(wrangler.jsonc 的 version_metadata):改了演算法(通勤、行情、時速)重新部署後,舊結果自動失效,不用等 7 天。
  */
 import type { Context } from "hono";
 import type { AppEnv } from "./env";
@@ -34,7 +35,8 @@ export async function cachedJson(c: Context<AppEnv>, parts: (string | number)[],
  */
 export async function cachedBody(c: Context<AppEnv>, parts: (string | number)[], contentType: string, clientCache: string, compute: () => Promise<string>) {
   const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-  const key = new Request(`${ORIGIN}/${parts.map((p) => encodeURIComponent(String(p))).join("/")}`);
+  const deploy = (c.env as { CF_VERSION_METADATA?: { id?: string } }).CF_VERSION_METADATA?.id ?? "dev";
+  const key = new Request(`${ORIGIN}/${[deploy, ...parts].map((p) => encodeURIComponent(String(p))).join("/")}`);
   if (cache) {
     const hit = await cache.match(key);
     if (hit) {

@@ -1,3 +1,4 @@
+import { Pending } from "@/components/Pending";
 import { useEffect, useMemo, useState } from "react";
 import { usePlan } from "@/lib/plan";
 import { PlanLock } from "@/features/plan/PlanLock";
@@ -9,7 +10,7 @@ import { useFilters, whenOf } from "@/lib/filters";
 import type { Place } from "@shared/schemas";
 import { api } from "@/lib/api";
 import type { BusOverlay } from "@/features/map/busLayer";
-import { openPlacesDialog, useCommuteTarget, usePlaces } from "@/features/places/places";
+import { openPlacesDialog, useCommuteTarget, useCommutePlaces } from "@/features/places/places";
 import { RouteTimes } from "@/features/bus/BusSection";
 import { useCommute } from "./useCommute";
 import { tripOverlay } from "./tripOverlay";
@@ -32,7 +33,7 @@ interface Props {
  * 再點一種看每段怎麼走,地圖畫出整趟。沒設地點前只顯示「輸入公司地址」。
  */
 export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
-  const places = usePlaces();
+  const places = useCommutePlaces();
   const go = useCommute("go");
   const back = useCommute("back");
   const f = useFilters();
@@ -255,7 +256,7 @@ function Trips({
           {sel === i && <TripDetail trip={t} />}
         </div>
       ))}
-      {q.data && !q.data.has_bus && <p className="px-1.5 text-[11px] text-amber-700 dark:text-amber-400">還沒匯入公車資料,只算捷運與走路(家裡跑 npm run collect -- bus)。</p>}
+      {q.data && !q.data.has_bus && <Pending what="公車資料(目前只算捷運與走路)" cmd="npm run collect -- bus" className="px-1.5 text-[11px] text-amber-700 dark:text-amber-400" />}
       {trips.length > 0 && <p className="px-1.5 text-[11px] text-neutral-400">估計值:等車抓這個時段的班距一半(那時沒開的路線不算)、走路含等紅綠燈、轉乘另加 2 分;時間在篩選列「通勤」調整。</p>}
     </div>
   );

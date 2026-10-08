@@ -4,14 +4,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ApiError, api } from "@/lib/api";
 import { PropertyInput } from "@shared/schemas";
-import { useRegion } from "@/lib/region";
+import { setRegion, useRegion } from "@/lib/region";
 import { usePrivatePool } from "@/lib/useAuth";
 import { usePurpose } from "@/lib/purpose";
 import { BUILDING_TYPES, DEALS, DEAL_LABEL, DISTRICTS, KINDS, SOURCES, SOURCE_LABEL, type City, type Deal } from "@shared/constants";
 import { invalidateProperties } from "@/lib/invalidate";
 import { parseImportHash, type ImportedFacts } from "@shared/bookmarklet";
 import { bookmarkletHref } from "@/lib/bookmarklet";
-import { normalizeCity } from "@shared/regions";
+import { normalizeCity, OPEN_CITIES, regionOfCity } from "@shared/regions";
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
 export function NewPage() {
@@ -23,7 +23,13 @@ export function NewPage() {
   // 書籤小工具帶過來的欄位(/new#import=…,只在瀏覽器裡,不經過伺服器)
   const [imported] = useState<ImportedFacts | null>(() => parseImportHash(window.location.hash));
   const importedCity = normalizeCity(imported?.city);
-  const cityOk = !!importedCity && (region.cities as readonly string[]).includes(importedCity);
+  // 帶入的物件在別的生活圈(例如目前看北北基桃、帶入台中的物件):切過去,縣市選單才有那個市,也跟帶入的座標一致
+  const cityOk = !!importedCity && OPEN_CITIES.includes(importedCity);
+  useEffect(() => {
+    const r = cityOk ? regionOfCity(importedCity!) : null;
+    if (r && r !== region.key) setRegion(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [city, setCity] = useState<City>(cityOk ? (importedCity as City) : region.cities[0]!);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {

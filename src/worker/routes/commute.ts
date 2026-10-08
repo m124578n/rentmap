@@ -33,7 +33,7 @@ import { loadBusNet } from "../transit/network";
 import { EMPTY_BIKES, loadBikes } from "../transit/bike";
 import { bestTrip, buildPlan, buildTrip, candidates } from "../transit/plan";
 import { RAIL_VERSION } from "../transit/mrt";
-import { parseRegion, regionAt, regionTdx } from "@shared/regions";
+import { boxInTaiwan, inTaiwan, parseRegion, regionAt, regionTdx } from "@shared/regions";
 import { deny, planOf } from "../plan";
 import { briefOf, loadRoads, runRoads, snapNode } from "../transit/roads";
 import { COMMUTE_MODES, type DriveMode } from "@shared/drive";
@@ -185,7 +185,7 @@ commute.get("/api/commute/drive", async (c) => {
 commute.get("/api/commute/drive/at", async (c) => {
   const lat = Number(c.req.query("lat"));
   const lng = Number(c.req.query("lng"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat, lng required" }, 400);
+  if (!inTaiwan(lat, lng)) return c.json({ error: "lat, lng required" }, 400);
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
   const g = await commuteGate(c, when);
@@ -211,7 +211,7 @@ commute.get("/api/commute/trips", async (c) => {
   const lat = Number(c.req.query("lat"));
   const lng = Number(c.req.query("lng"));
   const placeId = Number(c.req.query("place_id"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isInteger(placeId)) return c.json({ error: "lat, lng, place_id required" }, 400);
+  if (!inTaiwan(lat, lng) || !Number.isInteger(placeId)) return c.json({ error: "lat, lng, place_id required" }, 400);
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
   const g = await commuteGate(c, when);
@@ -241,7 +241,7 @@ const GRID_MAX = 2500;
 
 commute.get("/api/commute/grid", async (c) => {
   const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => Number(c.req.query(k))) as [number, number, number, number];
-  if (![w, s, e, n].every(Number.isFinite) || e <= w || n <= s) return c.json({ error: "w, s, e, n required" }, 400);
+  if (!boxInTaiwan(w, s, e, n)) return c.json({ error: "w, s, e, n required" }, 400);
   const when = whenOf(c.req.query());
   if (!when) return c.json({ error: "day / time / dir invalid" }, 400);
   const g = await commuteGate(c, when);

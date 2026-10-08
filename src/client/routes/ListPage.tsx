@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { usePrivatePool } from "@/lib/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
@@ -18,6 +19,11 @@ import { priceText } from "@shared/price";
 export function ListPage() {
   const q = useQuery({ queryKey: ["properties"], queryFn: api.listProperties });
   const filters = useFilters();
+  // 「剛刊登的在前」看來源網站的刊登日,公開版的筆記沒有
+  const pool = usePrivatePool();
+  useEffect(() => {
+    if (!pool && filters.sort === "newest") setFilters({ sort: "updated" });
+  }, [pool, filters.sort]);
   const all = q.data?.items ?? [];
   const commute = useCommute();
   const along = useAlong();
@@ -39,7 +45,7 @@ export function ListPage() {
             <select value={filters.sort} onChange={(e) => setFilters({ sort: e.target.value as SortKey })} className="rounded border border-neutral-300 bg-transparent px-1.5 py-1 dark:border-neutral-700">
               <option value="updated">最近更新</option>
               <option value="rent">租金低 → 高</option>
-              <option value="newest">剛刊登的在前</option>
+              {pool && <option value="newest">剛刊登的在前</option>}
               <option value="drop">降價最多的在前</option>
               <option value="market">比行情便宜的在前</option>
               <option value="fit" disabled={!fit.configured}>

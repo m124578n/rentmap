@@ -99,6 +99,14 @@ export const CITY_INFO = {
 } as const satisfies Record<string, CityInfo>;
 
 export type CityName = keyof typeof CITY_INFO;
+
+/**
+ * 台灣本島 + 近海的範圍。API 的座標參數一律先用它擋:極端值(lat = 1e17)會讓網格迴圈的 y++ 停在同一個數、永遠跑不完,
+ * lat = 90 會讓經度換算變無限大。
+ */
+export const inTaiwan = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= 21 && lat <= 26.5 && lng >= 118 && lng <= 123;
+/** 範圍參數:四角都在台灣範圍內、而且 e > w、n > s */
+export const boxInTaiwan = (w: number, s: number, e: number, n: number) => inTaiwan(s, w) && inTaiwan(n, e) && e > w && n > s;
 /** 垃圾車清運點是用門牌對出來的、不是每一點都有座標的縣市(台中約 95%、高雄約 88%;scripts/locate_garbage.py) */
 export const PARTIAL_GARBAGE: readonly CityName[] = ["台中市", "高雄市"];
 export const ALL_CITIES = Object.keys(CITY_INFO) as CityName[];

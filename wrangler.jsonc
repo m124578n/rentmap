@@ -5,6 +5,8 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // 部署版本:彙總快取的鍵帶它,重新部署後舊結果自動失效(cache.ts)
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // 前端 SPA 靜態檔:vite build 產到 dist/client;找不到的路徑回 index.html 交給前端路由
   "assets": {
     "not_found_handling": "single-page-application",

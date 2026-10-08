@@ -2,6 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { beforeAll, describe, expect, it } from "vitest";
 import app from "../src/worker/index";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
+import { LEGAL_DOCS } from "../src/shared/legal";
 import { OFFERS, effectivePlan, extendPlan, type PlanState } from "../src/shared/plan";
 
 // 方案權限只在公開模式生效(私人模式不限),所以跟 pool.test.ts 一樣換一份 env 直接呼叫 app.fetch
@@ -30,6 +31,9 @@ beforeAll(async () => {
     await env.DB.prepare("INSERT INTO users (id, provider, provider_id, display_name, email, created_at, last_login_at) VALUES (?, 'google', ?, ?, ?, ?, ?)")
       .bind(uid, `sub-${uid}`, `U${uid}`, `u${uid}@example.com`, now, now)
       .run();
+    // 公開模式寫入前要同意最新版條款(auth.ts requireUser)
+    for (const doc of ["terms", "privacy"] as const)
+      await env.DB.prepare("INSERT INTO consents (user_id, doc, version, accepted_at) VALUES (?, ?, ?, ?)").bind(uid, doc, LEGAL_DOCS[doc].version, now).run();
     cookies[uid] = `${SESSION_COOKIE}=${await signSession({ id: uid, name: `U${uid}`, avatar: null }, "test-secret")}`;
   }
 });

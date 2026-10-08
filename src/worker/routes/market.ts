@@ -98,13 +98,16 @@ market.get("/api/market", async (c) => {
     const pools = await loadPools(DB);
     const { results } = await DB.prepare(`${PROP_SQL} WHERE 1${ownerSql(owner, "p")}`).all<PropRow>();
     const items: MarketMatrix["items"] = {};
+    // 買房筆記:同一縣市的樣本池只載一次(loadSalePools 每次呼叫都會先查一次 COUNT)
+    const salePools = new Map<string, Awaited<ReturnType<typeof loadSalePools>>>();
     for (const p of results) {
       if (p.deal !== "buy") {
         items[p.id] = briefOf(marketOf(pools, p));
         continue;
       }
       // 買房:跟買賣實價登錄比每坪單價(median 是每坪單價,sale: true)
-      const sp = await loadSalePools(DB, p.city);
+      let sp = salePools.get(p.city);
+      if (!sp) salePools.set(p.city, (sp = await loadSalePools(DB, p.city)));
       const m = computeSaleMarket(
         { building_type: saleTypeOf(p.building_type), size_ping: p.size_ping, building_age: p.building_age, price: p.price },
         sp.byDistrict.get(p.district) ?? [],

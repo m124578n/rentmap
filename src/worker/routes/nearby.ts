@@ -21,7 +21,7 @@ import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
 import { isPrivatePool, ownerOf, ownerSql } from "../pool";
-import { DEFAULT_REGION, REGION_KEYS, regionAt, regionBbox, type RegionKey } from "@shared/regions";
+import { DEFAULT_REGION, REGION_KEYS, boxInTaiwan, inTaiwan, regionAt, regionBbox, type RegionKey } from "@shared/regions";
 
 export const nearby = new Hono<AppEnv>();
 nearby.use("/api/nearby", requireUser());
@@ -103,7 +103,7 @@ const KEEP_BY: Partial<Record<PoiCat, number>> = { garbage: 30 }; // 同一地�
 nearby.get("/api/nearby", async (c) => {
   const lat = num(c.req.query("lat"));
   const lng = num(c.req.query("lng"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
+  if (!inTaiwan(lat, lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = radiusOf(c.req.query("radius"));
   const all = c.req.query("all") as PoiCat | undefined;
   const { grid, n } = await loadGrid(c.env.DB, regionOf(lat, lng));
@@ -152,7 +152,7 @@ const BOX_MAX_ITEMS = 1500;
 nearby.get("/api/nearby/box", async (c) => {
   const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => num(c.req.query(k)));
   const cat = c.req.query("cat") as PoiCat;
-  if (![w, s, e, n].every((x) => Number.isFinite(x)) || e! <= w! || n! <= s!) return c.json({ error: "w, s, e, n required" }, 400);
+  if (!boxInTaiwan(w!, s!, e!, n!)) return c.json({ error: "w, s, e, n required" }, 400);
   if (!(POI_CATS as readonly string[]).includes(cat)) return c.json({ error: "cat invalid" }, 400);
   const body: PoiBoxResponse = { cat, too_big: false, truncated: false, items: [] };
   if (e! - w! > BOX_MAX_DEG * 1.6 || n! - s! > BOX_MAX_DEG) return c.json({ ...body, too_big: true });

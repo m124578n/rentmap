@@ -6,7 +6,7 @@ import { driveBrief } from "@shared/drive";
 import { api } from "@/lib/api";
 import { useRegion } from "@/lib/region";
 import { useFilters, whenOf, type CommuteCtx } from "@/lib/filters";
-import { usePlaces } from "@/features/places/places";
+import { useCommutePlaces } from "@/features/places/places";
 import { usePlan } from "@/lib/plan";
 
 /**
@@ -17,7 +17,7 @@ import { usePlan } from "@/lib/plan";
  * side 省略 = 篩選列目前選的(上班 / 下班);時段設定改了會重查。
  */
 export function useCommute(side?: CommuteSide) {
-  const places = usePlaces();
+  const places = useCommutePlaces();
   const f = useFilters();
   const region = useRegion();
   const when = whenOf(f, side);

@@ -21,7 +21,7 @@ import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { ownerOf, ownerSql } from "../pool";
 import { mrtGraph, TRA_LINE, type MrtGraph } from "../transit/mrt";
-import { parseRegion, regionTdx } from "@shared/regions";
+import { inTaiwan, parseRegion, regionTdx } from "@shared/regions";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
@@ -35,7 +35,7 @@ const num = (v: string | undefined) => (v == null || v === "" ? NaN : Number(v))
 bus.get("/api/bus/nearby", async (c) => {
   const lat = num(c.req.query("lat"));
   const lng = num(c.req.query("lng"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
+  if (!inTaiwan(lat, lng)) return c.json({ error: "lat/lng required" }, 400);
   const radius = Math.min(1500, Math.max(100, num(c.req.query("radius")) || 400));
   const DB = c.env.DB;
 

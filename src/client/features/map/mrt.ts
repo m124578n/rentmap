@@ -11,7 +11,11 @@ export interface MrtData {
 export function useMrt() {
   return useQuery({
     queryKey: ["mrt"],
-    queryFn: async () => (await fetch("/mrt.json")).json() as Promise<MrtData>,
+    queryFn: async () => {
+      const res = await fetch("/mrt.json");
+      if (!res.ok) throw new Error(`mrt.json ${res.status}`);
+      return (await res.json()) as MrtData;
+    },
     staleTime: Infinity,
   });
 }

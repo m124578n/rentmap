@@ -83,6 +83,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const onSelectRef = useRef(onSelect);
   const mrtRef = useRef(mrt);
   const themeRef = useRef(theme);
+  /** 底圖目前是哪個主題(建立地圖時的那個) */
+  const appliedTheme = useRef(theme);
   const padRef = useRef(padLeft);
   const padBottomRef = useRef(padBottom);
   padBottomRef.current = padBottom;
@@ -168,12 +170,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 主題切換:換底圖,styledata 後重套在地化與捷運圖層
+  // 主題切換:換底圖,整份重載後重套在地化與各圖層。地圖還在載入時切也要換(以前會被略過,底圖停在舊主題)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleReady(map)) return;
-    map.setStyle(STYLE[theme]);
-    map.once("styledata", () => {
+    if (!map || appliedTheme.current === theme) return;
+    appliedTheme.current = theme;
+    map.setStyle(STYLE[theme], { diff: false });
+    map.once("style.load", () => {
       localizeBasemap(map);
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);

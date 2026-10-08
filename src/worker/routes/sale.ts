@@ -60,7 +60,9 @@ sale.get("/api/market/sale/at", async (c) => {
   const parsed = AtQuery.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "city, district required" }, 400);
   const v = parsed.data;
-  const city = normalizeCity(v.city) ?? v.city;
+  // 不認得的縣市直接擋(否則每個亂字串都在記憶體快取多開一份)
+  const city = normalizeCity(v.city);
+  if (!city) return c.json({ error: "city invalid" }, 400);
   const pools = await loadSalePools(c.env.DB, city);
   const market = computeSaleMarket(
     { building_type: v.building_type ?? null, size_ping: v.size_ping ?? null, building_age: v.building_age ?? null, price: v.price ?? null },

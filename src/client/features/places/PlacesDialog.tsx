@@ -52,7 +52,8 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
         <p className="mb-3 text-sm text-neutral-500">存公司(或常去的地方)的地址,房源就能算通勤:搭公車、捷運(轉乘一次內)要多久。</p>
 
         {editing ? (
-          <PlaceForm
+          <>
+            <PlaceForm
             key={editing.id ?? "new"}
             initial={editing}
             canCancel={items.length > 0}
@@ -70,6 +71,11 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
               else mut.update.mutate({ id: v.id, ...body }, { onSuccess: () => setDraft(null) });
             }}
           />
+            {/* 表單畫面也要看得到失敗原因(第一次設定會直接進表單;402、400、斷線以前都沒提示) */}
+            {(mut.create.error || mut.update.error) && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{planError(mut.create.error ?? mut.update.error) ?? "存不起來,再試一次"}</p>
+            )}
+          </>
         ) : (
           <>
             <ul className="grid gap-1.5">

@@ -162,7 +162,7 @@ export class PriceMarkers {
         el.addEventListener("click", async (ev) => {
           ev.stopPropagation();
           const src = map.getSource(SRC) as maplibregl.GeoJSONSource;
-          const zoom = await src.getClusterExpansionZoom(cid);
+          const zoom = await src.getClusterExpansionZoom(cid).catch(() => map.getZoom() + 1.5);
           map.easeTo({ center: e!.marker.getLngLat(), zoom: Math.min(zoom + 0.2, 17), duration: 400 });
         });
         e = { marker: new maplibregl.Marker({ element: el }), el, on: false };

@@ -1,3 +1,4 @@
+import { Pending } from "@/components/Pending";
 import { useState } from "react";
 import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
@@ -70,7 +71,7 @@ function MarketView({ data, city, district, kind, rent }: { data: MarketResponse
     return (
       <section className="text-sm">
         {head}
-        <p className="text-xs text-neutral-500">還沒匯入實價登錄(家裡跑 npm run collect -- rent-stats)。</p>
+        <Pending what="租賃實價登錄" cmd="npm run collect -- rent-stats" />
         <Asking a={asking} m={null} city={city} district={district} kind={kind} />
       </section>
     );

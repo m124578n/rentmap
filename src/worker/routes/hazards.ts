@@ -20,7 +20,7 @@ import { HAZARD_KINDS, HazardZoneIn, type HazardKind, type HazardLevels, type Ha
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { cachedJson, propertiesSig, tableSig } from "../cache";
-import { DEFAULT_REGION, REGIONS, hasCoverage, regionAt, type Coverage, type RegionKey } from "@shared/regions";
+import { DEFAULT_REGION, REGIONS, boxInTaiwan, hasCoverage, inTaiwan, regionAt, type Coverage, type RegionKey } from "@shared/regions";
 import { ownerOf, ownerSql } from "../pool";
 
 export const hazards = new Hono<AppEnv>();
@@ -124,7 +124,7 @@ const num = (v: string | undefined) => (v == null || v === "" ? NaN : Number(v))
 hazards.get("/api/hazards", async (c) => {
   const lat = num(c.req.query("lat"));
   const lng = num(c.req.query("lng"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return c.json({ error: "lat/lng required" }, 400);
+  if (!inTaiwan(lat, lng)) return c.json({ error: "lat/lng required" }, 400);
   const z = await loadZones(c.env.DB, regionAt(lat, lng) ?? DEFAULT_REGION);
   const body: HazardResponse = {
     has_data: z.zones.length > 0,
@@ -169,7 +169,7 @@ const ZONES_MAX_AREA = 0.025;
 hazards.get("/api/hazards/zones", async (c) => {
   const kind = z.enum(HAZARD_KINDS).safeParse(c.req.query("kind"));
   const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => Number(c.req.query(k))) as [number, number, number, number];
-  if (!kind.success || ![w, s, e, n].every(Number.isFinite)) return c.json({ error: "kind, w, s, e, n required" }, 400);
+  if (!kind.success || !boxInTaiwan(w, s, e, n)) return c.json({ error: "kind, w, s, e, n required" }, 400);
   // 航空噪音只有一百多個里,整份給;其他看範圍
   if (kind.data !== "airnoise" && (e - w) * (n - s) > ZONES_MAX_AREA) return c.json({ type: "FeatureCollection", features: [], too_big: true });
   const zc = await loadZones(c.env.DB, regionAt((s + n) / 2, (w + e) / 2) ?? DEFAULT_REGION);

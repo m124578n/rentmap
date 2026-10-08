@@ -97,6 +97,11 @@ export function PointDetail({
         ))}
       </div>
 
+      {purpose !== "look" && addr.isError && (
+        <p className="text-xs text-neutral-500">
+          查不到這個點的地址,沒辦法直接存成筆記;可以改用上方「新增」手動填。
+        </p>
+      )}
       {purpose !== "look" && addr.data && <SaveNote key={`s${key}${purpose}`} deal={purpose} lat={lat} lng={lng} addr={{ ...addr.data, city }} onSaved={onSelect} />}
 
       {purpose === "rent" && city && district && <PointMarketSection key={`m${key}`} city={city} district={district} />}

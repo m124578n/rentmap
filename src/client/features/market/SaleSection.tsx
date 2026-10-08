@@ -1,3 +1,4 @@
+import { Pending } from "@/components/Pending";
 import { useState } from "react";
 import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
@@ -56,7 +57,7 @@ export function SaleSection({
       {!q.data ? (
         <p className="text-xs text-neutral-500">{q.isError ? "行情載入失敗" : "載入行情…"}</p>
       ) : !q.data.has_data ? (
-        <p className="text-xs text-neutral-500">{city}還沒匯入買賣實價登錄(家裡跑 npm run collect -- sale-stats)。</p>
+        <Pending what={`${city}的買賣實價登錄`} cmd="npm run collect -- sale-stats" />
       ) : !m ? (
         <p className="text-xs text-neutral-500">
           {district}最近一年沒有{type}的買賣登錄。

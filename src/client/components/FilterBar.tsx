@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePrivatePool } from "@/lib/useAuth";
 import { usePlan } from "@/lib/plan";
 import { PlanLock } from "@/features/plan/PlanLock";
 import { useQuery } from "@tanstack/react-query";
@@ -21,6 +22,20 @@ const KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"] as cons
 /** 篩選列:一排 chip,點開展開細項。地圖與列表共用同一份條件。 */
 export function FilterBar({ shown, total }: { shown: number; total: number }) {
   const f = useFilters();
+  // 「新上架」看的是來源網站的刊登日,只有私人模式的採集房源有;公開版的筆記永遠不是新上架,勾了會把清單清空
+  const pool = usePrivatePool();
+  useEffect(() => {
+    if (!pool && f.newOnly) setFilters({ newOnly: false });
+  }, [pool, f.newOnly]);
+  // 「經過路線」是某個生活圈的路線名:換生活圈就清掉,不然新的一區房源全被濾掉
+  const regionKey = useRegion().key;
+  const lastRegion = useRef(regionKey);
+  useEffect(() => {
+    if (lastRegion.current === regionKey) return;
+    lastRegion.current = regionKey;
+    if (f.alongRoutes.length) setFilters({ alongRoutes: [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionKey]);
   const places = usePlaces();
   const placeList = places.data?.items ?? [];
   const [open, setOpen] = useState(false);
@@ -54,9 +69,11 @@ export function FilterBar({ shown, total }: { shown: number; total: number }) {
         <Chip on={f.favOnly} onClick={() => setFilters({ favOnly: !f.favOnly })}>
           ♥ 只看收藏
         </Chip>
-        <Chip on={f.newOnly} onClick={() => setFilters({ newOnly: !f.newOnly })}>
-          新上架
-        </Chip>
+        {pool && (
+          <Chip on={f.newOnly} onClick={() => setFilters({ newOnly: !f.newOnly })}>
+            新上架
+          </Chip>
+        )}
         <Chip on={f.priceDrop} onClick={() => setFilters({ priceDrop: !f.priceDrop })}>
           ↓ 降過價
         </Chip>

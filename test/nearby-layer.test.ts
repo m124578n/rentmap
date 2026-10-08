@@ -52,3 +52,15 @@ describe("地圖生活機能圖層", () => {
     expect(anon.status).toBe(401);
   });
 });
+
+describe("座標參數限制在台灣範圍(極端值會讓網格迴圈停不下來)", () => {
+  it("超出範圍的 lat / lng / 範圍回 400", async () => {
+    expect((await get(`/api/nearby?lat=1e17&lng=121&radius=500`)).status).toBe(400);
+    expect((await get(`/api/nearby?lat=90&lng=121`)).status).toBe(400);
+    expect((await get(`/api/bus/nearby?lat=25&lng=1e17`)).status).toBe(400);
+    expect((await get(`/api/hazards?lat=-30&lng=121`)).status).toBe(400);
+    expect((await get(`/api/commute/grid?w=1e17&e=100000000000000016&s=25&n=25.01`)).status).toBe(400);
+    expect((await get(`/api/nearby/box?w=121.54&s=25.03&e=1e17&n=25.05&cat=convenience`)).status).toBe(400);
+    expect((await get(`/api/market/sale/at?city=${encodeURIComponent("亂寫市")}&district=x&building_type=${encodeURIComponent("電梯大樓")}`)).status).toBe(400);
+  });
+});

@@ -2,6 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { beforeAll, describe, expect, it } from "vitest";
 import app from "../src/worker/index";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
+import { LEGAL_DOCS } from "../src/shared/legal";
 
 // 公開模式(PRIVATE_POOL 沒設):每人只看得到自己的房源,不收照片 / 屋況文字 / 聯絡人,沒有房源採集推入。
 // vitest 的預設 binding 是私人模式,這裡直接呼叫 app.fetch 換一份 env。
@@ -31,6 +32,9 @@ beforeAll(async () => {
     await env.DB.prepare("INSERT INTO users (id, provider, provider_id, display_name, created_at, last_login_at) VALUES (?, 'google', ?, ?, ?, ?)")
       .bind(uid, `sub-${uid}`, `U${uid}`, now, now)
       .run();
+    // 公開模式寫入前要同意最新版條款(auth.ts requireUser)
+    for (const doc of ["terms", "privacy"] as const)
+      await env.DB.prepare("INSERT INTO consents (user_id, doc, version, accepted_at) VALUES (?, ?, ?, ?)").bind(uid, doc, LEGAL_DOCS[doc].version, now).run();
     cookies[uid] = `${SESSION_COOKIE}=${await signSession({ id: uid, name: `U${uid}`, avatar: null }, "test-secret")}`;
   }
   // 私人模式採集進來的共用房源(created_by 是 NULL),帶照片、屋況、聯絡人
@@ -109,5 +113,34 @@ describe("公開模式", () => {
     expect((await pub("/api/ingest/listings", null, { method: "POST", body: "{}" })).status).toBe(401);
     // 開放資料(生活機能)不受影響:格式錯回 400 而不是 404
     expect((await pub("/api/ingest/pois", null, { method: "POST", headers: bearer, body: "{}" })).status).toBe(400);
+  });
+});
+
+describe("寫入前的伺服器端檢查(公開模式)", () => {
+  const note = { title: "測試", city: "台北市", district: "大安區", rent: 10000 };
+  it("沒同意最新版條款:讀照常,寫入 403;同意後可以寫", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO users (id, provider, provider_id, display_name, created_at, last_login_at) VALUES (21, 'google', 'sub-21', 'U21', ?, ?)").bind(now, now).run();
+    cookies[21] = `${SESSION_COOKIE}=${await signSession({ id: 21, name: "U21", avatar: null }, "test-secret")}`;
+    expect((await pub("/api/properties", 21)).status).toBe(200);
+    const r = await pub("/api/properties", 21, { method: "POST", body: JSON.stringify(note) });
+    expect(r.status).toBe(403);
+    expect(((await r.json()) as { error: string }).error).toBe("consent_required");
+    // 同意本身不受限
+    const docs = (["terms", "privacy"] as const).map((doc) => ({ doc, version: LEGAL_DOCS[doc].version }));
+    expect((await pub("/api/consent", 21, { method: "POST", body: JSON.stringify({ docs }) })).status).toBe(200);
+    expect((await pub("/api/properties", 21, { method: "POST", body: JSON.stringify(note) })).status).toBe(201);
+  });
+
+  it("帳號已刪除(別台裝置刪的),舊 cookie 寫入回 401、不會 500", async () => {
+    const ghost = `${SESSION_COOKIE}=${await signSession({ id: 999, name: "X", avatar: null }, "test-secret")}`;
+    const ctx = createExecutionContext();
+    const res = await app.fetch(
+      new Request(`${ORIGIN}/api/properties`, { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", Cookie: ghost }, body: JSON.stringify(note) }),
+      PUBLIC_ENV,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(401);
   });
 });

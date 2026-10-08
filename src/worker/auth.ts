@@ -170,12 +170,26 @@ export async function readSession(c: Context<AppEnv>): Promise<SessionUser | nul
   }
 }
 
+/** 不用先同意條款就能寫的:同意本身、匯出 / 刪除帳號 */
+const CONSENT_FREE = /^\/api\/(consent|account)(\/|$)/;
+
 /** 沒登入 401;非 GET 另要求同源(Origin / Sec-Fetch-Site)搭配 SameSite=Lax 擋 CSRF。 */
 export function requireUser(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     if (c.req.method !== "GET" && c.req.method !== "HEAD" && !sameOrigin(c)) return c.json({ error: "forbidden" }, 403);
     const user = await readSession(c);
     if (!user) return c.json({ error: "login required" }, 401);
+    // 寫入前再確認兩件事(只有前端擋不夠,直接打 API 也要擋;讀取照常,沒必要每次多查):
+    //   帳號還在(別台裝置刪了帳號,這顆 cookie 簽章仍有效)、公開模式下最新版條款已同意(改版後要重新同意)
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+      const exists = await c.env.DB.prepare("SELECT 1 AS ok FROM users WHERE id = ?").bind(user.id).first();
+      if (!exists) {
+        clearSession(c);
+        return c.json({ error: "login required" }, 401);
+      }
+      if (!isPrivatePool(c.env) && !CONSENT_FREE.test(c.req.path) && (await neededFor(c.env.DB, user.id)).length)
+        return c.json({ error: "consent_required", message: "請先同意最新版的服務條款與隱私權政策" }, 403);
+    }
     c.set("user", user);
     await next();
   };

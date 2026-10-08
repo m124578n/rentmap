@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Siren } from "lucide-react";
 import { CRIME_CATS, poiLabel } from "@shared/poi";
-import { coverageCities, hasCoverage } from "@shared/regions";
+import { coverageCities, hasCoverage, REGIONS, regionOfCity } from "@shared/regions";
 import { useRegion } from "@/lib/region";
 import { districtRank, type CrimeDistricts } from "@shared/crime";
 import { api } from "@/lib/api";
@@ -40,7 +40,9 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
   const row = d?.items[key];
   const period = d?.periods?.[city.replace("臺", "台")] ?? d;
   // 排名只跟同一個生活圈、有治安資料的縣市的區比(沒件數的區算 0;見 shared/crime.ts)
-  const rank = (k: "house" | "moto") => (d ? districtRank(d.items, region.cities, city, district, k) : null);
+  // 房源所在的生活圈(在台中看台北的房源時,要跟北北基桃比)
+  const home = REGIONS[regionOfCity(city) ?? region.key];
+  const rank = (k: "house" | "moto") => (d ? districtRank(d.items, home.cities, city, district, k) : null);
   const houseRank = rank("house");
   const cases = CRIME_CATS.flatMap((c) => (near.data?.items[c] ?? []).map((p) => ({ ...p, c }))).sort((a, b) => a.distance_m - b.distance_m);
 
@@ -50,9 +52,9 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
         <Siren size={14} /> 治安(竊盜)
       </h2>
       {!hasCoverage(city, "crimeDistricts") ? (
-        <p className="text-xs text-neutral-500">{city}還沒有治安資料{coverageCities("crimeDistricts", region.key) ? `(目前只有${coverageCities("crimeDistricts", region.key)})` : ""}。</p>
+        <p className="text-xs text-neutral-500">{city}還沒有治安資料{coverageCities("crimeDistricts", home.key) ? `(目前只有${coverageCities("crimeDistricts", home.key)})` : ""}。</p>
       ) : !d ? (
-        <p className="text-xs text-neutral-500">還沒匯入治安資料(家裡跑 npm run collect -- crime)。</p>
+        <p className="text-xs text-neutral-500">治安資料準備中。</p>
       ) : (
         <div className="grid gap-1 text-xs">
           {tp && near.data && (
@@ -90,7 +92,7 @@ export function CrimeSection({ lat, lng, city, district }: { lat: number; lng: n
             </span>
             {houseRank && (
               <span className="ml-1.5 text-neutral-500">
-                (住宅竊盜{region.label} {houseRank.of} 區第 {houseRank.n} 多)
+                (住宅竊盜{home.label} {houseRank.of} 區第 {houseRank.n} 多)
               </span>
             )}
           </div>
