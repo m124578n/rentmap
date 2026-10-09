@@ -9,6 +9,7 @@ import type { HazardKind, HazardResponse, HazardSummary, HazardZones } from "@sh
 import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, type DriveAtResponse, type DriveMatrix, type TourResponse, type TripsResponse } from "@shared/trip";
 import type { ConsentNeed } from "@shared/legal";
 import type { SaleMarketResponse } from "@shared/sale";
+import type { AdminStats } from "@shared/admin";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -49,7 +50,9 @@ window.addEventListener(STALE_EVENT, () => (staleShown = true));
 window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
-  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[]; plan: PlanState | null }>("/api/me"),
+  me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[]; plan: PlanState | null; owner?: boolean }>("/api/me"),
+  /** 營運儀表板(只有站長) */
+  adminStats: () => req<AdminStats>("/api/admin/stats"),
   deleteAccount: () => req<{ ok: true }>("/api/account", { method: "DELETE", body: JSON.stringify({ confirm: "刪除" }) }),
   consent: (docs: { doc: string; version: string }[]) => req<{ consent_needed: ConsentNeed[] }>("/api/consent", { method: "POST", body: JSON.stringify({ docs }) }),
   logout: () => req<{ ok: true }>("/api/auth/logout", { method: "POST" }),

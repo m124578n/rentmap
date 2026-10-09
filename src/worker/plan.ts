@@ -7,12 +7,15 @@ import type { Context } from "hono";
 import { ENTITLEMENTS, UNLIMITED, effectivePlan, type Entitlements, type PlanDenied, type PlanState } from "@shared/plan";
 import type { AppEnv } from "./env";
 import { isPrivatePool } from "./pool";
+import { isOwnerEmail } from "./owner";
 
 export async function planOf(c: Context<AppEnv>): Promise<PlanState> {
   if (isPrivatePool(c.env)) return { plan: "pro", until: null, ent: UNLIMITED, enforced: false };
-  const row = await c.env.DB.prepare("SELECT plan, plan_until FROM users WHERE id = ?")
+  const row = await c.env.DB.prepare("SELECT plan, plan_until, email FROM users WHERE id = ?")
     .bind(c.get("user").id)
-    .first<{ plan: string; plan_until: string | null }>();
+    .first<{ plan: string; plan_until: string | null; email: string | null }>();
+  // 站長:永遠完整版、不限(owner.ts)
+  if (isOwnerEmail(c.env, row?.email)) return { plan: "pro", until: null, ent: UNLIMITED, enforced: true, owner: true };
   const plan = effectivePlan(row?.plan, row?.plan_until);
   return { plan, until: plan === "free" ? null : row!.plan_until, ent: ENTITLEMENTS[plan], enforced: true };
 }

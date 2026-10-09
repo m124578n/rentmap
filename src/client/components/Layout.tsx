@@ -2,7 +2,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ConsentGate } from "@/features/legal/ConsentGate";
 import { useEffect, useState } from "react";
 import { FRESH_EVENT, STALE_EVENT } from "@/lib/api";
-import { UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
+import { Activity, UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -20,7 +20,9 @@ const prerendered = (window as { __PRERENDERED__?: boolean }).__PRERENDERED__ ==
 
 /** 外框:頂欄 + 登入門檻。沒登入只看得到登入鈕。 */
 export function Layout() {
-  const { user, enabled, dev, loading, login, devLogin, logout, consentNeeded } = useAuth();
+  const { user, enabled, dev, loading, login, devLogin, logout, consentNeeded, owner, privatePool } = useAuth();
+  // 資料狀態頁是給維運看的(要在家裡跑哪些指令):站長與私人模式才放入口
+  const staff = owner || privatePool;
   // 條款頁沒登入也要看得到(同意畫面的連結、搜尋引擎)
   const legal = useRouterState({ select: (s) => s.location.pathname.startsWith("/legal/") });
   const { theme, toggle } = useTheme();
@@ -70,10 +72,17 @@ export function Layout() {
             </div>
           )}
           {/* .btn-ghost 不在 Tailwind 的 layer 裡,會蓋過 hidden,所以手機隱藏要包一層 */}
-          {user && (
+          {user && staff && (
             <span className="hidden sm:contents">
               <Link to="/status" className="btn-ghost" title="資料狀態(各份資料何時更新、要不要重跑)" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
                 <Database size={16} />
+              </Link>
+            </span>
+          )}
+          {user && owner && (
+            <span className="hidden sm:contents">
+              <Link to="/admin" className="btn-ghost" title="營運(只有站長看得到)" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
+                <Activity size={16} />
               </Link>
             </span>
           )}
@@ -167,6 +176,8 @@ function TabBar() {
 
 /** 手機「更多」:不常用但要找得到的入口 */
 function MoreSheet({ onClose }: { onClose: () => void }) {
+  const { owner, privatePool } = useAuth();
+  const staff = owner || privatePool;
   const { theme, toggle } = useTheme();
   const row = "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-neutral-100 active:bg-neutral-100 dark:hover:bg-neutral-800 dark:active:bg-neutral-800";
   const go = (fn: () => void) => () => {
@@ -196,9 +207,16 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
         <Link to="/compare" className={row} onClick={onClose}>
           <Columns3 size={18} /> 比較表
         </Link>
-        <Link to="/status" className={row} onClick={onClose}>
-          <Database size={18} /> 資料狀態
-        </Link>
+        {staff && (
+          <Link to="/status" className={row} onClick={onClose}>
+            <Database size={18} /> 資料狀態
+          </Link>
+        )}
+        {owner && (
+          <Link to="/admin" className={row} onClick={onClose}>
+            <Activity size={18} /> 營運
+          </Link>
+        )}
         <Link to="/about" className={row} onClick={onClose}>
           <Info size={18} /> 介紹
         </Link>

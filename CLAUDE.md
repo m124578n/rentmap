@@ -41,6 +41,7 @@ src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               新增這類公開路徑要加進 wrangler.jsonc 的 assets.run_worker_first,不然會被 SPA 的 index.html 接走
               plan.ts + src/shared/plan.ts 是付費方案(免費 / 完整版 30・60・90 天,期間方案、不賣點數):**權限一律在 API 檢查**(planOf / deny → 402),
               前端 lib/plan.ts 的 usePlan + features/plan/PlanLock 只負責顯示;新增付費功能兩邊都要加。方案只由 routes/billing.ts(bearer)改,私人模式不限制
+              owner.ts 是站長帳號(OWNER_EMAILS:永遠完整版、營運儀表板 routes/admin.ts → 前端 routes/AdminPage /admin)
               routes/legal.ts 條款同意(consents 表;版本在 src/shared/legal.ts,全文在 client features/legal/docs.tsx,改內容要加版本號);routes/account.ts 匯出 / 刪除帳號
               pool.ts 是私人 / 公開模式(PRIVATE_POOL):公開模式每人只看自己建的房源(properties.created_by),查房源的 SQL 都要接 ownerSql / ownerOf
               transit/ 一個生活圈一份(loadBusNet / mrtGraph / loadBikes 都帶 region;房源與地點用 regionAt 依座標歸區);開新生活圈照 docs/design/2026-09-30-open-a-region.md

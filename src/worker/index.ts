@@ -7,6 +7,7 @@ import { bus } from "./routes/bus";
 import { places } from "./routes/places";
 import { commute } from "./routes/commute";
 import { roads } from "./routes/roads";
+import { admin } from "./routes/admin";
 import { market } from "./routes/market";
 import { requirements } from "./routes/requirements";
 import { nearby } from "./routes/nearby";
@@ -37,6 +38,7 @@ app.route("/", places);
 // 所有房源 × 我的地點 的公車通勤
 app.route("/", commute);
 app.route("/", roads);
+app.route("/", admin);
 // 租金行情(實價登錄)/api/market、/api/properties/:id/market;匯入 /api/ingest/rent-stats
 app.route("/", market);
 // 買賣行情 /api/market/sale/at;匯入 /api/ingest/sale-stats

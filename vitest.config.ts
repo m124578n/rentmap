@@ -24,6 +24,7 @@ export default defineConfig({
                 INGEST_SECRET: "test-ingest",
                 APP_ORIGIN: "http://localhost:5173",
                 ADMIN_EMAILS: "tester@example.com",
+                OWNER_EMAILS: "owner@example.com",
                 // 既有測試跑私人模式(共用房源池、採集推入);公開模式另外在 test/pool.test.ts 用覆寫的 env 測
                 PRIVATE_POOL: "1",
               },

@@ -81,6 +81,8 @@ export interface PlanState {
   ent: Entitlements;
   /** false = 私人模式,不限制 */
   enforced: boolean;
+  /** 站長帳號(OWNER_EMAILS):永遠完整版、看得到營運儀表板 */
+  owner?: boolean;
 }
 
 /** 被方案擋下的回應(HTTP 402) */

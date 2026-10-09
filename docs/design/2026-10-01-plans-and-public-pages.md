@@ -36,6 +36,7 @@
 | `costDetail` 每月支出明細 | 否(只看總額) | 是 | 只在前端(`cost.tsx`):每項都是前端用拿得到的資料算的 |
 
 - 私人模式(`PRIVATE_POOL=1`,本機自用)回 `UNLIMITED`,什麼都不擋。
+- 站長帳號(`wrangler.jsonc` 的 `OWNER_EMAILS`,2026-10-09 加):永遠完整版、`UNLIMITED`(地點不限),不用手動開通;也只有站長看得到營運儀表板 `/admin`(`/api/admin/stats`,其他人 404)與頂欄的「資料狀態」。email 從資料庫讀,不信任前端。
 - 被擋的回應:HTTP **402** + `{ error: "plan_required", need, message }`(`src/worker/plan.ts` 的 `deny`)。前端用 `planError(e)` 取 message 顯示。
 - 到期:每次請求用 `effectivePlan(plan, plan_until)` 判斷,過期就是免費,不需要排程。不認得的值(含早期的 `rent` / `buy`)都算免費。
 - 降級後資料不刪:多的筆記照樣看得到、只是不能新增;多的地點留著,通勤只算最早建的那幾個。

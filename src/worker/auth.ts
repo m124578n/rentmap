@@ -19,6 +19,7 @@ import { db, nowIso, schema } from "./db";
 import { isPrivatePool } from "./pool";
 import { neededFor } from "./consent";
 import { planOf } from "./plan";
+import { isOwner } from "./owner";
 
 export const SESSION_COOKIE = "rent_session";
 const STATE_COOKIE = "rent_oauth_state";
@@ -149,7 +150,9 @@ auth.get("/api/me", async (c) => {
   // plan:目前方案與權限(前端只拿來顯示;真正的檢查在各 API,見 plan.ts)
   if (user) c.set("user", user);
   const plan = user ? await planOf(c) : null;
-  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env), consent_needed, plan });
+  // owner:站長(OWNER_EMAILS),前端依此顯示「營運」入口;真正的檢查在 /api/admin/*
+  const owner = user ? await isOwner(c) : false;
+  return c.json({ user, enabled: authConfigured(c.env), dev, private_pool: isPrivatePool(c.env), consent_needed, plan, owner });
 });
 
 // ---- 給其他路由用 ----

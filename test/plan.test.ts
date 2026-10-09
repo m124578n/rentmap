@@ -225,3 +225,32 @@ describe("沒登入一律擋(所有使用者 API)", () => {
     expect((await pub(path, null, init)).status).toBe(401);
   });
 });
+
+describe("站長帳號(OWNER_EMAILS)", () => {
+  it("永遠完整版、地點不限;營運 API 只有站長拿得到,其他人 404、沒登入 401", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO users (id, provider, provider_id, display_name, email, created_at, last_login_at) VALUES (31, 'google', 'sub-31', 'Owner', 'Owner@Example.com', ?, ?)").bind(now, now).run();
+    for (const doc of ["terms", "privacy"] as const)
+      await env.DB.prepare("INSERT INTO consents (user_id, doc, version, accepted_at) VALUES (31, ?, ?, ?)").bind(doc, LEGAL_DOCS[doc].version, now).run();
+    cookies[31] = `${SESSION_COOKIE}=${await signSession({ id: 31, name: "Owner", avatar: null }, "test-secret")}`;
+    const meOwner = (await (await pub("/api/me", 31)).json()) as { plan: PlanState; owner: boolean };
+    expect(meOwner.owner).toBe(true);
+    expect(meOwner.plan).toMatchObject({ plan: "pro", until: null, owner: true });
+    expect(meOwner.plan.ent.places).toBeGreaterThan(5);
+    // 免費版會 402 的功能都能用
+    expect((await pub("/api/commute?dir=from&time=18:00", 31)).status).toBe(200);
+    for (let i = 0; i < 3; i++) expect((await place(31, i)).status).toBe(201);
+
+    const stats = await pub("/api/admin/stats", 31);
+    expect(stats.status).toBe(200);
+    const body = (await stats.json()) as { users: { total: number }; series: unknown[]; tables: { table: string }[] };
+    expect(body.users.total).toBeGreaterThan(0);
+    expect(body.series).toHaveLength(30);
+    expect(body.tables.map((t) => t.table)).toContain("properties");
+
+    expect((await pub("/api/admin/stats", 11)).status).toBe(404);
+    expect((await pub("/api/admin/stats", null)).status).toBe(401);
+    const me11 = (await (await pub("/api/me", 11)).json()) as { owner: boolean };
+    expect(me11.owner).toBe(false);
+  });
+});

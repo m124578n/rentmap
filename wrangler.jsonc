@@ -19,7 +19,9 @@
   // 正式站不設 PRIVATE_POOL(= 公開模式)、不設 DEV_USER_EMAIL。
   "vars": {
     "APP_ORIGIN": "https://lokanote.shunzz.com",
-    "ADMIN_EMAILS": "m23568n@gmail.com"
+    "ADMIN_EMAILS": "m23568n@gmail.com",
+    // 站長:永遠完整版、看得到營運儀表板 /admin(src/worker/owner.ts)
+    "OWNER_EMAILS": "m23568n@gmail.com"
   },
   // 本機 dev 走 .wrangler/state 的本地 SQLite(不會碰遠端);正式站是 2026-10-08 建的 rentmap-db(亞太)。
   // preview_database_id 決定本機那份檔名:留 local-placeholder,本機才會接到原本的資料(改成正式 id 會變成一份空的)。
