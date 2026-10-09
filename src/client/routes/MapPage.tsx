@@ -22,9 +22,11 @@ import { regionBbox } from "@shared/regions";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
-import { COMMUTE_LEGEND, commuteColor, HEAT_LABEL, HEAT_MODES, useHeat, type HeatMode, type Viewport } from "@/features/map/heat";
+import { COMMUTE_LEGEND, commuteColor, HEAT_LABEL, HEAT_MODES, useHeat, type HeatMode, type HeatResult, type Viewport } from "@/features/map/heat";
 import { Layers, Store } from "lucide-react";
 import { POI_LAYER_CATS, poiColor, usePoiLayer } from "@/features/map/poiLayer";
+import { POI_ICON } from "@/features/map/poiIcons";
+import { MultiPick } from "@/components/MultiPick";
 import { poiLabel, type PoiCat } from "@shared/poi";
 
 const PANEL_W = 400;
@@ -78,18 +80,19 @@ export function MapPage() {
     if (byFit && fitOf) return (p: PropertySummary) => { const r = fitOf(p); return r ? FIT_COLOR[r.level] : undefined; };
     return undefined;
   }, [byCommute, byFit, fitOf, filters, commute.ctx]);
-  const [storedHeat, setHeatMode] = useHeatMode();
-  // 每坪開價圖層靠共用房源池,公開版沒有(記住的選擇是 rent 就當沒開)
+  const [storedHeats, setHeatModes] = useStoredList<HeatMode>(HEAT_KEY, HEAT_LAYERS, "rentmap.heatLayer");
+  // 每坪開價圖層靠共用房源池,公開版沒有(記住的選擇有 rent 就略過)
   const pool = usePrivatePool();
-  const heatMode: HeatMode = storedHeat === "rent" && !pool ? "none" : storedHeat;
+  const heatModes = storedHeats.filter((m) => m !== "rent" || pool);
   const [view, setView] = useState<Viewport | null>(null);
   // 看區域圖層時標記會擋住,可以先藏起來(不記)
   const [hideMarkers, setHideMarkers] = useState(false);
-  const shownOnMap = heatMode !== "none" && hideMarkers ? NO_ITEMS : items;
-  const heat = useHeat(heatMode, view, items);
-  const [poiCat, setPoiCat] = usePoiCat();
-  const poi = usePoiLayer(poiCat, view);
-  const poiLayer = useMemo(() => (poi.fc && poiCat ? { fc: poi.fc, color: poiColor(poiCat) } : null), [poi.fc, poiCat]);
+  const shownOnMap = heatModes.length > 0 && hideMarkers ? NO_ITEMS : items;
+  const heatsAll = useHeats(heatModes, view, items);
+  const heatsShown = useMemo(() => heatsAll.flatMap((h) => (h.fc ? [{ id: h.mode, fc: h.fc }] : [])), [heatsAll]);
+  const firstLegend = heatsAll.find((h) => h.legend.length > 0)?.legend ?? [];
+  const [poiCats, setPoiCats] = useStoredList<PoiCat>(POI_KEY, POI_LAYER_CATS, "rentmap.poiLayer");
+  const poi = usePoiLayer(poiCats, view);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
   const panelOpen = selectedId != null || point != null;
   const panel = (onOverlay: (o: BusOverlay | null) => void) =>
@@ -123,46 +126,50 @@ export function MapPage() {
     </div>
   );
   const heatControls = (
-  <div className={BOX}>
-    <label className="flex items-center gap-1">
-      <Layers size={13} className="text-neutral-500 dark:text-neutral-300" />
-      <span className="text-neutral-500 dark:text-neutral-300">區域圖層</span>
-      <select value={heatMode} onChange={(e) => setHeatMode(e.target.value as HeatMode)} className="rounded border border-neutral-200 bg-white px-1 py-0.5 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100">
-        {HEAT_MODES.filter((m) => m !== "rent" || pool).map((m) => (
-          <option key={m} value={m}>
-            {HEAT_LABEL[m]}
-          </option>
-        ))}
-      </select>
-      {heat.loading && <span className="text-neutral-400">計算中…</span>}
-    </label>
-    {heatMode !== "none" && (
-      <label className="mt-1 flex items-center gap-1 text-neutral-600 dark:text-neutral-400">
-        <input type="checkbox" checked={hideMarkers} onChange={(e) => setHideMarkers(e.target.checked)} /> 隱藏房源標記
-      </label>
-    )}
-    {heat.legend.length > 0 && <Legend items={heat.legend} square />}
-    {heat.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{heat.note}</p>}
-    <label className="mt-1 flex items-center gap-1">
-      <Store size={13} className="text-neutral-500 dark:text-neutral-300" />
-      <span className="text-neutral-500 dark:text-neutral-300">生活機能</span>
-      <select
-        value={poiCat ?? ""}
-        onChange={(e) => setPoiCat((e.target.value || null) as PoiCat | null)}
-        className="rounded border border-neutral-200 bg-white px-1 py-0.5 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-      >
-        <option value="">不顯示</option>
-        {POI_LAYER_CATS.map((c) => (
-          <option key={c} value={c}>
-            {poiLabel(c)}
-          </option>
-        ))}
-      </select>
-      {poiCat && <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: poiColor(poiCat) }} />}
-      {poi.loading && <span className="text-neutral-400">載入中…</span>}
-    </label>
-    {poi.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{poi.note}</p>}
-  </div>
+    <div className={BOX}>
+      <MultiPick
+        label="區域圖層"
+        icon={<Layers size={13} className="text-neutral-500 dark:text-neutral-300" />}
+        options={HEAT_LAYERS.filter((m) => m !== "rent" || pool).map((m) => ({ value: m, label: HEAT_LABEL[m] }))}
+        value={heatModes}
+        onChange={setHeatModes}
+      />
+      {heatsAll.some((h) => h.loading) && <p className="text-[11px] text-neutral-400">計算中…</p>}
+      {heatModes.length > 0 && (
+        <label className="mt-1 flex items-center gap-1 text-neutral-600 dark:text-neutral-400">
+          <input type="checkbox" checked={hideMarkers} onChange={(e) => setHideMarkers(e.target.checked)} /> 隱藏房源標記
+        </label>
+      )}
+      {heatsAll.map((h) => (
+        <div key={h.mode} className="mt-1">
+          {heatsAll.length > 1 && <p className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">{HEAT_LABEL[h.mode]}</p>}
+          {h.legend.length > 0 && <Legend items={h.legend} square />}
+          {h.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{h.note}</p>}
+        </div>
+      ))}
+      <div className="mt-1.5">
+        <MultiPick
+          label="生活機能"
+          icon={<Store size={13} className="text-neutral-500 dark:text-neutral-300" />}
+          options={POI_LAYER_CATS.map((c) => {
+            const Icon = POI_ICON[c]!;
+            return {
+              value: c,
+              label: poiLabel(c),
+              icon: (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-white" style={{ background: poiColor(c) }}>
+                  <Icon size={10} strokeWidth={2.5} />
+                </span>
+              ),
+            };
+          })}
+          value={poiCats}
+          onChange={setPoiCats}
+        />
+      </div>
+      {poi.loading && <p className="text-[11px] text-neutral-400">載入中…</p>}
+      {poi.note && <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">{poi.note}</p>}
+    </div>
   );
 
   return (
@@ -196,8 +203,8 @@ export function MapPage() {
             point={point}
             view={region.view}
             fitWithin={regionBbox(region.key)}
-            heat={heat.fc}
-            poiLayer={poiLayer}
+            heats={heatsShown}
+            poiLayer={poi.fc}
             onViewport={setView}
           />
 
@@ -243,13 +250,13 @@ export function MapPage() {
                   aria-haspopup="dialog"
                 >
                   <Layers size={15} /> 圖層
-                  {(heatMode !== "none" || colorMode !== "stage") && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  {(heatModes.length > 0 || poiCats.length > 0 || colorMode !== "stage") && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                 </button>
                 {/* 手機:開著的圖層只留圖例 */}
-                {!layersOpen && (heat.legend.length > 0 || byCommute || byFit) && (
+                {!layersOpen && (firstLegend.length > 0 || byCommute || byFit) && (
                   <div className={`${BOX} !py-1 text-[11px]`}>
-                    {heat.legend.length > 0 ? (
-                      <Legend items={heat.legend} square />
+                    {firstLegend.length > 0 ? (
+                      <Legend items={firstLegend} square />
                     ) : (
                       <Legend items={byFit ? [["符合", FIT_COLOR.green], ["普通", FIT_COLOR.yellow], ["不符", FIT_COLOR.red]] : COMMUTE_LEGEND} />
                     )}
@@ -304,25 +311,29 @@ function Legend({ items, square = false }: { items: [string, string][]; square?:
   );
 }
 
-const POI_KEY = "rentmap.poiLayer";
+const POI_KEY = "rentmap.poiLayers";
+const HEAT_KEY = "rentmap.heatLayers";
+/** 區域圖層可選的(不含「不顯示」) */
+const HEAT_LAYERS = HEAT_MODES.filter((m): m is Exclude<HeatMode, "none"> => m !== "none");
 
-/** 生活機能圖層的類別:這台瀏覽器的偏好 */
-function usePoiCat(): [PoiCat | null, (c: PoiCat | null) => void] {
-  const [cat, setCat] = useState<PoiCat | null>(() => {
+/** 多選的偏好(這台瀏覽器;JSON 陣列)。legacyKey 是以前單選時存的,讀到就轉過來 */
+function useStoredList<T extends string>(key: string, allowed: readonly string[], legacyKey?: string): [T[], (v: T[]) => void] {
+  const [list, setList] = useState<T[]>(() => {
     try {
-      const v = localStorage.getItem(POI_KEY) as PoiCat | null;
-      return v && POI_LAYER_CATS.includes(v) ? v : null;
+      const raw = localStorage.getItem(key);
+      if (raw) return (JSON.parse(raw) as string[]).filter((x): x is T => allowed.includes(x));
+      const old = legacyKey ? localStorage.getItem(legacyKey) : null;
+      return old && allowed.includes(old) ? [old as T] : [];
     } catch {
-      return null;
+      return [];
     }
   });
   return [
-    cat,
-    (c) => {
-      setCat(c);
+    list,
+    (v) => {
+      setList(v);
       try {
-        if (c) localStorage.setItem(POI_KEY, c);
-        else localStorage.removeItem(POI_KEY);
+        localStorage.setItem(key, JSON.stringify(v));
       } catch {
         /* 私密模式,忽略 */
       }
@@ -330,29 +341,17 @@ function usePoiCat(): [PoiCat | null, (c: PoiCat | null) => void] {
   ];
 }
 
-const HEAT_KEY = "rentmap.heatLayer";
-
-/** 區域圖層:這台瀏覽器的偏好 */
-function useHeatMode(): [HeatMode, (m: HeatMode) => void] {
-  const [mode, setMode] = useState<HeatMode>(() => {
-    try {
-      const v = localStorage.getItem(HEAT_KEY) as HeatMode | null;
-      return v && (HEAT_MODES as readonly string[]).includes(v) ? v : "none";
-    } catch {
-      return "none";
-    }
-  });
-  return [
-    mode,
-    (m) => {
-      setMode(m);
-      try {
-        localStorage.setItem(HEAT_KEY, m);
-      } catch {
-        /* 私密模式,忽略 */
-      }
-    },
-  ];
+/**
+ * 每個區域圖層各算一份。HEAT_LAYERS 是固定的清單,所以 hook 的呼叫次數每次都一樣(沒選的傳 "none",不會查資料)。
+ */
+function useHeats(modes: HeatMode[], view: Viewport | null, items: PropertySummary[]) {
+  const out: (HeatResult & { mode: Exclude<HeatMode, "none"> })[] = [];
+  for (const m of HEAT_LAYERS) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const r = useHeat(modes.includes(m) ? m : "none", view, items);
+    if (modes.includes(m)) out.push({ ...r, mode: m });
+  }
+  return out;
 }
 
 type ColorMode = "stage" | "commute" | "fit";

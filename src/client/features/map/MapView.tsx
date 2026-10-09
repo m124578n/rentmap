@@ -6,8 +6,8 @@ import type { Place, PropertySummary } from "@shared/schemas";
 import { localizeBasemap, STYLE, type Theme } from "./basemap";
 import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
-import { setHeat } from "./heatLayer";
-import { setPoiLayer } from "./poiLayer";
+import { setHeats } from "./heatLayer";
+import { POI_ICON_LAYER, setPoiLayer } from "./poiLayer";
 import { PriceMarkers } from "./priceMarkers";
 import type { Viewport } from "./heat";
 import type { FeatureCollection } from "geojson";
@@ -38,9 +38,10 @@ interface Props {
   /** 第一次框畫面只看這個範圍內的房源 [w, s, e, n](目前的生活圈);範圍內沒有房源就停在 view */
   fitWithin?: [number, number, number, number];
   /** 區域圖層(通勤網格、災害多邊形…) */
-  heat?: FeatureCollection | null;
+  /** 區域圖層(可同時好幾層) */
+  heats?: { id: string; fc: FeatureCollection }[];
   /** 生活機能圖層(畫面範圍內某一類的點) */
-  poiLayer?: { fc: FeatureCollection; color: string } | null;
+  poiLayer?: FeatureCollection | null;
   /** 畫面移動結束(區域圖層依範圍抓資料) */
   onViewport?: (v: Viewport) => void;
 }
@@ -75,7 +76,9 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  * 地圖:CARTO 底圖 + 捷運圖層 + 房源價格標記(HTML,縮小時群集,見 priceMarkers.ts)。
  * 只負責畫,選中狀態由父層管。
  */
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heat = null, poiLayer = null, onViewport, view, fitWithin }: Props) {
+const NO_HEATS: { id: string; fc: FeatureCollection }[] = [];
+
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heats = NO_HEATS, poiLayer = null, onViewport, view, fitWithin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -94,8 +97,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   const onPointRef = useRef(onPoint);
   onPointRef.current = onPoint;
   const pointMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const heatRef = useRef(heat);
-  heatRef.current = heat;
+  const heatRef = useRef(heats);
+  heatRef.current = heats;
   const poiRef = useRef(poiLayer);
   poiRef.current = poiLayer;
   const onViewportRef = useRef(onViewport);
@@ -129,13 +132,33 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       localizeBasemap(map);
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
-      if (heatRef.current) setHeat(map, heatRef.current);
-      if (poiRef.current) setPoiLayer(map, poiRef.current, themeRef.current);
+      setHeats(map, heatRef.current);
+      if (poiRef.current) void setPoiLayer(map, poiRef.current, themeRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
       emitView();
     });
     map.on("moveend", emitView);
     map.on("click", () => onSelectRef.current(null));
+    // 生活機能圖示:點了跳名稱與說明(垃圾車的收運時間與星期在 note)
+    map.on("click", POI_ICON_LAYER, (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const { name, note } = f.properties as { name: string; note: string };
+      const el = document.createElement("div");
+      el.className = "text-xs text-neutral-900";
+      const b = document.createElement("div");
+      b.className = "font-medium";
+      b.textContent = name;
+      el.append(b);
+      if (note) {
+        const n = document.createElement("div");
+        n.textContent = note;
+        el.append(n);
+      }
+      new maplibregl.Popup({ closeButton: false, offset: 12 }).setLngLat(e.lngLat).setDOMContent(el).addTo(map);
+    });
+    map.on("mouseenter", POI_ICON_LAYER, () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", POI_ICON_LAYER, () => (map.getCanvas().style.cursor = ""));
     // 看附近:桌機右鍵;手機長按(maplibre 在觸控上不一定發 contextmenu,自己計時,手指一動就取消)
     const pick = (ll: maplibregl.LngLat) => onPointRef.current?.({ lat: Math.round(ll.lat * 1e6) / 1e6, lng: Math.round(ll.lng * 1e6) / 1e6 });
     let press: ReturnType<typeof setTimeout> | null = null;
@@ -180,8 +203,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       localizeBasemap(map);
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
-      if (heatRef.current) setHeat(map, heatRef.current);
-      if (poiRef.current) setPoiLayer(map, poiRef.current, theme);
+      setHeats(map, heatRef.current);
+      if (poiRef.current) void setPoiLayer(map, poiRef.current, theme);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
   }, [theme]);
@@ -202,14 +225,14 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    return whenReady(map, () => setHeat(map, heatRef.current));
-  }, [heat]);
+    return whenReady(map, () => setHeats(map, heatRef.current));
+  }, [heats]);
 
   // 生活機能圖層
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    return whenReady(map, () => setPoiLayer(map, poiRef.current, themeRef.current));
+    return whenReady(map, () => void setPoiLayer(map, poiRef.current, themeRef.current));
   }, [poiLayer]);
 
   // 捷運資料到了才加圖層

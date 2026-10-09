@@ -55,7 +55,11 @@ export function NearbySection({
     if (!open || !onMap.length) return onOverlay(null);
     onOverlay({
       lines: [{ coords: circle(lat, lng, radius), kind: "walk", color: "#6b7280" }],
-      stops: onMap.map((p) => ({ name: p.name ?? POI_SUBTYPE_LABEL[p.subtype ?? ""] ?? poiLabel(open), lat: p.lat, lng: p.lng, role: "transfer" as const })),
+      // 垃圾車:站名前面加收運時間(note 是「16:30–16:40 · 一二四五六」)
+      stops: onMap.map((p) => {
+        const name = p.name ?? POI_SUBTYPE_LABEL[p.subtype ?? ""] ?? poiLabel(open);
+        return { name: open === "garbage" && p.note ? `${p.note.split(" · ")[0]} ${name}` : name, lat: p.lat, lng: p.lng, role: "transfer" as const };
+      }),
       // 畫面框住整個半徑(點很多時不要被最遠的一個拉太遠)
       focus: [[lng, lat], ...circle(lat, lng, radius)],
     });
