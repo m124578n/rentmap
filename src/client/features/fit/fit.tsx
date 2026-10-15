@@ -8,8 +8,8 @@ import { useMonthlyCost } from "@/features/cost/cost";
 import { useCommute } from "@/features/commute/useCommute";
 import { useMarket } from "@/features/market/useMarket";
 
-export function useRequirements() {
-  return useQuery({ queryKey: ["requirements"], queryFn: api.getRequirements, staleTime: 10 * 60_000 });
+export function useRequirements(enabled = true) {
+  return useQuery({ queryKey: ["requirements"], queryFn: api.getRequirements, staleTime: 10 * 60_000, enabled });
 }
 export function useSaveRequirements() {
   const qc = useQueryClient();

@@ -10,7 +10,7 @@ import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, typ
 import type { ConsentNeed } from "@shared/legal";
 import type { SaleMarketResponse } from "@shared/sale";
 import type { AdminStats } from "@shared/admin";
-import type { ZonesResponse } from "@shared/zones";
+import type { SharedZones, ZonesResponse } from "@shared/zones";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -55,6 +55,12 @@ export const api = {
   /** 落腳圈:依到我的地點的通勤時間分圈,列出圈內的區與車站 */
   zones: (q: { region: string; mode: string; combine: string; rings: number[]; when: CommuteWhen }) =>
     req<ZonesResponse>(`/api/zones?region=${q.region}&mode=${q.mode}&combine=${q.combine}&rings=${q.rings.join(",")}&${whenParams(q.when)}`),
+  /** 落腳圈的分享連結 */
+  createShare: (q: { region: string; mode: string; combine: string; rings: number[]; when: CommuteWhen }) =>
+    req<{ token: string }>("/api/shares", { method: "POST", body: JSON.stringify({ region: q.region, mode: q.mode, combine: q.combine, rings: q.rings.join(","), ...q.when }) }),
+  listShares: () => req<{ items: { token: string; created_at: string; region: string; places: { name: string }[] }[] }>("/api/shares"),
+  deleteShare: (token: string) => req<{ ok: true }>(`/api/shares/${encodeURIComponent(token)}`, { method: "DELETE" }),
+  sharedZones: (token: string) => req<SharedZones>(`/api/shares/${encodeURIComponent(token)}/zones`),
   /** 營運儀表板(只有站長) */
   adminStats: () => req<AdminStats>("/api/admin/stats"),
   deleteAccount: () => req<{ ok: true }>("/api/account", { method: "DELETE", body: JSON.stringify({ confirm: "刪除" }) }),

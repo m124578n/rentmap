@@ -24,6 +24,7 @@ account.get("/api/account/export", async (c) => {
     places: await all("SELECT * FROM my_places WHERE user_id = ?"),
     requirements: await all("SELECT * FROM user_requirements WHERE user_id = ?"),
     consents: await all("SELECT doc, version, accepted_at, ip FROM consents WHERE user_id = ?"),
+    shares: await all("SELECT token, params, created_at FROM shares WHERE user_id = ?"),
   };
   c.header("Content-Disposition", `attachment; filename="rentmap-export-${body.exported_at.slice(0, 10)}.json"`);
   c.header("Cache-Control", "no-store");

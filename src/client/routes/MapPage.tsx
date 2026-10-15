@@ -111,7 +111,7 @@ export function MapPage() {
     ) : selectedId != null ? (
       <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={onOverlay} />
     ) : zonesPanel ? (
-      <ZonesPanel s={zs} data={zonesQ.data} loading={zonesQ.isFetching} error={zonesQ.error} nPlaces={nPlaces} onFocus={focus} onClose={() => setZonesSettings({ on: false })} />
+      <ZonesPanel s={zs} data={zonesQ.data} loading={zonesQ.isFetching} error={zonesQ.error} nPlaces={nPlaces} onFocus={focus} onClose={() => setZonesSettings({ on: false })} share={{ region: region.key, when: whenOf(filters, filters.commuteSide) }} />
     ) : null;
 
   const [layersOpen, setLayersOpen] = useState(false);

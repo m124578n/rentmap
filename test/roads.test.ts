@@ -119,3 +119,30 @@ describe("落腳圈(/api/zones)", () => {
     expect((await get("/api/zones?region=taichung&rings=1")).status).toBe(400);
   });
 });
+
+describe("落腳圈分享連結", () => {
+  it("建立 → 不用登入就能看(唯讀)→ 列出 → 刪除後打不開", async () => {
+    const r = await SELF.fetch(`${ORIGIN}/api/shares`, authed({ method: "POST", body: JSON.stringify({ region: "taichung", mode: "scooter", combine: "max", rings: "10,20,30" }) }));
+    expect(r.status).toBe(201);
+    const { token } = (await r.json()) as { token: string };
+    expect(token).toMatch(/^[A-Za-z0-9_-]{16}$/);
+
+    const pub = await SELF.fetch(`${ORIGIN}/api/shares/${token}/zones`);
+    expect(pub.status).toBe(200);
+    const z = (await pub.json()) as import("../src/shared/zones").SharedZones;
+    expect(z.region).toBe("taichung");
+    expect(z.places.map((p) => p.name)).toEqual(["公司"]);
+    expect(z.cells.length).toBeGreaterThan(0);
+
+    const list = await get<{ items: { token: string }[] }>("/api/shares");
+    expect(list.body.items.map((x) => x.token)).toContain(token);
+    expect((await SELF.fetch(`${ORIGIN}/api/shares/${token}`, { method: "DELETE", headers: { Origin: ORIGIN } })).status).toBe(401);
+    expect((await SELF.fetch(`${ORIGIN}/api/shares/${token}`, authed({ method: "DELETE" }))).status).toBe(200);
+    expect((await SELF.fetch(`${ORIGIN}/api/shares/${token}/zones`)).status).toBe(404);
+  });
+
+  it("沒有地點的生活圈不能分享;參數錯 400", async () => {
+    expect((await SELF.fetch(`${ORIGIN}/api/shares`, authed({ method: "POST", body: JSON.stringify({ region: "north" }) }))).status).toBe(400);
+    expect((await SELF.fetch(`${ORIGIN}/api/shares`, authed({ method: "POST", body: JSON.stringify({ region: "mars" }) }))).status).toBe(400);
+  });
+});

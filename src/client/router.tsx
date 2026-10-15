@@ -12,11 +12,12 @@ const tourRoute = createRoute({ getParentRoute: () => rootRoute, path: "/tour", 
 const statusRoute = createRoute({ getParentRoute: () => rootRoute, path: "/status", component: lazyRouteComponent(() => import("./routes/StatusPage"), "StatusPage") });
 const aboutRoute = createRoute({ getParentRoute: () => rootRoute, path: "/about", component: lazyRouteComponent(() => import("./routes/AboutPage"), "AboutPage") });
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: lazyRouteComponent(() => import("./routes/AdminPage"), "AdminPage") });
+const shareRoute = createRoute({ getParentRoute: () => rootRoute, path: "/s/$token", component: lazyRouteComponent(() => import("./routes/SharePage"), "SharePage") });
 const accountRoute = createRoute({ getParentRoute: () => rootRoute, path: "/account", component: lazyRouteComponent(() => import("./routes/AccountPage"), "AccountPage") });
 const legalRoute = createRoute({ getParentRoute: () => rootRoute, path: "/legal/$doc", component: lazyRouteComponent(() => import("./routes/LegalPage"), "LegalPage") });
 const detailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/p/$id", component: lazyRouteComponent(() => import("./routes/DetailPage"), "DetailPage") });
 
-export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, listRoute, boardRoute, newRoute, compareRoute, tourRoute, statusRoute, aboutRoute, adminRoute, accountRoute, legalRoute, detailRoute]) });
+export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, listRoute, boardRoute, newRoute, compareRoute, tourRoute, statusRoute, aboutRoute, adminRoute, shareRoute, accountRoute, legalRoute, detailRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register {

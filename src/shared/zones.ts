@@ -84,6 +84,12 @@ export interface ZonesResponse {
   stations: ZoneStation[];
 }
 
+/** GET /api/shares/:token/zones:分享連結(不用登入,唯讀) */
+export interface SharedZones extends ZonesResponse {
+  region: "north" | "taichung" | "tainan" | "kaohsiung";
+  created_at: string;
+}
+
 // ---- 前端:落腳分數、生活感 ----
 
 /** 分數的五個面向與預設權重(0 = 不看) */

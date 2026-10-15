@@ -24,7 +24,8 @@ export function Layout() {
   // 資料狀態頁是給維運看的(要在家裡跑哪些指令):站長與私人模式才放入口
   const staff = owner || privatePool;
   // 條款頁沒登入也要看得到(同意畫面的連結、搜尋引擎)
-  const legal = useRouterState({ select: (s) => s.location.pathname.startsWith("/legal/") });
+  // 條款頁與落腳圈分享頁(/s/…)不用登入就能看
+  const legal = useRouterState({ select: (s) => s.location.pathname.startsWith("/legal/") || s.location.pathname.startsWith("/s/") });
   const { theme, toggle } = useTheme();
   const params = new URLSearchParams(window.location.search);
   const loginErr = params.get("login");

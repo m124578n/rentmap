@@ -1,18 +1,9 @@
 import { useMemo, useState } from "react";
-import { Bike, Bus, Car, ChevronDown, Crosshair, ExternalLink, MapPin, Scale, SlidersHorizontal, TrainFront, X } from "lucide-react";
-import {
-  COMBINE_LABEL,
-  COMBINES,
-  RING_COLOR,
-  RING_LABEL,
-  SCORE_KEYS,
-  SCORE_LABEL,
-  lifeSentence,
-  rentOf,
-  scoreDistricts,
-  type ZoneDistrict,
-  type ZonesResponse,
-} from "@shared/zones";
+import { Bike, Bus, Car, ChevronDown, Crosshair, ExternalLink, Link2, MapPin, Scale, SlidersHorizontal, Trash2, TrainFront, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CommuteWhen } from "@shared/trip";
+import { api } from "@/lib/api";
+import { COMBINE_LABEL, COMBINES, RING_COLOR, RING_LABEL, SCORE_KEYS, SCORE_LABEL, lifeSentence, rentOf, scoreDistricts, type ZoneDistrict, type ZonesResponse } from "@shared/zones";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { useRequirements } from "@/features/fit/fit";
 import { openPlacesDialog } from "@/features/places/places";
@@ -41,6 +32,8 @@ export function ZonesPanel({
   nPlaces,
   onFocus,
   onClose,
+  readOnly = false,
+  share,
 }: {
   s: ZonesSettings;
   data: ZonesResponse | undefined;
@@ -48,12 +41,16 @@ export function ZonesPanel({
   error: unknown;
   nPlaces: number;
   onFocus: (bbox: [number, number, number, number]) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  /** 分享頁:不能改設定、不看預算、不能分享 */
+  readOnly?: boolean;
+  /** 建立分享連結要用的(目前的生活圈與時段) */
+  share?: { region: string; when: CommuteWhen };
 }) {
   const purpose = usePurpose();
   const deal = purpose === "buy" ? "buy" : "rent";
-  const req = useRequirements().data?.requirements;
-  const budget = deal === "rent" ? (req?.budget_max ?? null) : null;
+  const req = useRequirements(!readOnly).data?.requirements;
+  const budget = deal === "rent" && !readOnly ? (req?.budget_max ?? null) : null;
   const crime = useCrimeDistricts().data;
   const [showWeights, setShowWeights] = useState(false);
   const [pick, setPick] = useState<string[]>([]);
@@ -81,11 +78,13 @@ export function ZonesPanel({
           <h2 className="flex items-center gap-1 font-semibold">
             <MapPin size={16} className="text-emerald-600" /> 適合你落腳的地方
           </h2>
-          <p className="text-xs text-neutral-500">依到「我的地點」的通勤時間分圈;時段跟著篩選列的上班 / 下班。</p>
+          <p className="text-xs text-neutral-500">{readOnly ? "依到這些地點的通勤時間分圈。" : "依到「我的地點」的通勤時間分圈;時段跟著篩選列的上班 / 下班。"}</p>
         </div>
-        <button onClick={onClose} className="btn-ghost !p-1" aria-label="關閉">
-          <X size={16} />
-        </button>
+        {onClose && (
+          <button onClick={onClose} className="btn-ghost !p-1" aria-label="關閉">
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       {nPlaces === 0 ? (
@@ -97,83 +96,86 @@ export function ZonesPanel({
         </div>
       ) : (
         <>
-          {/* 設定 */}
-          <div className="grid gap-2 rounded-lg border border-neutral-200 p-2 text-xs dark:border-neutral-800">
-            <div className="flex flex-wrap gap-1">
-              {MODES.map((m) => (
-                <button key={m.k} onClick={() => setZonesSettings({ mode: m.k })} className={pill(s.mode === m.k)}>
-                  {m.icon} {m.label}
-                </button>
-              ))}
-            </div>
-            {nPlaces > 1 && (
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-neutral-500">多個地點:</span>
-                {COMBINES.map((c) => (
-                  <button key={c} onClick={() => setZonesSettings({ combine: c })} className={pill(s.combine === c)}>
-                    {COMBINE_LABEL[c]}
+          {/* 設定(分享頁不能改) */}
+          {!readOnly && (
+            <div className="grid gap-2 rounded-lg border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+              <div className="flex flex-wrap gap-1">
+                {MODES.map((m) => (
+                  <button key={m.k} onClick={() => setZonesSettings({ mode: m.k })} className={pill(s.mode === m.k)}>
+                    {m.icon} {m.label}
                   </button>
                 ))}
               </div>
-            )}
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="text-neutral-500">分圈(分鐘):</span>
-              {s.rings.map((r, i) => (
-                <label key={i} className="flex items-center gap-0.5">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: RING_COLOR[i] }} />
-                  <input
-                    type="number"
-                    min={5}
-                    max={120}
-                    step={5}
-                    value={r}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (!Number.isFinite(v) || v < 5 || v > 120) return;
-                      const next = [...s.rings];
-                      next[i] = v;
-                      setZonesSettings({ rings: next.sort((a, b) => a - b) });
-                    }}
-                    className="w-12 rounded border border-neutral-200 bg-white px-1 py-0.5 dark:border-neutral-700 dark:bg-neutral-800"
-                  />
-                </label>
-              ))}
-            </div>
-            {deal === "rent" && (
+              {nPlaces > 1 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-neutral-500">多個地點:</span>
+                  {COMBINES.map((c) => (
+                    <button key={c} onClick={() => setZonesSettings({ combine: c })} className={pill(s.combine === c)}>
+                      {COMBINE_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-1">
-                <span className="text-neutral-500">租金看:</span>
-                {RENT_KINDS.map((k) => (
-                  <button key={k} onClick={() => setZonesSettings({ rentKind: k })} className={pill(s.rentKind === k)}>
-                    {k}
-                  </button>
-                ))}
-              </div>
-            )}
-            {deal === "rent" &&
-              (budget != null ? (
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={s.budgetOnly} onChange={(e) => setZonesSettings({ budgetOnly: e.target.checked })} />
-                  只看預算內({s.rentKind}行情 ≤ {$(budget)})
-                </label>
-              ) : (
-                <p className="text-neutral-500">在「我的需求」設預算,就能篩掉住不起的區。</p>
-              ))}
-            <button className="flex items-center gap-1 text-left text-neutral-600 dark:text-neutral-300" onClick={() => setShowWeights(!showWeights)}>
-              <SlidersHorizontal size={12} /> 排名權重 <ChevronDown size={12} className={showWeights ? "rotate-180" : ""} />
-            </button>
-            {showWeights && (
-              <div className="grid gap-1">
-                {SCORE_KEYS.map((k) => (
-                  <label key={k} className="grid grid-cols-[4.5rem_1fr_1.5rem] items-center gap-2">
-                    <span>{SCORE_LABEL[k]}</span>
-                    <input type="range" min={0} max={5} value={s.weights[k]} onChange={(e) => setZonesSettings({ weights: { ...s.weights, [k]: Number(e.target.value) } })} />
-                    <span className="tabular-nums text-neutral-500">{s.weights[k]}</span>
+                <span className="text-neutral-500">分圈(分鐘):</span>
+                {s.rings.map((r, i) => (
+                  <label key={i} className="flex items-center gap-0.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: RING_COLOR[i] }} />
+                    <input
+                      type="number"
+                      min={5}
+                      max={120}
+                      step={5}
+                      value={r}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (!Number.isFinite(v) || v < 5 || v > 120) return;
+                        const next = [...s.rings];
+                        next[i] = v;
+                        setZonesSettings({ rings: next.sort((a, b) => a - b) });
+                      }}
+                      className="w-12 rounded border border-neutral-200 bg-white px-1 py-0.5 dark:border-neutral-700 dark:bg-neutral-800"
+                    />
                   </label>
                 ))}
-                <p className="text-[11px] text-neutral-400">0 = 不看。分數是在這次圈內的區之間比,不是絕對值。</p>
               </div>
-            )}
-          </div>
+              {deal === "rent" && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-neutral-500">租金看:</span>
+                  {RENT_KINDS.map((k) => (
+                    <button key={k} onClick={() => setZonesSettings({ rentKind: k })} className={pill(s.rentKind === k)}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {deal === "rent" &&
+                (budget != null ? (
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={s.budgetOnly} onChange={(e) => setZonesSettings({ budgetOnly: e.target.checked })} />
+                    只看預算內({s.rentKind}行情 ≤ {$(budget)})
+                  </label>
+                ) : (
+                  <p className="text-neutral-500">在「我的需求」設預算,就能篩掉住不起的區。</p>
+                ))}
+              <button className="flex items-center gap-1 text-left text-neutral-600 dark:text-neutral-300" onClick={() => setShowWeights(!showWeights)}>
+                <SlidersHorizontal size={12} /> 排名權重 <ChevronDown size={12} className={showWeights ? "rotate-180" : ""} />
+              </button>
+              {showWeights && (
+                <div className="grid gap-1">
+                  {SCORE_KEYS.map((k) => (
+                    <label key={k} className="grid grid-cols-[4.5rem_1fr_1.5rem] items-center gap-2">
+                      <span>{SCORE_LABEL[k]}</span>
+                      <input type="range" min={0} max={5} value={s.weights[k]} onChange={(e) => setZonesSettings({ weights: { ...s.weights, [k]: Number(e.target.value) } })} />
+                      <span className="tabular-nums text-neutral-500">{s.weights[k]}</span>
+                    </label>
+                  ))}
+                  <p className="text-[11px] text-neutral-400">0 = 不看。分數是在這次圈內的區之間比,不是絕對值。</p>
+                </div>
+              )}
+            </div>
+          )}
+          {!readOnly && share && <ShareBox s={s} share={share} />}
 
           {error ? (
             <p className="text-xs text-red-600 dark:text-red-400">{planError(error) ?? "算不出來,稍後再試"}</p>
@@ -229,11 +231,7 @@ export function ZonesPanel({
                                 <Crosshair size={14} />
                               </button>
                               <label className="flex items-center gap-0.5 text-[10px] text-neutral-500" title="勾兩區比較">
-                                <input
-                                  type="checkbox"
-                                  checked={pick.includes(k)}
-                                  onChange={(e) => setPick(e.target.checked ? [...pick, k].slice(-2) : pick.filter((x) => x !== k))}
-                                />
+                                <input type="checkbox" checked={pick.includes(k)} onChange={(e) => setPick(e.target.checked ? [...pick, k].slice(-2) : pick.filter((x) => x !== k))} />
                                 比較
                               </label>
                             </div>
@@ -290,8 +288,7 @@ function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse
         </p>
       )}
       <p className="text-neutral-600 dark:text-neutral-400">
-        圈內約佔全區 {Math.round(d.share * 100)}%
-        {d.ring_cells.map((n, i) => (n ? ` · ${RING_LABEL[i]} ${Math.round((n / d.ring_cells.reduce((a, b) => a + b, 0)) * 100)}%` : "")).join("")}
+        圈內約佔全區 {Math.round(d.share * 100)}%{d.ring_cells.map((n, i) => (n ? ` · ${RING_LABEL[i]} ${Math.round((n / d.ring_cells.reduce((a, b) => a + b, 0)) * 100)}%` : "")).join("")}
       </p>
       {deal === "rent" ? (
         <p>
@@ -308,11 +305,22 @@ function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse
       </p>
       <div className="flex flex-wrap gap-1">
         {areaLinks(d.city, d.district, deal).map((l) => (
-          <a key={l.label} href={l.url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 rounded-full bg-neutral-100 px-2 py-0.5 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700">
+          <a
+            key={l.label}
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-0.5 rounded-full bg-neutral-100 px-2 py-0.5 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          >
             {l.label} <ExternalLink size={10} />
           </a>
         ))}
-        <a href={`/area/${encodeURIComponent(d.city)}/${encodeURIComponent(d.district)}`} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+        <a
+          href={`/area/${encodeURIComponent(d.city)}/${encodeURIComponent(d.district)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+        >
           本區行情頁 <ExternalLink size={10} />
         </a>
       </div>
@@ -374,3 +382,55 @@ function Compare({
 
 const pill = (on: boolean) =>
   `flex items-center gap-1 rounded-full border px-2 py-0.5 ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-200 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`;
+
+/** 分享連結:建立(把目前的地點與設定存成快照)、複製、刪除 */
+function ShareBox({ s, share }: { s: ZonesSettings; share: { region: string; when: CommuteWhen } }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const list = useQuery({ queryKey: ["shares"], queryFn: api.listShares, enabled: open });
+  const create = useMutation({
+    mutationFn: () => api.createShare({ region: share.region, mode: s.mode, combine: s.combine, rings: s.rings, when: share.when }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shares"] }),
+  });
+  const del = useMutation({ mutationFn: api.deleteShare, onSuccess: () => qc.invalidateQueries({ queryKey: ["shares"] }) });
+  const url = (t: string) => `${window.location.origin}/s/${t}`;
+  const copy = (t: string) => void navigator.clipboard?.writeText(url(t));
+  return (
+    <div className="text-xs">
+      <button className="flex items-center gap-1 text-neutral-600 dark:text-neutral-300" onClick={() => setOpen(!open)}>
+        <Link2 size={12} /> 分享給家人 / 另一半 <ChevronDown size={12} className={open ? "rotate-180" : ""} />
+      </button>
+      {open && (
+        <div className="mt-1 grid gap-1.5 rounded-lg border border-neutral-200 p-2 dark:border-neutral-800">
+          <p className="text-[11px] text-neutral-500">對方不用登入就能看這份落腳圈(唯讀)。連結會包含你的地點名稱與位置;之後改地點,已分享的不會跟著變。</p>
+          <button className="btn-primary justify-center" disabled={create.isPending} onClick={() => create.mutate()}>
+            {create.isPending ? "建立中…" : "建立分享連結"}
+          </button>
+          {create.data && (
+            <div className="flex items-center gap-1">
+              <input readOnly value={url(create.data.token)} className="input !py-0.5 text-[11px]" onFocus={(e) => e.target.select()} />
+              <button className="btn-ghost shrink-0 !px-2 !py-0.5" onClick={() => copy(create.data!.token)}>
+                複製
+              </button>
+            </div>
+          )}
+          {create.error && <p className="text-red-600">{planError(create.error) ?? "建立失敗"}</p>}
+          {(list.data?.items.length ?? 0) > 0 && (
+            <ul className="grid gap-0.5 border-t border-neutral-100 pt-1 dark:border-neutral-800">
+              {list.data!.items.map((it) => (
+                <li key={it.token} className="flex items-center justify-between gap-1">
+                  <a href={url(it.token)} target="_blank" rel="noreferrer" className="truncate text-emerald-700 underline dark:text-emerald-400">
+                    {it.created_at.slice(0, 10)} · {it.places.map((p) => p.name).join("、")}
+                  </a>
+                  <button className="btn-ghost shrink-0 !p-1" title="刪除這個連結" onClick={() => confirm("刪除這個分享連結?對方就打不開了。") && del.mutate(it.token)}>
+                    <Trash2 size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

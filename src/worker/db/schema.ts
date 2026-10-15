@@ -375,3 +375,21 @@ export const roadGraphs = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.region, t.version, t.chunk] })],
 );
+
+/**
+ * 落腳圈的分享連結(/s/:token,不用登入就能看,唯讀)。建立當下把地點與設定存成快照,之後改地點不影響已分享的;
+ * 建立的人可以刪。地點名稱與座標會被看到(建立時有提示)。
+ */
+export const shares = sqliteTable(
+  "shares",
+  {
+    token: text("token").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // JSON:{ region, mode, combine, rings, when, places: [{ name, lat, lng, days }] }
+    params: text("params").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("shares_user_idx").on(t.userId)],
+);
