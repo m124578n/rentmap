@@ -103,11 +103,15 @@ sale.post("/api/ingest/sale-stats", async (c) => {
   return c.json({ upserted: rows.length });
 });
 
-const PruneBody = z.object({ before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+const PruneBody = z.object({ before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cities: z.array(z.string().max(10)).max(30).optional() });
 sale.post("/api/ingest/sale-stats/prune", async (c) => {
   const parsed = PruneBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid" }, 400);
-  const r = await c.env.DB.prepare("DELETE FROM sale_stats WHERE date < ?").bind(parsed.data.before).run();
+  // 只清這次有抓的縣市(只抓一個生活圈時,別的縣市的季別可能比較舊,全表清會把它們最舊那一季刪掉;2026-10-15 踩過)
+  const cities = parsed.data.cities;
+  const r = cities?.length
+    ? await c.env.DB.prepare(`DELETE FROM sale_stats WHERE date < ?1 AND city IN (SELECT value FROM json_each(?2))`).bind(parsed.data.before, JSON.stringify(cities)).run()
+    : await c.env.DB.prepare("DELETE FROM sale_stats WHERE date < ?").bind(parsed.data.before).run();
   const left = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM sale_stats").first<{ n: number }>();
   return c.json({ deleted: r.meta.changes ?? 0, total: left?.n ?? 0 });
 });

@@ -18,7 +18,7 @@ import { AddressSearch } from "@/features/report/AddressSearch";
 import { RegionPicker } from "@/features/report/RegionPicker";
 import type { BusOverlay } from "@/features/map/busLayer";
 import type { PropertySummary } from "@shared/schemas";
-import { regionBbox } from "@shared/regions";
+import { regionAt } from "@shared/regions";
 import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
@@ -105,6 +105,8 @@ export function MapPage() {
   const focus = useCallback((bbox: [number, number, number, number]) => setFitTo((f) => ({ bbox, n: (f?.n ?? 0) + 1 })), []);
   const zonesPanel = zs.on && selectedId == null && point == null;
   const panelOpen = selectedId != null || point != null || zs.on;
+  // 依縣市界判斷房源在不在目前的生活圈(外框會重疊,例如新竹縣跟桃園)
+  const inRegion = useCallback((lat: number, lng: number) => regionAt(lat, lng) === region.key, [region.key]);
   const panel = (onOverlay: (o: BusOverlay | null) => void) =>
     point ? (
       <PointDetail point={point} items={items} onClose={() => setPoint(null)} onSelect={setSelectedId} onBusOverlay={onOverlay} />
@@ -214,7 +216,7 @@ export function MapPage() {
             onPoint={pickPoint}
             point={point}
             view={region.view}
-            fitWithin={regionBbox(region.key)}
+            fitWithin={inRegion}
             heats={heatsShown}
             poiLayer={poi.fc}
             zones={zs.on ? (zonesQ.data ?? null) : null}

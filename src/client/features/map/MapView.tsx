@@ -41,8 +41,8 @@ interface Props {
   zones?: ZonesResponse | null;
   /** 縮放到某個範圍 [w, s, e, n](n 換了就再縮放一次) */
   fitTo?: { bbox: [number, number, number, number]; n: number } | null;
-  /** 第一次框畫面只看這個範圍內的房源 [w, s, e, n](目前的生活圈);範圍內沒有房源就停在 view */
-  fitWithin?: [number, number, number, number];
+  /** 第一次框畫面只看這些房源(目前生活圈裡的;生活圈外框會互相重疊,所以用判斷函式);沒有就停在 view */
+  fitWithin?: (lat: number, lng: number) => boolean;
   /** 區域圖層(通勤網格、災害多邊形…) */
   /** 區域圖層(可同時好幾層) */
   heats?: { id: string; fc: FeatureCollection }[];
@@ -335,8 +335,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     if (!fittedRef.current) {
       const bounds = new maplibregl.LngLatBounds();
       // 只框目前生活圈裡的房源(別的生活圈、舊資料裡座標是 (0, 0) 的都不算),不然會被拉到別的城市甚至全世界
-      const [w, so, e, n] = fitWithin ?? [118, 21, 123, 26.5];
-      for (const p of items) if (p.lat != null && p.lng != null && p.lat >= so && p.lat <= n && p.lng >= w && p.lng <= e) bounds.extend([p.lng, p.lat]);
+      const ok = fitWithin ?? ((lat: number, lng: number) => lat > 21 && lat < 26.5 && lng > 118 && lng < 123);
+      for (const p of items) if (p.lat != null && p.lng != null && ok(p.lat, p.lng)) bounds.extend([p.lng, p.lat]);
       if (!bounds.isEmpty()) {
         fittedRef.current = true;
         map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });

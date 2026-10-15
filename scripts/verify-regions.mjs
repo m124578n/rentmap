@@ -10,6 +10,7 @@ const want = process.argv.slice(2);
 // 市中心附近、一定在陸地上的點
 const SPOT = {
   north: { label: "台北 大安", lat: 25.0335, lng: 121.5436 },
+  hsinchu: { label: "新竹 竹北高鐵", lat: 24.8085, lng: 121.0403 },
   taichung: { label: "台中 市政府", lat: 24.1618, lng: 120.6469 },
   tainan: { label: "台南 火車站前", lat: 22.9955, lng: 120.2095 },
   kaohsiung: { label: "高雄 美麗島", lat: 22.6313, lng: 120.3019 },

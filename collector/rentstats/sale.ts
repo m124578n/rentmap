@@ -58,5 +58,7 @@ export async function runSaleStats(opts: { base: string; secret: string; args: s
     process.stdout.write(`\r推入 ${Math.min(i + 1000, items.length)} / ${items.length}`);
   }
   console.log();
-  console.log("prune", await post(opts.base, opts.secret, "/prune", { before: dates[0] }));
+  // 只清這次有抓的縣市
+  const cities = [...new Set(items.map((x) => x.city))];
+  console.log("prune", await post(opts.base, opts.secret, "/prune", { before: dates[0], cities }));
 }

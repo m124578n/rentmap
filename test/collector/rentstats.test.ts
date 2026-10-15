@@ -3,7 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { RentStatIn, computeMarket, quantile, type RentStat } from "../../src/shared/market";
-import { cnNum, parseFloor, roadOf, rocDate, transformRent } from "../../collector/rentstats/transform";
+import { cnNum, parseFloor, placeOf, roadOf, rocDate, transformRent } from "../../collector/rentstats/transform";
 import { readZipEntry, recentSeasons } from "../../collector/rentstats/index";
 
 const csv = fs.readFileSync(path.join(import.meta.dirname, "..", "fixtures", "lvr-rent-mini.csv"), "utf8");
@@ -46,6 +46,12 @@ describe("實價登錄租賃 CSV", () => {
     expect([rocDate("1150211"), rocDate("0920610"), rocDate("abc")]).toEqual(["2026-02-11", "2003-06-10", null]);
     expect(roadOf("臺北市中山區復興北路３８０巷１１號４樓", "中山區")).toBe("復興北路");
     expect(roadOf("新北市板橋區文化路一段１號", "板橋區")).toBe("文化路一段");
+    // 新竹市:區欄就是「新竹市」,地址「新竹市新竹市武陵路…」→ 用路名推回區;推不出來留「新竹市」
+    expect(roadOf("新竹市新竹市武陵路７０巷１０號十樓", "新竹市")).toBe("武陵路");
+    expect(placeOf("新竹市", "新竹市", "新竹市新竹市武陵路７０巷１０號十樓")).toEqual({ district: "北區", road: "武陵路" });
+    expect(placeOf("新竹市", "新竹市", "新竹市新竹市光復路二段１號")).toEqual({ district: "東區", road: "光復路二段" });
+    expect(placeOf("新竹市", "新竹市", "新竹市新竹市不存在路１號").district).toBe("新竹市");
+    expect(placeOf("台北市", "中山區", "臺北市中山區復興北路３８０巷１１號")).toEqual({ district: "中山區", road: "復興北路" });
     expect(recentSeasons(new Date("2026-09-29"), 4)).toEqual(["115S3", "115S2", "115S1", "114S4"]);
   });
 

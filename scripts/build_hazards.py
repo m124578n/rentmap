@@ -6,7 +6,7 @@
 
 來源:
   淹水潛勢(經濟部水利署第四代,data.gov.tw 25766):每縣市一個 7z,內含各降雨情境的 SHP。
-    目前收七個縣市:基隆、台北、新北、桃園、台中、台南、高雄(FLOOD_CITIES;各縣市檔名與級距欄位不同,見 flood_level)。
+    目前收九個縣市:基隆、台北、新北、桃園、新竹市、新竹縣、台中、台南、高雄(FLOOD_CITIES;各縣市檔名與級距欄位不同,見 flood_level)。
     取兩種情境:6 小時 150 毫米(短時強降雨,最常見)、24 小時 500 毫米(颱風等級)。
     台北市 WGS84、GRIDCODE 1–5 = 0.3–0.5 / 0.5–1 / 1–2 / 2–3 / >3 公尺;
     新北市 TWD97 TM2、GRIDCODE 1–6 = 0–0.3 / 0.3–0.5 / …(0–0.3 幾乎整個新北都是,不收)→ 統一成 1–5 級。
@@ -198,7 +198,8 @@ def airnoise(zones):
 
 
 # 淹水潛勢:水利署每縣市一個 7z(207-{代碼}.7z)。代碼 2026-09-30 逐一下載確認過。
-FLOOD_CITIES = [("01", "基隆市"), ("02", "台北市"), ("03", "新北市"), ("04", "桃園市"), ("07", "台中市"), ("12", "台南市"), ("13", "高雄市")]
+# 05 是「新竹縣市」一包,裡面分「新竹市/」「新竹縣/」兩個資料夾:第三個欄位是只看哪個資料夾
+FLOOD_CITIES = [("01", "基隆市", ""), ("02", "台北市", ""), ("03", "新北市", ""), ("04", "桃園市", ""), ("05", "新竹市", "新竹市/"), ("05", "新竹縣", "新竹縣/"), ("07", "台中市", ""), ("12", "台南市", ""), ("13", "高雄市", "")]
 # 各縣市檔名不一:tp_06h_r150_polygon_class_1、6h150r、ty_06h_150mm、6Hr150r、6h150…
 FLOOD_FILE = {"flood6": re.compile(r"(?<!\d)0?6hr?_?r?_?150", re.I), "flood24": re.compile(r"24hr?_?r?_?500", re.I)}
 DEPTH_LEVEL = {0.0: 0, 0.3: 1, 0.5: 2, 1.0: 3, 2.0: 4, 3.0: 5}
@@ -210,7 +211,7 @@ def flood_level(rec, n_classes):
     for v in rec:
         if not isinstance(v, str):
             continue
-        t = v.replace(" ", "").replace("m", "").replace("M", "")
+        t = v.replace(" ", "").replace("m", "").replace("M", "").replace("~", "-").replace("～", "-")  # 新竹:「0.3m~0.5m」
         m = re.fullmatch(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)", t) or re.match(r"(\d+(?:\.\d+)?)公尺>淹水深度>", t)
         if m and float(m.group(1)) in DEPTH_LEVEL:
             return DEPTH_LEVEL[float(m.group(1))]
@@ -224,7 +225,7 @@ def flood_level(rec, n_classes):
 
 
 def flood(zones, only):
-    for code, city in FLOOD_CITIES:
+    for code, city, folder in FLOOD_CITIES:
         if only and city not in only:
             continue
         arc = download(FLOOD.format(code), os.path.join(DIR, f"207-{code}.7z"))
@@ -232,7 +233,7 @@ def flood(zones, only):
             names = z.getnames()
             picked = {}
             for kind, rx in FLOOD_FILE.items():
-                shps = [n for n in names if n.lower().endswith(".shp") and rx.search(os.path.basename(n))]
+                shps = [n for n in names if n.startswith(folder) and n.lower().endswith(".shp") and rx.search(os.path.basename(n))]
                 if len(shps) != 1:
                     raise SystemExit(f"{city} {kind}:預期 1 個 SHP,找到 {shps}")
                 picked[kind] = shps[0]
@@ -250,8 +251,14 @@ def flood(zones, only):
             prj = open(shp[:-4] + ".prj").read() if os.path.exists(shp[:-4] + ".prj") else ""
             project = None if "GCS_WGS_1984" in prj else (lambda x, y: twd97.transform(x, y))
             total = 0
-            with shapefile.Reader(shp, encoding="big5") as r:
+            # 大部分縣市的屬性表是 Big5,新竹是 UTF-8
+            try:
+                r = shapefile.Reader(shp, encoding="big5")
                 recs = r.records()
+            except shapefile.ShapefileException:
+                r = shapefile.Reader(shp, encoding="utf-8")
+                recs = r.records()
+            with r:
                 n_classes = len(recs)
                 for rec, shape in zip(recs, r.shapes()):
                     level = flood_level(rec, n_classes)

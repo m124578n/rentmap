@@ -67,7 +67,7 @@ export const CITY_INFO = {
     lvr: "o",
     bbox: [120.88, 24.71, 121.03, 24.86],
     districts: ["東區", "北區", "香山區"],
-    coverage: [],
+    coverage: ["crimeDistricts", "youbike", "flood"],
   },
   新竹縣: {
     name: "新竹縣",
@@ -75,7 +75,7 @@ export const CITY_INFO = {
     lvr: "j",
     bbox: [120.93, 24.4, 121.42, 24.96],
     districts: ["竹北市", "竹東鎮", "新埔鎮", "關西鎮", "湖口鄉", "新豐鄉", "芎林鄉", "橫山鄉", "北埔鄉", "寶山鄉", "峨眉鄉", "尖石鄉", "五峰鄉"],
-    coverage: [],
+    coverage: ["crimeDistricts", "youbike", "flood"],
   },
   台中市: {
     name: "台中市",
@@ -155,8 +155,8 @@ export const REGIONS: Record<RegionKey, RegionInfo> = {
       [121.75, 25.22],
     ],
   },
-  // 新竹(新竹市 + 新竹縣;竹科橫跨兩邊,竹北是熱門落腳處)2026-10-15 加,資料齊了才開
-  hsinchu: { key: "hsinchu", label: "新竹", cities: [], planned: ["新竹市", "新竹縣"], enabled: false, view: [[120.9, 24.72], [121.08, 24.88]] },
+  // 新竹(新竹市 + 新竹縣;竹科橫跨兩邊,竹北是熱門落腳處)2026-10-15 開放:公車、實價登錄、生活機能、淹水、YouBike、治安各區、道路圖;沒有垃圾車、液化、捷運
+  hsinchu: { key: "hsinchu", label: "新竹", cities: ["新竹市", "新竹縣"], planned: [], enabled: true, view: [[120.9, 24.72], [121.08, 24.88]] },
   // 台中、台南、高雄 2026-09-30 開放(資料狀況見 docs/design/2026-09-30-open-a-region.md §4)
   taichung: { key: "taichung", label: "台中", cities: ["台中市"], planned: [], enabled: true, view: [[120.55, 24.05], [120.8, 24.3]] },
   tainan: { key: "tainan", label: "台南", cities: ["台南市"], planned: [], enabled: true, view: [[120.13, 22.93], [120.3, 23.08]] },

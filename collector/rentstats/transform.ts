@@ -8,6 +8,21 @@
  */
 import type { RentStatIn } from "../../src/shared/market";
 import type { SaleStatIn } from "../../src/shared/sale";
+import streetDistricts from "./street-districts.json";
+
+/** 實價登錄沒有分區的縣市(新竹市):路 → 行政區(scripts/build_street_districts.py 從 OSM 門牌統計) */
+const STREET_DISTRICT = streetDistricts as Record<string, Record<string, string>>;
+
+/**
+ * 行政區與路段。新竹市的「鄉鎮市區」欄就是「新竹市」、地址寫成「新竹市新竹市武陵路…」:用路名推回東區 / 北區 / 香山區;
+ * 推不出來(跨區的長路、新路)就留「新竹市」(行情當成全市的樣本)。
+ */
+export function placeOf(city: string, rawDistrict: string, addr: string): { district: string; road: string | null } {
+  const district = rawDistrict.trim();
+  const road = roadOf(addr, district);
+  if (district === city && STREET_DISTRICT[city]) return { district: (road && STREET_DISTRICT[city]![road]) || district, road };
+  return { district, road };
+}
 
 /** 簡單 CSV(支援雙引號欄位) */
 /** 房 / 廳 / 衛偶爾有登錄錯誤的離譜值(>20):當成沒填,不要讓一筆髒資料擋掉整批匯入(Zod 上限 50) */
@@ -83,7 +98,9 @@ export function rocDate(s: string): string | null {
 export function roadOf(addr: string, district: string): string | null {
   const a = halfDigits(addr);
   const i = a.indexOf(district);
-  const rest = i >= 0 ? a.slice(i + district.length) : a.replace(/^.*?[市縣]/, "").replace(/^.*?[區鄉鎮市]/, "");
+  let rest = i >= 0 ? a.slice(i + district.length) : a.replace(/^.*?[市縣]/, "").replace(/^.*?[區鄉鎮市]/, "");
+  // 新竹市的地址是「新竹市新竹市武陵路」:區名就是市名,重複的去掉
+  while (district && rest.startsWith(district)) rest = rest.slice(district.length);
   const m = /^(?:.{0,6}?里)?(?:\d+鄰)?(.+?(?:大道|路|街)(?:[一二三四五六七八九十]+段)?)/.exec(rest);
   return m ? m[1]!.slice(0, 40) : null;
 }
@@ -164,14 +181,14 @@ export function transformRent(city: RentStatIn["city"], csv: string): { items: R
       skip("整棟多房"); // 整棟宿舍 / 旅館式,不是一般住家
       continue;
     }
-    const district = r[idx.district]!.trim();
+    const { district, road } = placeOf(city, r[idx.district]!, r[idx.addr]!);
     const built = rocDate(r[idx.built]!.padStart(7, "0"));
     const age = built ? Math.max(0, Number(date.slice(0, 4)) - Number(built.slice(0, 4))) : null;
     items.push({
       serial: r[idx.serial]!.trim(),
       city,
       district,
-      road: roadOf(r[idx.addr]!, district),
+      road,
       kind: KIND[r[idx.kind]!.trim()] ?? null,
       building_type: r[idx.btype]!.replace(/\(.*\)$/, "").slice(0, 30) || null,
       floor: parseFloor(r[idx.floor]!),
@@ -283,7 +300,7 @@ export function transformSale(city: SaleStatIn["city"], csv: string): { items: S
       skip("價格或面積不合理");
       continue;
     }
-    const district = r[idx.district]!.trim();
+    const { district, road } = placeOf(city, r[idx.district]!, r[idx.addr]!);
     const built = rocDate(r[idx.built]!.padStart(7, "0"));
     const age = built ? Math.max(0, Number(date.slice(0, 4)) - Number(built.slice(0, 4))) : null;
     const parkPrice = int(r[idx.parkPrice]);
@@ -291,7 +308,7 @@ export function transformSale(city: SaleStatIn["city"], csv: string): { items: S
       serial: r[idx.serial]!.trim(),
       city,
       district,
-      road: roadOf(r[idx.addr]!, district),
+      road,
       building_type: type,
       floor: parseFloor(r[idx.floor]!),
       total_floors: cnNum(halfDigits(r[idx.total]!.replace(/層$/, ""))) ?? int(r[idx.total]),

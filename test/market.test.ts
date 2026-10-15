@@ -133,3 +133,19 @@ describe("rent stats ingest + market", () => {
     expect((await SELF.fetch(`${ORIGIN}/api/properties/99999/market`, authed())).status).toBe(404);
   });
 });
+
+describe("實價登錄清理只動有抓的縣市", () => {
+  it("帶 cities 只刪那些縣市的舊資料;不帶是全表(舊行為)", async () => {
+    await post("rent-stats", {
+      items: [
+        stat("p-hc-old", 15000, 20, { city: "新竹市", district: "東區", date: "2025-01-01" }),
+        stat("p-hc-new", 15000, 20, { city: "新竹市", district: "東區", date: "2026-03-01" }),
+        stat("p-tc-old", 12000, 20, { city: "台中市", district: "西屯區", date: "2025-01-01" }),
+      ],
+    });
+    const r = (await (await post("rent-stats/prune", { before: "2025-06-01", cities: ["新竹市"] })).json()) as { deleted: number };
+    expect(r.deleted).toBe(1);
+    const left = await env.DB.prepare("SELECT serial FROM rent_stats WHERE serial LIKE 'p-%' ORDER BY serial").all<{ serial: string }>();
+    expect(left.results.map((x) => x.serial)).toEqual(["p-hc-new", "p-tc-old"]);
+  });
+});

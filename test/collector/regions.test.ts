@@ -4,9 +4,9 @@ import { CITIES, DISTRICTS } from "../../src/shared/constants";
 
 describe("regions", () => {
   it("四個生活圈都開放(六都 + 基隆)", () => {
-    expect(OPEN_CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市", "台中市", "台南市", "高雄市"]);
+    expect(OPEN_CITIES).toEqual(["台北市", "新北市", "桃園市", "基隆市", "新竹市", "新竹縣", "台中市", "台南市", "高雄市"]);
     expect(CITIES).toEqual(OPEN_CITIES);
-    expect(Object.values(REGIONS).filter((r) => r.enabled).map((r) => r.key)).toEqual(["north", "taichung", "tainan", "kaohsiung"]);
+    expect(Object.values(REGIONS).filter((r) => r.enabled).map((r) => r.key)).toEqual(["north", "hsinchu", "taichung", "tainan", "kaohsiung"]);
   });
 
   it("district lists per city", () => {
