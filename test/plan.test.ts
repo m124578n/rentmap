@@ -201,6 +201,7 @@ describe("沒登入一律擋(所有使用者 API)", () => {
     ["GET", "/api/commute/trips?lat=25&lng=121&place_id=1"],
     ["GET", "/api/commute/grid?w=121.5&s=25&e=121.52&n=25.02"],
     ["GET", "/api/commute/drive?mode=car"],
+    ["GET", "/api/zones"],
     ["GET", "/api/commute/drive/at?lat=25&lng=121"],
     ["POST", "/api/tour"],
     ["GET", "/api/requirements"],

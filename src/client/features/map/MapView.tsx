@@ -8,6 +8,8 @@ import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 import { setHeats } from "./heatLayer";
 import { POI_ICON_LAYER, setPoiLayer } from "./poiLayer";
+import { setZones } from "@/features/zones/zoneLayer";
+import type { ZonesResponse } from "@shared/zones";
 import { PriceMarkers } from "./priceMarkers";
 import type { Viewport } from "./heat";
 import type { FeatureCollection } from "geojson";
@@ -35,6 +37,10 @@ interface Props {
   point?: { lat: number; lng: number } | null;
   /** 一開始看的範圍(生活圈的都會核心);換生活圈時地圖跟著移過去 */
   view: [[number, number], [number, number]];
+  /** 落腳圈(分圈的色塊、外框、圈內車站) */
+  zones?: ZonesResponse | null;
+  /** 縮放到某個範圍 [w, s, e, n](n 換了就再縮放一次) */
+  fitTo?: { bbox: [number, number, number, number]; n: number } | null;
   /** 第一次框畫面只看這個範圍內的房源 [w, s, e, n](目前的生活圈);範圍內沒有房源就停在 view */
   fitWithin?: [number, number, number, number];
   /** 區域圖層(通勤網格、災害多邊形…) */
@@ -78,7 +84,7 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  */
 const NO_HEATS: { id: string; fc: FeatureCollection }[] = [];
 
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heats = NO_HEATS, poiLayer = null, onViewport, view, fitWithin }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heats = NO_HEATS, poiLayer = null, zones = null, fitTo = null, onViewport, view, fitWithin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -101,6 +107,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   heatRef.current = heats;
   const poiRef = useRef(poiLayer);
   poiRef.current = poiLayer;
+  const zonesRef = useRef(zones);
+  zonesRef.current = zones;
   const onViewportRef = useRef(onViewport);
   onViewportRef.current = onViewport;
   padRef.current = padLeft;
@@ -133,6 +141,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
       setHeats(map, heatRef.current);
+      if (zonesRef.current) setZones(map, zonesRef.current, themeRef.current);
       if (poiRef.current) void setPoiLayer(map, poiRef.current, themeRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
       emitView();
@@ -204,6 +213,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       priceRef.current?.attach();
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
       setHeats(map, heatRef.current);
+      if (zonesRef.current) setZones(map, zonesRef.current, theme);
       if (poiRef.current) void setPoiLayer(map, poiRef.current, theme);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
@@ -227,6 +237,23 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     if (!map) return;
     return whenReady(map, () => setHeats(map, heatRef.current));
   }, [heats]);
+
+  // 落腳圈
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    return whenReady(map, () => setZones(map, zonesRef.current, themeRef.current));
+  }, [zones]);
+
+  // 縮放到指定範圍(落腳圈點了某一區)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !fitTo) return;
+    const [w, s, e, n] = fitTo.bbox;
+    const narrow = window.innerWidth < 640;
+    map.fitBounds([[w, s], [e, n]], { padding: narrow ? { top: 40, bottom: padBottomRef.current + 20, left: 30, right: 30 } : { top: 60, bottom: 60, left: padRef.current + 60, right: 60 }, maxZoom: 15, duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitTo?.n]);
 
   // 生活機能圖層
   useEffect(() => {

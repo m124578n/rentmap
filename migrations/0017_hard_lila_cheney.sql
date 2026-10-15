@@ -1,0 +1,1 @@
+ALTER TABLE `my_places` ADD `days_per_week` integer DEFAULT 5 NOT NULL;

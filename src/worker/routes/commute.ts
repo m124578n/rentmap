@@ -54,7 +54,7 @@ const WhenQuery = z.object({
     .default(COMMUTE_DEFAULT.go.time),
   dir: z.enum(["to", "from"]).default(COMMUTE_DEFAULT.go.dir),
 });
-const whenOf = (q: Record<string, string>): CommuteWhen | null => {
+export const whenOf = (q: Record<string, string>): CommuteWhen | null => {
   const r = WhenQuery.safeParse({ day: q.day || undefined, time: q.time || undefined, dir: q.dir || undefined });
   return r.success ? { ...r.data, time: r.data.time.padStart(5, "0") } : null;
 };
@@ -63,7 +63,7 @@ const whenOf = (q: Record<string, string>): CommuteWhen | null => {
  * 方案:免費只算平日 08:00 上班、不含 YouBike、只用最早建的 N 個地點(降級後多的地點不算,不刪)。
  * 時段不是預設就 402(不偷偷改成預設,免得畫面顯示的時段跟算的不一樣)。
  */
-async function commuteGate(c: Parameters<typeof planOf>[0], when: CommuteWhen) {
+export async function commuteGate(c: Parameters<typeof planOf>[0], when: CommuteWhen) {
   const { ent } = await planOf(c);
   const d = COMMUTE_DEFAULT.go;
   if (!ent.commuteCustom && (when.day !== d.day || when.time !== d.time || when.dir !== d.dir)) return { denied: deny(c, "commuteCustom") };
@@ -129,9 +129,9 @@ commute.get("/api/commute", async (c) => {
 });
 
 /** 我的地點(方案內的前 N 個) */
-async function myPlaces(c: Parameters<typeof planOf>[0], max: number) {
+export async function myPlaces(c: Parameters<typeof planOf>[0], max: number) {
   return db(c.env.DB)
-    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng })
+    .select({ id: schema.myPlaces.id, name: schema.myPlaces.name, lat: schema.myPlaces.lat, lng: schema.myPlaces.lng, days: schema.myPlaces.daysPerWeek })
     .from(schema.myPlaces)
     .where(eq(schema.myPlaces.userId, c.get("user").id))
     .orderBy(asc(schema.myPlaces.id))

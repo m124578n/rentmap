@@ -23,10 +23,13 @@ import { BottomSheet, type Snap } from "@/components/BottomSheet";
 import { useNarrow } from "@/lib/useNarrow";
 import { openPlacesDialog, usePlaces } from "@/features/places/places";
 import { COMMUTE_LEGEND, commuteColor, HEAT_LABEL, HEAT_MODES, useHeat, type HeatMode, type HeatResult, type Viewport } from "@/features/map/heat";
-import { Layers, Store } from "lucide-react";
+import { Layers, MapPin, Store } from "lucide-react";
 import { POI_LAYER_CATS, poiColor, usePoiLayer } from "@/features/map/poiLayer";
 import { POI_ICON } from "@/features/map/poiIcons";
 import { MultiPick } from "@/components/MultiPick";
+import { ZonesPanel } from "@/features/zones/ZonesPanel";
+import { setZonesSettings, useZones, useZonesSettings } from "@/features/zones/useZones";
+import { whenOf } from "@/lib/filters";
 import { poiLabel, type PoiCat } from "@shared/poi";
 
 const PANEL_W = 400;
@@ -94,12 +97,21 @@ export function MapPage() {
   const [poiCats, setPoiCats] = useStoredList<PoiCat>(POI_KEY, POI_LAYER_CATS, "rentmap.poiLayer");
   const poi = usePoiLayer(poiCats, view);
   const noCoords = items.filter((p) => p.lat == null || p.lng == null).length;
-  const panelOpen = selectedId != null || point != null;
+  // 落腳圈:打開時左側面板顯示圈內的區(點了房源或地圖任一點時先看那個)
+  const zs = useZonesSettings();
+  const nPlaces = places.data?.items.length ?? 0;
+  const zonesQ = useZones(zs, region.key, whenOf(filters, filters.commuteSide), nPlaces);
+  const [fitTo, setFitTo] = useState<{ bbox: [number, number, number, number]; n: number } | null>(null);
+  const focus = useCallback((bbox: [number, number, number, number]) => setFitTo((f) => ({ bbox, n: (f?.n ?? 0) + 1 })), []);
+  const zonesPanel = zs.on && selectedId == null && point == null;
+  const panelOpen = selectedId != null || point != null || zs.on;
   const panel = (onOverlay: (o: BusOverlay | null) => void) =>
     point ? (
       <PointDetail point={point} items={items} onClose={() => setPoint(null)} onSelect={setSelectedId} onBusOverlay={onOverlay} />
     ) : selectedId != null ? (
       <PropertyDetail id={selectedId} onClose={() => setSelectedId(null)} onBusOverlay={onOverlay} />
+    ) : zonesPanel ? (
+      <ZonesPanel s={zs} data={zonesQ.data} loading={zonesQ.isFetching} error={zonesQ.error} nPlaces={nPlaces} onFocus={focus} onClose={() => setZonesSettings({ on: false })} />
     ) : null;
 
   const [layersOpen, setLayersOpen] = useState(false);
@@ -205,6 +217,8 @@ export function MapPage() {
             fitWithin={regionBbox(region.key)}
             heats={heatsShown}
             poiLayer={poi.fc}
+            zones={zs.on ? (zonesQ.data ?? null) : null}
+            fitTo={fitTo}
             onViewport={setView}
           />
 
@@ -233,6 +247,12 @@ export function MapPage() {
           >
             <RegionPicker />
             <AddressSearch onPick={pickPoint} />
+            <button
+              onClick={() => setZonesSettings({ on: !zs.on })}
+              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium shadow-sm ${zs.on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-200 bg-white/95 text-emerald-700 dark:border-neutral-800 dark:bg-neutral-900/95 dark:text-emerald-400"}`}
+            >
+              <MapPin size={14} /> 適合我落腳的地方
+            </button>
             {noCoords > 0 && (
               <div className="rounded bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                 {noCoords} 間沒有座標,只在

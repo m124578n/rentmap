@@ -1,0 +1,376 @@
+import { useMemo, useState } from "react";
+import { Bike, Bus, Car, ChevronDown, Crosshair, ExternalLink, MapPin, Scale, SlidersHorizontal, TrainFront, X } from "lucide-react";
+import {
+  COMBINE_LABEL,
+  COMBINES,
+  RING_COLOR,
+  RING_LABEL,
+  SCORE_KEYS,
+  SCORE_LABEL,
+  lifeSentence,
+  rentOf,
+  scoreDistricts,
+  type ZoneDistrict,
+  type ZonesResponse,
+} from "@shared/zones";
+import { useCrimeDistricts } from "@/features/crime/CrimeSection";
+import { useRequirements } from "@/features/fit/fit";
+import { openPlacesDialog } from "@/features/places/places";
+import { planError } from "@/lib/plan";
+import { usePurpose } from "@/lib/purpose";
+import { areaLinks } from "./links";
+import { setZonesSettings, type ZonesSettings } from "./useZones";
+
+const MODES = [
+  { k: "transit", label: "大眾運輸", icon: <Bus size={13} /> },
+  { k: "scooter", label: "機車", icon: <Bike size={13} /> },
+  { k: "car", label: "開車", icon: <Car size={13} /> },
+] as const;
+const RENT_KINDS = ["整層住家", "獨立套房", "分租套房", "雅房"];
+const $ = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const wan = (n: number) => `${(n / 10000).toFixed(1)} 萬`;
+
+/**
+ * 「適合你落腳的地方」:依到我的地點的通勤時間分圈,列出圈內的區(落腳分數排名)、車站、行情與外部搜尋連結,可以挑兩區比較。
+ */
+export function ZonesPanel({
+  s,
+  data,
+  loading,
+  error,
+  nPlaces,
+  onFocus,
+  onClose,
+}: {
+  s: ZonesSettings;
+  data: ZonesResponse | undefined;
+  loading: boolean;
+  error: unknown;
+  nPlaces: number;
+  onFocus: (bbox: [number, number, number, number]) => void;
+  onClose: () => void;
+}) {
+  const purpose = usePurpose();
+  const deal = purpose === "buy" ? "buy" : "rent";
+  const req = useRequirements().data?.requirements;
+  const budget = deal === "rent" ? (req?.budget_max ?? null) : null;
+  const crime = useCrimeDistricts().data;
+  const [showWeights, setShowWeights] = useState(false);
+  const [pick, setPick] = useState<string[]>([]);
+  const [open, setOpen] = useState<string | null>(null);
+
+  const ranked = useMemo(() => {
+    if (!data) return [];
+    const ds = data.districts;
+    const scores = scoreDistricts(ds, s.weights, {
+      rentKind: s.rentKind,
+      crimeOf: (d) => crime?.items[`${d.city}|${d.district}`]?.house ?? null,
+    });
+    return ds
+      .map((d, i) => ({ d, score: scores[i] ?? null, over: budget != null && (rentOf(d, s.rentKind) ?? 0) > budget }))
+      .filter((x) => !(s.budgetOnly && x.over))
+      .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.d.median - b.d.median);
+  }, [data, s.weights, s.rentKind, s.budgetOnly, crime, budget]);
+  const keyOf = (d: ZoneDistrict) => `${d.city}|${d.district}`;
+  const picked = ranked.filter((x) => pick.includes(keyOf(x.d)));
+
+  return (
+    <div className="grid gap-3 p-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 className="flex items-center gap-1 font-semibold">
+            <MapPin size={16} className="text-emerald-600" /> 適合你落腳的地方
+          </h2>
+          <p className="text-xs text-neutral-500">依到「我的地點」的通勤時間分圈;時段跟著篩選列的上班 / 下班。</p>
+        </div>
+        <button onClick={onClose} className="btn-ghost !p-1" aria-label="關閉">
+          <X size={16} />
+        </button>
+      </div>
+
+      {nPlaces === 0 ? (
+        <div className="rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+          先設定公司(或常去的地方),才知道住哪裡方便。
+          <button className="btn-primary mt-2 w-full justify-center" onClick={openPlacesDialog}>
+            設定我的地點
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* 設定 */}
+          <div className="grid gap-2 rounded-lg border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+            <div className="flex flex-wrap gap-1">
+              {MODES.map((m) => (
+                <button key={m.k} onClick={() => setZonesSettings({ mode: m.k })} className={pill(s.mode === m.k)}>
+                  {m.icon} {m.label}
+                </button>
+              ))}
+            </div>
+            {nPlaces > 1 && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-neutral-500">多個地點:</span>
+                {COMBINES.map((c) => (
+                  <button key={c} onClick={() => setZonesSettings({ combine: c })} className={pill(s.combine === c)}>
+                    {COMBINE_LABEL[c]}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-neutral-500">分圈(分鐘):</span>
+              {s.rings.map((r, i) => (
+                <label key={i} className="flex items-center gap-0.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: RING_COLOR[i] }} />
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={r}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v) || v < 5 || v > 120) return;
+                      const next = [...s.rings];
+                      next[i] = v;
+                      setZonesSettings({ rings: next.sort((a, b) => a - b) });
+                    }}
+                    className="w-12 rounded border border-neutral-200 bg-white px-1 py-0.5 dark:border-neutral-700 dark:bg-neutral-800"
+                  />
+                </label>
+              ))}
+            </div>
+            {deal === "rent" && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-neutral-500">租金看:</span>
+                {RENT_KINDS.map((k) => (
+                  <button key={k} onClick={() => setZonesSettings({ rentKind: k })} className={pill(s.rentKind === k)}>
+                    {k}
+                  </button>
+                ))}
+              </div>
+            )}
+            {deal === "rent" &&
+              (budget != null ? (
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={s.budgetOnly} onChange={(e) => setZonesSettings({ budgetOnly: e.target.checked })} />
+                  只看預算內({s.rentKind}行情 ≤ {$(budget)})
+                </label>
+              ) : (
+                <p className="text-neutral-500">在「我的需求」設預算,就能篩掉住不起的區。</p>
+              ))}
+            <button className="flex items-center gap-1 text-left text-neutral-600 dark:text-neutral-300" onClick={() => setShowWeights(!showWeights)}>
+              <SlidersHorizontal size={12} /> 排名權重 <ChevronDown size={12} className={showWeights ? "rotate-180" : ""} />
+            </button>
+            {showWeights && (
+              <div className="grid gap-1">
+                {SCORE_KEYS.map((k) => (
+                  <label key={k} className="grid grid-cols-[4.5rem_1fr_1.5rem] items-center gap-2">
+                    <span>{SCORE_LABEL[k]}</span>
+                    <input type="range" min={0} max={5} value={s.weights[k]} onChange={(e) => setZonesSettings({ weights: { ...s.weights, [k]: Number(e.target.value) } })} />
+                    <span className="tabular-nums text-neutral-500">{s.weights[k]}</span>
+                  </label>
+                ))}
+                <p className="text-[11px] text-neutral-400">0 = 不看。分數是在這次圈內的區之間比,不是絕對值。</p>
+              </div>
+            )}
+          </div>
+
+          {error ? (
+            <p className="text-xs text-red-600 dark:text-red-400">{planError(error) ?? "算不出來,稍後再試"}</p>
+          ) : !data ? (
+            <p className="text-xs text-neutral-500">{loading ? "計算中…(第一次約需幾秒)" : ""}</p>
+          ) : (
+            <>
+              {!data.has_data && <p className="text-xs text-amber-700 dark:text-amber-400">這一區的交通資料還在準備中,圈只是參考。</p>}
+              <div className="flex flex-wrap gap-2 text-[11px] text-neutral-600 dark:text-neutral-400">
+                {data.rings.map((r, i) => (
+                  <span key={i} className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: RING_COLOR[i] }} />
+                    {RING_LABEL[i]} ≤ {r} 分
+                  </span>
+                ))}
+                {loading && <span className="text-neutral-400">更新中…</span>}
+              </div>
+              {ranked.length === 0 ? (
+                <p className="text-xs text-neutral-500">圈內沒有符合的區。可以放寬分圈時間、或取消「只看預算內」。</p>
+              ) : (
+                <>
+                  {picked.length === 2 && <Compare a={picked[0]!} b={picked[1]!} places={data.places} kind={s.rentKind} deal={deal} crime={crime} />}
+                  {pick.length > 0 && pick.length < 2 && <p className="text-[11px] text-neutral-500">再勾一個區就能比較。</p>}
+                  <ol className="grid gap-2">
+                    {ranked.map(({ d, score, over }, i) => {
+                      const k = keyOf(d);
+                      const isOpen = open === k;
+                      const rent = rentOf(d, s.rentKind);
+                      return (
+                        <li key={k} className={`rounded-lg border p-2 ${over ? "border-neutral-200 opacity-60 dark:border-neutral-800" : "border-neutral-200 dark:border-neutral-700"}`}>
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 w-5 shrink-0 text-right text-xs tabular-nums text-neutral-400">{i + 1}</span>
+                            <button className="min-w-0 flex-1 text-left" onClick={() => setOpen(isOpen ? null : k)}>
+                              <div className="flex flex-wrap items-center gap-x-2">
+                                <span className="font-medium">
+                                  {d.city}
+                                  {d.district}
+                                </span>
+                                <span className="rounded px-1 text-[10px] text-white" style={{ background: RING_COLOR[d.best_ring] }}>
+                                  {RING_LABEL[d.best_ring]}
+                                </span>
+                                {score != null && <span className="text-xs text-emerald-700 dark:text-emerald-400">落腳分數 {score}</span>}
+                              </div>
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                                通勤約 {d.median} 分(最快 {d.min})
+                                {deal === "rent" ? (rent != null ? ` · ${s.rentKind} ${$(rent)}` : ` · ${s.rentKind}樣本不足`) : d.sale_unit != null ? ` · 每坪 ${wan(d.sale_unit)}` : ""}
+                                {over && "(超出預算)"}
+                              </p>
+                              <p className="text-[11px] text-neutral-500">{lifeSentence(d, data.stations)}</p>
+                            </button>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <button className="btn-ghost !p-1" title="在地圖上看這區" onClick={() => onFocus(d.bbox)}>
+                                <Crosshair size={14} />
+                              </button>
+                              <label className="flex items-center gap-0.5 text-[10px] text-neutral-500" title="勾兩區比較">
+                                <input
+                                  type="checkbox"
+                                  checked={pick.includes(k)}
+                                  onChange={(e) => setPick(e.target.checked ? [...pick, k].slice(-2) : pick.filter((x) => x !== k))}
+                                />
+                                比較
+                              </label>
+                            </div>
+                          </div>
+                          {isOpen && <Detail d={d} data={data} deal={deal} crime={crime} />}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </>
+              )}
+              {data.stations.length > 0 && (
+                <section>
+                  <h3 className="mb-1 flex items-center gap-1 text-xs font-medium text-neutral-500">
+                    <TrainFront size={13} /> 圈內車站(住車站旁)
+                  </h3>
+                  <ul className="flex flex-wrap gap-1 text-[11px]">
+                    {data.stations.slice(0, 24).map((st, i) => (
+                      <li key={i}>
+                        <button
+                          className="rounded-full border border-neutral-200 px-2 py-0.5 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                          onClick={() => onFocus([st.lng - 0.008, st.lat - 0.006, st.lng + 0.008, st.lat + 0.006])}
+                        >
+                          <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: RING_COLOR[st.ring] }} />
+                          {st.rail === "tra" ? "台鐵" : ""}
+                          {st.name} {st.min} 分
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+type Crime = ReturnType<typeof useCrimeDistricts>["data"];
+
+function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse; deal: "rent" | "buy"; crime: Crime }) {
+  const c = crime?.items[`${d.city}|${d.district}`];
+  return (
+    <div className="mt-2 grid gap-1.5 border-t border-neutral-100 pt-2 text-xs dark:border-neutral-800">
+      {data.places.length > 1 && (
+        <p>
+          {data.places.map((p, i) => (
+            <span key={p.id} className="mr-2">
+              到{p.name} 約 {d.per_place[i] ?? "—"} 分
+            </span>
+          ))}
+        </p>
+      )}
+      <p className="text-neutral-600 dark:text-neutral-400">
+        圈內約佔全區 {Math.round(d.share * 100)}%
+        {d.ring_cells.map((n, i) => (n ? ` · ${RING_LABEL[i]} ${Math.round((n / d.ring_cells.reduce((a, b) => a + b, 0)) * 100)}%` : "")).join("")}
+      </p>
+      {deal === "rent" ? (
+        <p>
+          租金行情(近一年實價登錄):
+          {d.rent.length ? d.rent.map((r) => `${r.kind} ${$(r.median)}`).join(" · ") : "樣本不足"}
+        </p>
+      ) : (
+        <p>房價:{d.sale_unit != null ? `每坪中位數 ${wan(d.sale_unit)}(${d.sale_count} 筆)` : "樣本不足"}</p>
+      )}
+      <p className="text-neutral-600 dark:text-neutral-400">
+        圈內:超商 {d.pois.convenience ?? 0} · 超市 {d.pois.supermarket ?? 0} · 公園 {d.pois.park ?? 0} · 診所 {d.pois.clinic ?? 0}
+        {d.flood_share > 0 && ` · 約 ${Math.round(d.flood_share * 100)}% 有淹水潛勢`}
+        {c?.house != null && ` · 住宅竊盜近一年 ${c.house} 件`}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {areaLinks(d.city, d.district, deal).map((l) => (
+          <a key={l.label} href={l.url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 rounded-full bg-neutral-100 px-2 py-0.5 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700">
+            {l.label} <ExternalLink size={10} />
+          </a>
+        ))}
+        <a href={`/area/${encodeURIComponent(d.city)}/${encodeURIComponent(d.district)}`} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+          本區行情頁 <ExternalLink size={10} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function Compare({
+  a,
+  b,
+  places,
+  kind,
+  deal,
+  crime,
+}: {
+  a: { d: ZoneDistrict; score: number | null };
+  b: { d: ZoneDistrict; score: number | null };
+  places: ZonesResponse["places"];
+  kind: string;
+  deal: "rent" | "buy";
+  crime: Crime;
+}) {
+  const life = (d: ZoneDistrict) => (d.km2 > 0 ? Math.round(((d.pois.convenience ?? 0) + (d.pois.supermarket ?? 0) + (d.pois.park ?? 0) + (d.pois.clinic ?? 0)) / d.km2) : 0);
+  const rows: [string, (d: ZoneDistrict, sc: number | null) => string][] = [
+    ["落腳分數", (_, sc) => (sc == null ? "—" : String(sc))],
+    ["通勤(中位)", (d) => `${d.median} 分`],
+    ...places.map((p, i): [string, (d: ZoneDistrict) => string] => [`到${p.name}`, (d) => (d.per_place[i] == null ? "—" : `${d.per_place[i]} 分`)]),
+    deal === "rent" ? [`${kind}租金`, (d) => (rentOf(d, kind) == null ? "樣本不足" : $(rentOf(d, kind)!))] : ["每坪房價", (d) => (d.sale_unit == null ? "樣本不足" : wan(d.sale_unit))],
+    ["生活機能密度", (d) => `${life(d)} 個 / km²`],
+    ["淹水潛勢", (d) => `${Math.round(d.flood_share * 100)}%`],
+    ["住宅竊盜(近一年)", (d) => String(crime?.items[`${d.city}|${d.district}`]?.house ?? "—")],
+  ];
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2 text-xs dark:border-emerald-900 dark:bg-emerald-950/30">
+      <p className="mb-1 flex items-center gap-1 font-medium">
+        <Scale size={13} /> 比較
+      </p>
+      <table className="w-full">
+        <thead>
+          <tr className="text-left">
+            <th className="font-normal text-neutral-500" />
+            <th className="py-0.5 font-medium">{a.d.district}</th>
+            <th className="py-0.5 font-medium">{b.d.district}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, f]) => (
+            <tr key={label} className="border-t border-emerald-100 dark:border-emerald-900">
+              <td className="py-0.5 pr-2 text-neutral-500">{label}</td>
+              <td className="py-0.5 pr-2 tabular-nums">{f(a.d, a.score)}</td>
+              <td className="py-0.5 tabular-nums">{f(b.d, b.score)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const pill = (on: boolean) =>
+  `flex items-center gap-1 rounded-full border px-2 py-0.5 ${on ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-200 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"}`;

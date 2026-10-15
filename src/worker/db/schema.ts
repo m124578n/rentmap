@@ -220,6 +220,8 @@ export const myPlaces = sqliteTable(
     address: text("address"), // 使用者輸入的地址(顯示用;座標以 lat/lng 為準,可能拖曳微調過)
     lat: real("lat").notNull(),
     lng: real("lng").notNull(),
+    // 每週去幾天(落腳圈「依天數加權」用;公司 5、爸媽家 1…)
+    daysPerWeek: integer("days_per_week").notNull().default(5),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("my_places_user_idx").on(t.userId)],

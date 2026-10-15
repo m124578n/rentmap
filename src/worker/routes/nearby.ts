@@ -48,7 +48,7 @@ type Grid = { sig: string; grid: Map<string, Poi[]>; n: number };
 const cache = new Map<RegionKey, Grid>();
 
 /** 一個生活圈一份(依外框取點);座標在哪個生活圈就用哪份 */
-async function loadGrid(DB: D1Database, region: RegionKey = DEFAULT_REGION): Promise<Grid> {
+export async function loadGrid(DB: D1Database, region: RegionKey = DEFAULT_REGION): Promise<Grid> {
   const [w, s, e, n] = regionBbox(region);
   const box = "WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4";
   const head = await DB.prepare(`SELECT COUNT(*) AS n, MAX(version) AS v FROM pois ${box}`).bind(s, n, w, e).first<{ n: number; v: string | null }>();

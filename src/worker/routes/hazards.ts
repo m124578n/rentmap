@@ -45,7 +45,7 @@ type ZoneCache = { sig: string; zones: Zone[]; grid: Map<string, number[]>; citi
 const caches = new Map<RegionKey, ZoneCache>();
 const regionCities = (r: RegionKey): string[] => [...REGIONS[r].cities, ...REGIONS[r].planned];
 
-async function loadZones(DB: D1Database, region: RegionKey): Promise<ZoneCache> {
+export async function loadZones(DB: D1Database, region: RegionKey): Promise<ZoneCache> {
   const cities = regionCities(region);
   const inList = cities.map(() => "?").join(",");
   const head = await DB.prepare(`SELECT COUNT(*) AS n, MAX(version) AS v FROM hazard_zones WHERE city IN (${inList})`)

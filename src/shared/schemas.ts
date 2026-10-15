@@ -154,6 +154,8 @@ export const PlaceInput = z.object({
   address: z.string().trim().max(120).nullish(),
   lat: z.number().min(21).max(26.5),
   lng: z.number().min(119).max(122.5),
+  /** 每週去幾天(落腳圈「依天數加權」用),預設 5 */
+  days_per_week: z.number().int().min(1).max(7).optional(),
 });
 export type PlaceInput = z.infer<typeof PlaceInput>;
 export const PlaceUpdate = PlaceInput.partial();
@@ -164,4 +166,6 @@ export interface Place {
   address: string | null;
   lat: number;
   lng: number;
+  /** 每週去幾天(預設 5) */
+  days_per_week: number;
 }

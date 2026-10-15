@@ -17,7 +17,7 @@ export function PlacesDialogHost() {
   return <PlacesDialog onClose={() => setOpen(false)} />;
 }
 
-type Draft = { id: number | null; name: string; address: string; pin: { lat: number; lng: number } | null };
+type Draft = { id: number | null; name: string; address: string; pin: { lat: number; lng: number } | null; days?: number };
 
 /**
  * 我的地點(公司、爸媽家…):輸入地址 → 搜尋 → 選一個結果 → 小地圖上拖曳圖釘對到門口 → 儲存。
@@ -60,7 +60,7 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
             saving={mut.create.isPending || mut.update.isPending}
             onCancel={() => setDraft(null)}
             onSave={(v) => {
-              const body = { name: v.name, address: v.address || null, lat: v.pin.lat, lng: v.pin.lng };
+              const body = { name: v.name, address: v.address || null, lat: v.pin.lat, lng: v.pin.lng, days_per_week: v.days ?? 5 };
               if (v.id == null)
                 mut.create.mutate(body, {
                   onSuccess: ({ place }) => {
@@ -83,7 +83,7 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
                 <PlaceRow
                   key={p.id}
                   place={p}
-                  onEdit={() => setDraft({ id: p.id, name: p.name, address: p.address ?? "", pin: { lat: p.lat, lng: p.lng } })}
+                  onEdit={() => setDraft({ id: p.id, name: p.name, address: p.address ?? "", pin: { lat: p.lat, lng: p.lng }, days: p.days_per_week })}
                   onDelete={() => {
                     if (confirm(`刪除「${p.name}」?`)) mut.remove.mutate(p.id);
                   }}
@@ -143,6 +143,7 @@ function PlaceForm({
   const region = useRegion();
   const [address, setAddress] = useState(initial.address);
   const [pin, setPin] = useState(initial.pin);
+  const [days, setDays] = useState(initial.days ?? 5);
   const [hits, setHits] = useState<GeoHit[] | null>(null);
   const [chosen, setChosen] = useState<GeoHit | null>(null);
   const [searching, setSearching] = useState(false);
@@ -178,6 +179,17 @@ function PlaceForm({
       <label className="grid gap-1 text-sm">
         <span className="text-xs text-neutral-500">名稱</span>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="公司、爸媽家…" maxLength={30} />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <span className="text-xs text-neutral-500">每週去幾天</span>
+        <select className="input !w-auto" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+            <option key={n} value={n}>
+              {n} 天
+            </option>
+          ))}
+        </select>
+        <span className="text-[11px] text-neutral-400">「適合我落腳的地方」依天數加權時用</span>
       </label>
       <label className="grid gap-1 text-sm">
         <span className="text-xs text-neutral-500">地址</span>
@@ -233,7 +245,7 @@ function PlaceForm({
             取消
           </button>
         )}
-        <button type="button" className="btn-primary" disabled={!canSave} onClick={() => pin && onSave({ id: initial.id, name: name.trim(), address: address.trim(), pin })}>
+        <button type="button" className="btn-primary" disabled={!canSave} onClick={() => pin && onSave({ id: initial.id, name: name.trim(), address: address.trim(), pin, days })}>
           {saving ? "儲存中…" : "儲存"}
         </button>
       </div>

@@ -10,6 +10,7 @@ import { whenParams, type CommuteGrid, type CommuteMatrix, type CommuteWhen, typ
 import type { ConsentNeed } from "@shared/legal";
 import type { SaleMarketResponse } from "@shared/sale";
 import type { AdminStats } from "@shared/admin";
+import type { ZonesResponse } from "@shared/zones";
 
 /** 地圖畫面範圍(度) */
 export interface Bbox {
@@ -51,6 +52,9 @@ window.addEventListener(FRESH_EVENT, () => (staleShown = false));
 
 export const api = {
   me: () => req<{ user: SessionUser | null; enabled: boolean; dev: boolean; private_pool: boolean; consent_needed: ConsentNeed[]; plan: PlanState | null; owner?: boolean }>("/api/me"),
+  /** 落腳圈:依到我的地點的通勤時間分圈,列出圈內的區與車站 */
+  zones: (q: { region: string; mode: string; combine: string; rings: number[]; when: CommuteWhen }) =>
+    req<ZonesResponse>(`/api/zones?region=${q.region}&mode=${q.mode}&combine=${q.combine}&rings=${q.rings.join(",")}&${whenParams(q.when)}`),
   /** 營運儀表板(只有站長) */
   adminStats: () => req<AdminStats>("/api/admin/stats"),
   deleteAccount: () => req<{ ok: true }>("/api/account", { method: "DELETE", body: JSON.stringify({ confirm: "刪除" }) }),

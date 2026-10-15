@@ -99,3 +99,23 @@ describe("機車 / 開車通勤", () => {
     expect(Object.values(back.body.items[propId]!)[0]).toMatchObject({ km: 4 });
   });
 });
+
+describe("落腳圈(/api/zones)", () => {
+  it("機車:公司附近的格子分圈,依行政區彙總;門檻改了結果跟著變", async () => {
+    const r = await get<import("../src/shared/zones").ZonesResponse>("/api/zones?region=taichung&mode=scooter&rings=10,20,30");
+    expect(r.status).toBe(200);
+    expect(r.body.has_data).toBe(true);
+    expect(r.body.places).toHaveLength(1);
+    expect(r.body.cells.length).toBeGreaterThan(0);
+    expect(r.body.cells.every((c) => c[2] >= 0 && c[2] < 3 && c[3] <= 30)).toBe(true);
+    expect(r.body.districts.length).toBeGreaterThan(0);
+    expect(r.body.districts.every((d) => d.city === "台中市" && d.median <= 30)).toBe(true);
+    const tight = await get<import("../src/shared/zones").ZonesResponse>("/api/zones?region=taichung&mode=scooter&rings=5");
+    expect(tight.body.cells.length).toBeLessThan(r.body.cells.length);
+    // 別的生活圈沒有地點:空的
+    const north = await get<import("../src/shared/zones").ZonesResponse>("/api/zones?region=north&mode=scooter");
+    expect(north.body.places).toHaveLength(0);
+    expect(north.body.cells).toHaveLength(0);
+    expect((await get("/api/zones?region=taichung&rings=1")).status).toBe(400);
+  });
+});
