@@ -5,6 +5,7 @@
  *   GET /api/bus/nearby?lat=&lng=&radius=400 → 半徑內可搭的路線(同路線同方向只留最近的站),依距離排序
  *       (通勤怎麼搭改由 /api/commute/trips 算,含轉乘)
  *   GET /api/bus/routes/:key  → 一條路線方向的線形、全部站、時刻表
+ *   GET /api/bus/lines?w=&s=&e=&n= → 畫面範圍內有站的路線與切過的線形(地圖「公車路線」圖層;範圍太大回 too_big)
  *   GET /api/bus/names        → 篩選用建議:公車主路線名 + 捷運線名
  *   GET /api/bus/along?names=307,板南線&radius=400 → 走得到這些路線(任一條)的房源 id
  *       公車看半徑內有沒有該路線任一方向的站;捷運看 800m 內有沒有該線的站
@@ -16,12 +17,12 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type AlongResponse, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
+import { ALONG_MRT_R, BusRouteIn, BusStopIn, haversine, summarizeDay, type AlongResponse, type BusLine, type BusLinesResponse, type BusRouteDetail, type DaySummary, type NearbyBusResponse, type NearbyRoute } from "@shared/bus";
 import type { AppEnv } from "../env";
 import { requireIngest, requireUser } from "../auth";
 import { ownerOf, ownerSql } from "../pool";
 import { mrtGraph, TRA_LINE, type MrtGraph } from "../transit/mrt";
-import { inTaiwan, parseRegion, regionTdx } from "@shared/regions";
+import { boxInTaiwan, inTaiwan, parseRegion, regionTdx } from "@shared/regions";
 import { parseSchedule, routeMetas, stopsNear, toStop, type Hit, type RouteMeta } from "../busdata";
 
 export const bus = new Hono<AppEnv>();
@@ -71,6 +72,76 @@ bus.get("/api/bus/nearby", async (c) => {
   const hasData = hits.length > 0 || (await DB.prepare("SELECT 1 FROM bus_routes LIMIT 1").first()) != null;
   const body: NearbyBusResponse = { radius, routes, has_data: hasData };
   return c.json(body);
+});
+
+/** 地圖「公車路線」圖層:最大範圍(度);再大線會糊成一團,也太多資料 */
+const LINES_MAX_DEG = 0.05;
+
+/** 線形切到範圍(含外擴)內:連續在裡面的點成一段,兩端各多帶一個點讓線延伸出畫面 */
+function clipShape(shape: [number, number][], w: number, s: number, e: number, n: number): [number, number][][] {
+  const segs: [number, number][][] = [];
+  let cur: [number, number][] = [];
+  const inside = (p: [number, number]) => p[0] >= w && p[0] <= e && p[1] >= s && p[1] <= n;
+  shape.forEach((p, i) => {
+    if (inside(p)) {
+      if (!cur.length && i > 0) cur.push(shape[i - 1]!);
+      cur.push(p);
+    } else if (cur.length) {
+      cur.push(p);
+      segs.push(cur);
+      cur = [];
+    }
+  });
+  if (cur.length > 1) segs.push(cur);
+  return segs;
+}
+
+bus.get("/api/bus/lines", async (c) => {
+  const [w, s, e, n] = (["w", "s", "e", "n"] as const).map((k) => num(c.req.query(k))) as [number, number, number, number];
+  if (!boxInTaiwan(w, s, e, n)) return c.json({ error: "w, s, e, n required" }, 400);
+  if (e - w > LINES_MAX_DEG * 1.6 || n - s > LINES_MAX_DEG) return c.json({ too_big: true, lines: [] } satisfies BusLinesResponse);
+  const DB = c.env.DB;
+  const { results: keys } = await DB.prepare("SELECT DISTINCT route_key FROM bus_route_stops WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?")
+    .bind(s, n, w, e)
+    .all<{ route_key: string }>();
+  if (!keys.length) return c.json({ too_big: false, lines: [] } satisfies BusLinesResponse);
+  const rows: (RouteMeta & { shape_json: string })[] = [];
+  // D1 每個查詢最多 100 個參數
+  for (let i = 0; i < keys.length; i += 90) {
+    const part = keys.slice(i, i + 90).map((k) => k.route_key);
+    const { results } = await DB.prepare(
+      `SELECT key, route_uid, name, variant, city, direction, from_name, to_name, shape_json, schedule_json FROM bus_routes WHERE key IN (${part.map(() => "?").join(",")})`,
+    )
+      .bind(...part)
+      .all<RouteMeta & { shape_json: string }>();
+    rows.push(...results);
+  }
+  // 同名同支線只留一個方向(去回程大多同一條路,畫兩條只會疊在一起);留去程
+  const pick = new Map<string, RouteMeta & { shape_json: string }>();
+  for (const r of rows) {
+    const k = `${r.name}|${r.variant ?? ""}`;
+    const cur = pick.get(k);
+    if (!cur || r.direction < cur.direction) pick.set(k, r);
+  }
+  const padX = (e - w) * 0.3;
+  const padY = (n - s) * 0.3;
+  const lines: BusLine[] = [];
+  for (const r of pick.values()) {
+    const segs = clipShape(JSON.parse(r.shape_json) as [number, number][], w - padX, s - padY, e + padX, n + padY);
+    if (!segs.length) continue;
+    lines.push({
+      key: r.key,
+      name: r.name,
+      variant: r.variant ?? null,
+      from_name: r.from_name,
+      to_name: r.to_name,
+      peak: summarizeDay(parseSchedule(r.schedule_json)?.wd)?.peak ?? null,
+      segs,
+    });
+  }
+  lines.sort((a, b) => a.name.localeCompare(b.name, "zh-Hant", { numeric: true }));
+  c.header("Cache-Control", "private, max-age=3600");
+  return c.json({ too_big: false, lines } satisfies BusLinesResponse);
 });
 
 bus.get("/api/bus/routes/:key", async (c) => {

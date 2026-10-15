@@ -91,6 +91,23 @@ export interface NearbyRoute {
   dirs: NearbyRouteDir[];
 }
 
+/** GET /api/bus/lines:畫面範圍內有站的公車路線(地圖「公車路線」圖層;同名同支線只留一個方向) */
+export interface BusLine {
+  key: string;
+  name: string;
+  variant: string | null;
+  from_name: string | null;
+  to_name: string | null;
+  /** 平日尖峰班距 [最短, 最長] 分鐘;沒有時刻 / 班距資料為 null */
+  peak: [number, number] | null;
+  /** 線形切到畫面附近的幾段([lng, lat]) */
+  segs: [number, number][][];
+}
+export interface BusLinesResponse {
+  too_big: boolean;
+  lines: BusLine[];
+}
+
 export interface NearbyBusResponse {
   radius: number;
   routes: NearbyRoute[];

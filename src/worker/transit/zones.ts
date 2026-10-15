@@ -137,11 +137,14 @@ export async function computeZones(
   const salePools = new Map<string, Awaited<ReturnType<typeof loadSalePools>>>();
   // 生活機能:圈內格子裡的點
   const poiCount = new Map<string, Partial<Record<PoiCat, number>>>();
+  const cellPois = new Map<Cell, number>();
   const { grid } = await loadGrid(DB, region);
   for (const list of grid.values())
     for (const p of list) {
-      const c = cells.get(key(Math.floor(p.lat / STEP), Math.floor(p.lng / stepLng)));
+      const ck = key(Math.floor(p.lat / STEP), Math.floor(p.lng / stepLng));
+      const c = cells.get(ck);
       if (!c) continue;
+      cellPois.set(c, (cellPois.get(c) ?? 0) + 1);
       const k = `${c.city}|${c.district}`;
       const m = poiCount.get(k) ?? poiCount.set(k, {}).get(k)!;
       m[p.category] = (m[p.category] ?? 0) + 1;
@@ -163,6 +166,9 @@ export async function computeZones(
       const lv = levelsAt(hz, c.lat, c.lng);
       if ((lv.flood24 ?? 0) >= 2 || (lv.flood6 ?? 0) >= 1) flooded++;
     }
+    // 代表點:通勤不超過全區中位數的格子裡,生活機能點最多的那格(有人住、有店的地方,不是山上)
+    const med = median(list.map((c) => c.min));
+    const pt = list.filter((c) => c.min <= med).reduce((a, b) => ((cellPois.get(b) ?? 0) > (cellPois.get(a) ?? 0) ? b : a));
     const lats = list.map((c) => c.lat);
     const lngs = list.map((c) => c.lng);
     districts.push({
@@ -172,7 +178,8 @@ export async function computeZones(
       share: area ? Math.min(1, (list.length * cellKm2) / area) : 0,
       best_ring: Math.min(...list.map((c) => c.ring)),
       min: Math.min(...list.map((c) => c.min)),
-      median: median(list.map((c) => c.min)),
+      median: med,
+      pt: [Math.round(pt.lat * 1e5) / 1e5, Math.round(pt.lng * 1e5) / 1e5],
       per_place: places.map((_, i) => {
         const v = list.map((c) => c.per[i]).filter((x): x is number => x != null);
         return v.length ? median(v) : null;

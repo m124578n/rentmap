@@ -1,6 +1,6 @@
 import type { FavoriteInput, Place, PlaceInput, PlaceUpdate, PropertyInput, PropertySummary, SessionUser, StageInput } from "@shared/schemas";
 import type { PlanState } from "@shared/plan";
-import type { AlongResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
+import type { AlongResponse, BusLinesResponse, BusRouteDetail, NearbyBusResponse } from "@shared/bus";
 import type { MarketMatrix, MarketResponse } from "@shared/market";
 import type { Requirements } from "@shared/fit";
 import type { StatusResponse } from "@shared/status";
@@ -78,6 +78,7 @@ export const api = {
   deleteProperty: (id: number) => req<{ ok: true }>(`/api/properties/${id}`, { method: "DELETE" }),
 
   busNearby: (q: { lat: number; lng: number; radius: number }) => req<NearbyBusResponse>(`/api/bus/nearby?lat=${q.lat}&lng=${q.lng}&radius=${q.radius}`),
+  busLines: (b: Bbox) => req<BusLinesResponse>(`/api/bus/lines?${bboxParams(b)}`),
   busRoute: (key: string) => req<BusRouteDetail>(`/api/bus/routes/${encodeURIComponent(key)}`),
   busNames: (region = "north") => req<{ bus: string[]; mrt: string[] }>(`/api/bus/names?region=${region}`),
   busAlong: (names: string[], region = "north", radius = 400) =>

@@ -8,6 +8,7 @@ import { addMrtLayers, type MrtData } from "./mrt";
 import { overlayPoints, setBusOverlay, type BusOverlay } from "./busLayer";
 import { setHeats } from "./heatLayer";
 import { POI_ICON_LAYER, setPoiLayer } from "./poiLayer";
+import { BUS_LINES_HIT, highlightBusLine, setBusLines } from "./busLines";
 import { setZones } from "@/features/zones/zoneLayer";
 import type { ZonesResponse } from "@shared/zones";
 import { PriceMarkers } from "./priceMarkers";
@@ -48,6 +49,8 @@ interface Props {
   heats?: { id: string; fc: FeatureCollection }[];
   /** 生活機能圖層(畫面範圍內某一類的點) */
   poiLayer?: FeatureCollection | null;
+  /** 公車路線圖層(features/map/busLines.ts) */
+  busLines?: FeatureCollection | null;
   /** 畫面移動結束(區域圖層依範圍抓資料) */
   onViewport?: (v: Viewport) => void;
 }
@@ -84,7 +87,7 @@ function whenReady(map: maplibregl.Map, fn: () => void): (() => void) | undefine
  */
 const NO_HEATS: { id: string; fc: FeatureCollection }[] = [];
 
-export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heats = NO_HEATS, poiLayer = null, zones = null, fitTo = null, onViewport, view, fitWithin }: Props) {
+export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, padBottom = 0, busOverlay = null, places = [], onPlaceClick, colorOf, onPoint, point = null, heats = NO_HEATS, poiLayer = null, busLines = null, zones = null, fitTo = null, onViewport, view, fitWithin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const priceRef = useRef<PriceMarkers | null>(null);
@@ -107,6 +110,8 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
   heatRef.current = heats;
   const poiRef = useRef(poiLayer);
   poiRef.current = poiLayer;
+  const busLinesRef = useRef(busLines);
+  busLinesRef.current = busLines;
   const zonesRef = useRef(zones);
   zonesRef.current = zones;
   const onViewportRef = useRef(onViewport);
@@ -142,6 +147,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, themeRef.current);
       setHeats(map, heatRef.current);
       if (zonesRef.current) setZones(map, zonesRef.current, themeRef.current);
+      if (busLinesRef.current) setBusLines(map, busLinesRef.current, themeRef.current);
       if (poiRef.current) void setPoiLayer(map, poiRef.current, themeRef.current);
       if (busRef.current) setBusOverlay(map, busRef.current, themeRef.current);
       emitView();
@@ -166,6 +172,37 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       }
       new maplibregl.Popup({ closeButton: false, offset: 12 }).setLngLat(e.lngLat).setDOMContent(el).addTo(map);
     });
+    // 公車路線:點線跳路線名、起訖、尖峰班距,並加粗那條(生活機能圖示在上面,點到圖示就不跳)
+    map.on("click", BUS_LINES_HIT, (e) => {
+      if (map.getLayer(POI_ICON_LAYER) && map.queryRenderedFeatures(e.point, { layers: [POI_ICON_LAYER] }).length) return;
+      const fs = e.features ?? [];
+      if (!fs.length) return;
+      const el = document.createElement("div");
+      el.className = "grid gap-1 text-xs text-neutral-900";
+      // 同一處可能好幾條線疊在一起:最多列 6 條
+      const seen = new Set<string>();
+      for (const f of fs) {
+        const p = f.properties as { key: string; label: string; ends: string; peak: string; color: string };
+        if (seen.has(p.key) || seen.size >= 6) continue;
+        seen.add(p.key);
+        const row = document.createElement("div");
+        const b = document.createElement("div");
+        b.className = "font-medium";
+        b.style.color = p.color;
+        b.textContent = `${p.label}`;
+        row.append(b);
+        const t = document.createElement("div");
+        t.textContent = [p.ends, p.peak].filter(Boolean).join(" · ");
+        row.append(t);
+        el.append(row);
+      }
+      highlightBusLine(map, (fs[0]!.properties as { key: string }).key);
+      const popup = new maplibregl.Popup({ closeButton: false, offset: 8 }).setLngLat(e.lngLat).setDOMContent(el);
+      popup.on("close", () => highlightBusLine(map, ""));
+      popup.addTo(map);
+    });
+    map.on("mouseenter", BUS_LINES_HIT, () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", BUS_LINES_HIT, () => (map.getCanvas().style.cursor = ""));
     map.on("mouseenter", POI_ICON_LAYER, () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", POI_ICON_LAYER, () => (map.getCanvas().style.cursor = ""));
     // 看附近:桌機右鍵;手機長按(maplibre 在觸控上不一定發 contextmenu,自己計時,手指一動就取消)
@@ -214,6 +251,7 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
       if (mrtRef.current) addMrtLayers(map, mrtRef.current, theme);
       setHeats(map, heatRef.current);
       if (zonesRef.current) setZones(map, zonesRef.current, theme);
+      if (busLinesRef.current) setBusLines(map, busLinesRef.current, theme);
       if (poiRef.current) void setPoiLayer(map, poiRef.current, theme);
       if (busRef.current) setBusOverlay(map, busRef.current, theme);
     });
@@ -261,6 +299,13 @@ export function MapView({ items, selectedId, onSelect, theme, mrt, padLeft = 0, 
     if (!map) return;
     return whenReady(map, () => void setPoiLayer(map, poiRef.current, themeRef.current));
   }, [poiLayer]);
+
+  // 公車路線圖層
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    return whenReady(map, () => setBusLines(map, busLinesRef.current, themeRef.current));
+  }, [busLines]);
 
   // 捷運資料到了才加圖層
   useEffect(() => {

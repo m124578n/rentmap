@@ -10,6 +10,8 @@ import { useRequirements } from "@/features/fit/fit";
 import { openPlacesDialog } from "@/features/places/places";
 import { planError } from "@/lib/plan";
 import { usePurpose } from "@/lib/purpose";
+import { CommuteSection } from "@/features/commute/CommuteSection";
+import type { BusOverlay } from "@/features/map/busLayer";
 import { DEAL_LABEL, areaLinks, stationSearch, type Deal } from "./links";
 import { setZonesSettings, type ZonesSettings } from "./useZones";
 
@@ -32,6 +34,7 @@ export function ZonesPanel({
   error,
   nPlaces,
   onFocus,
+  onOverlay,
   onClose,
   readOnly = false,
   share,
@@ -42,6 +45,8 @@ export function ZonesPanel({
   error: unknown;
   nPlaces: number;
   onFocus: (bbox: [number, number, number, number]) => void;
+  /** 地圖頁:區內代表點到各地點的搭法畫到地圖上 */
+  onOverlay?: (o: BusOverlay | null) => void;
   onClose?: () => void;
   /** 分享頁:不能改設定、不看預算、不能分享 */
   readOnly?: boolean;
@@ -268,7 +273,7 @@ export function ZonesPanel({
                               </label>
                             </div>
                           </div>
-                          {isOpen && <Detail d={d} data={data} deal={deal} crime={crime} />}
+                          {isOpen && <Detail d={d} data={data} deal={deal} crime={crime} commute={!readOnly} onOverlay={onOverlay} />}
                         </li>
                       );
                     })}
@@ -316,7 +321,21 @@ export function ZonesPanel({
 
 type Crime = ReturnType<typeof useCrimeDistricts>["data"];
 
-function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse; deal: Deal; crime: Crime }) {
+function Detail({
+  d,
+  data,
+  deal,
+  crime,
+  commute,
+  onOverlay,
+}: {
+  d: ZoneDistrict;
+  data: ZonesResponse;
+  deal: Deal;
+  crime: Crime;
+  commute: boolean;
+  onOverlay?: (o: BusOverlay | null) => void;
+}) {
   const [linkDeal, setLinkDeal] = useState<Deal>(deal);
   const c = crime?.items[`${d.city}|${d.district}`];
   return (
@@ -333,6 +352,12 @@ function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse
       <p className="text-neutral-600 dark:text-neutral-400">
         圈內約佔全區 {Math.round(d.share * 100)}%{d.ring_cells.map((n, i) => (n ? ` · ${RING_LABEL[i]} ${Math.round((n / d.ring_cells.reduce((a, b) => a + b, 0)) * 100)}%` : "")).join("")}
       </p>
+      {commute && d.pt && (
+        <div className="rounded-lg bg-blue-50/50 p-1.5 dark:bg-blue-950/30">
+          <p className="mb-1 text-[11px] text-neutral-500">從區內生活機能多的一點出發(地圖上走路虛線的起點);點地點看公車、捷運怎麼搭,地圖畫出整趟。</p>
+          <CommuteSection lat={d.pt[0]} lng={d.pt[1]} onOverlay={onOverlay} />
+        </div>
+      )}
       {deal === "rent" ? (
         <p>
           租金行情(近一年實價登錄):

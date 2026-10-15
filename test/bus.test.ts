@@ -1,7 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { signSession, SESSION_COOKIE } from "../src/worker/auth";
-import type { AlongResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
+import type { AlongResponse, BusLinesResponse, BusRouteDetail, BusRouteIn, BusStopIn, NearbyBusResponse } from "../src/shared/bus";
 import type { CommuteGrid, CommuteMatrix, TourResponse, Trip, TripsResponse } from "../src/shared/trip";
 import { bestTourOrder } from "../src/shared/trip";
 import type { Place } from "../src/shared/schemas";
@@ -123,6 +123,23 @@ describe("bus nearby", () => {
     expect(r307.dirs[0]!.stop.name).toBe("站1");
     expect(r307.dirs[0]!.stop.walk_min).toBeGreaterThanOrEqual(1);
     expect(r307.dirs[0]!.wd).toMatchObject({ first: "06:00", last: "22:30", peak: [5, 8], offpeak: [10, 15] });
+  });
+
+  it("lines: 畫面內有站的路線,同名只留去程,線形切到範圍附近;範圍太大回 too_big", async () => {
+    const box = `w=${lngAt(0) - 0.001}&s=${LAT - 0.005}&e=${lngAt(3)}&n=${LAT + 0.005}`;
+    const res = await SELF.fetch(`${ORIGIN}/api/bus/lines?${box}`, authed());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as BusLinesResponse;
+    expect(body.too_big).toBe(false);
+    expect(body.lines.map((l) => [l.key, l.name])).toEqual([
+      ["R1:0", "307"],
+      ["R2:0", "紅30"],
+    ]);
+    expect(body.lines[0]!.peak).toEqual([5, 8]);
+    expect(body.lines[0]!.segs.length).toBeGreaterThan(0);
+    const big = (await (await SELF.fetch(`${ORIGIN}/api/bus/lines?w=121.4&s=25&e=121.6&n=25.1`, authed())).json()) as BusLinesResponse;
+    expect(big).toEqual({ too_big: true, lines: [] });
+    expect((await SELF.fetch(`${ORIGIN}/api/bus/lines?w=1&s=2&e=3&n=4`, authed())).status).toBe(400);
   });
 
   it("returns route detail with ordered stops", async () => {

@@ -42,6 +42,8 @@ export interface ZoneDistrict {
   median: number;
   /** 每個地點各自的中位數(順序同 places;到不了 null) */
   per_place: (number | null)[];
+  /** 代表點 [lat, lng]:通勤在中位數以內、生活機能最多的那格中心(展開時用它算到各地點怎麼搭);舊快取沒有 */
+  pt?: [number, number];
   /** 圈內格子的範圍 [w, s, e, n](點了縮放過去) */
   bbox: [number, number, number, number];
   /** 租賃實價登錄近一年中位數(依房型;樣本 < 5 不列) */
