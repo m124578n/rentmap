@@ -4,13 +4,13 @@ import { Bike, Bus, Car, ChevronDown, Crosshair, ExternalLink, Link2, MapPin, Sc
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CommuteWhen } from "@shared/trip";
 import { api } from "@/lib/api";
-import { COMBINE_LABEL, COMBINES, RING_COLOR, RING_LABEL, SCORE_KEYS, SCORE_LABEL, lifeSentence, rentOf, scoreDistricts, type ZoneDistrict, type ZonesResponse } from "@shared/zones";
+import { COMBINE_LABEL, COMBINES, DEFAULT_RINGS, RING_COLOR, RING_LABEL, SCORE_KEYS, SCORE_LABEL, lifeSentence, rentOf, scoreDistricts, type ZoneDistrict, type ZonesResponse } from "@shared/zones";
 import { useCrimeDistricts } from "@/features/crime/CrimeSection";
 import { useRequirements } from "@/features/fit/fit";
 import { openPlacesDialog } from "@/features/places/places";
 import { planError } from "@/lib/plan";
 import { usePurpose } from "@/lib/purpose";
-import { areaLinks } from "./links";
+import { DEAL_LABEL, areaLinks, stationSearch, type Deal } from "./links";
 import { setZonesSettings, type ZonesSettings } from "./useZones";
 
 const MODES = [
@@ -92,11 +92,21 @@ export function ZonesPanel({
       </div>
 
       {nPlaces === 0 ? (
-        <div className="rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
-          先設定公司(或常去的地方),才知道住哪裡方便。
-          <button className="btn-primary mt-2 w-full justify-center" onClick={openPlacesDialog}>
-            設定我的地點
+        <div className="grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <p className="text-lg leading-snug font-bold">
+            公司在這,
+            <span className="text-emerald-700 dark:text-emerald-400">住哪裡最剛好?</span>
+          </p>
+          <ol className="grid gap-1.5 text-xs text-neutral-700 dark:text-neutral-300">
+            <li>1. 輸入公司(或學校、家人住處)的地址</li>
+            <li>2. 地圖畫出 {DEFAULT_RINGS.join(" / ")} 分鐘通勤圈:公車捷運、機車或開車</li>
+            <li>3. 圈裡的行政區、車站周邊依租金、生活機能、治安、淹水排名</li>
+            <li>4. 看中哪一區,一鍵到 Google、591 搜租屋或買房</li>
+          </ol>
+          <button className="btn-primary w-full justify-center py-2.5 text-base" onClick={openPlacesDialog}>
+            <MapPin size={16} /> 輸入公司地址
           </button>
+          <p className="text-[11px] text-neutral-500">兩個人上班地點不同?都加進來,依每週去幾天加權。</p>
         </div>
       ) : (
         <>
@@ -268,19 +278,29 @@ export function ZonesPanel({
               {data.stations.length > 0 && (
                 <section>
                   <h3 className="mb-1 flex items-center gap-1 text-xs font-medium text-neutral-500">
-                    <TrainFront size={13} /> 圈內車站(住車站旁)
+                    <TrainFront size={13} /> 圈內車站(住車站旁;點名字縮放,<ExternalLink size={10} className="inline" /> 搜附近{DEAL_LABEL[deal]})
                   </h3>
                   <ul className="flex flex-wrap gap-1 text-[11px]">
                     {data.stations.slice(0, 24).map((st, i) => (
-                      <li key={i}>
+                      <li key={i} className="flex items-center rounded-full border border-neutral-200 dark:border-neutral-700">
                         <button
-                          className="rounded-full border border-neutral-200 px-2 py-0.5 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                          className="rounded-l-full py-0.5 pr-1 pl-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                           onClick={() => onFocus([st.lng - 0.008, st.lat - 0.006, st.lng + 0.008, st.lat + 0.006])}
                         >
                           <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: RING_COLOR[st.ring] }} />
                           {st.rail === "tra" ? "台鐵" : ""}
                           {st.name} {st.min} 分
                         </button>
+                        <a
+                          href={stationSearch(st.name, st.rail, deal)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Google 搜尋${st.name}附近${DEAL_LABEL[deal]}`}
+                          aria-label={`Google 搜尋${st.name}附近${DEAL_LABEL[deal]}`}
+                          className="rounded-r-full py-1 pr-2 pl-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        >
+                          <ExternalLink size={10} />
+                        </a>
                       </li>
                     ))}
                   </ul>
@@ -296,7 +316,8 @@ export function ZonesPanel({
 
 type Crime = ReturnType<typeof useCrimeDistricts>["data"];
 
-function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse; deal: "rent" | "buy"; crime: Crime }) {
+function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse; deal: Deal; crime: Crime }) {
+  const [linkDeal, setLinkDeal] = useState<Deal>(deal);
   const c = crime?.items[`${d.city}|${d.district}`];
   return (
     <div className="mt-2 grid gap-1.5 border-t border-neutral-100 pt-2 text-xs dark:border-neutral-800">
@@ -325,8 +346,16 @@ function Detail({ d, data, deal, crime }: { d: ZoneDistrict; data: ZonesResponse
         {d.flood_share > 0 && ` · 約 ${Math.round(d.flood_share * 100)}% 有淹水潛勢`}
         {c?.house != null && ` · 住宅竊盜近一年 ${c.house} 件`}
       </p>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-neutral-500">找房:</span>
+        {(["rent", "buy"] as const).map((k) => (
+          <button key={k} onClick={() => setLinkDeal(k)} className={pill(linkDeal === k)}>
+            {DEAL_LABEL[k]}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-1">
-        {areaLinks(d.city, d.district, deal).map((l) => (
+        {areaLinks(d.city, d.district, linkDeal).map((l) => (
           <a
             key={l.label}
             href={l.url}
