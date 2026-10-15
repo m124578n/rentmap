@@ -2,7 +2,7 @@
  * 落腳圈每個區的外部搜尋連結(只是連過去,不抓任何資料)。
  * 591 直接帶縣市代碼 + 關鍵字;其他網站的搜尋網址常改版,用 Google 站內搜尋比較不會壞。
  */
-const R591: Record<string, number> = { 台北市: 1, 基隆市: 2, 新北市: 3, 桃園市: 6, 台中市: 8, 台南市: 15, 高雄市: 17 };
+const R591: Record<string, number> = { 台北市: 1, 基隆市: 2, 新北市: 3, 新竹市: 4, 新竹縣: 5, 桃園市: 6, 台中市: 8, 台南市: 15, 高雄市: 17 };
 const q = encodeURIComponent;
 const google = (text: string, site: string) => `https://www.google.com/search?q=${q(`${text} site:${site}`)}`;
 

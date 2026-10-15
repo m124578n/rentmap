@@ -11,7 +11,7 @@ import json, os, urllib.request
 
 URL = "https://cdn.jsdelivr.net/npm/taiwan-atlas@2021.9.20/towns-10t.json"
 OUT = os.path.join(os.path.dirname(__file__), "..", "src", "shared", "district-bounds.json")
-WANT = {"台北市", "新北市", "桃園市", "基隆市", "台中市", "台南市", "高雄市"}
+WANT = {"台北市", "新北市", "桃園市", "基隆市", "新竹市", "新竹縣", "台中市", "台南市", "高雄市"}
 TOL = 0.0008  # Douglas-Peucker 容許誤差(度,約 80m)
 
 topo = json.load(urllib.request.urlopen(URL))

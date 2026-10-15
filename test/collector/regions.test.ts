@@ -11,7 +11,7 @@ describe("regions", () => {
 
   it("district lists per city", () => {
     const n = Object.fromEntries(Object.entries(CITY_INFO).map(([k, v]) => [k, v.districts.length]));
-    expect(n).toEqual({ 台北市: 12, 新北市: 29, 桃園市: 13, 基隆市: 7, 台中市: 29, 台南市: 37, 高雄市: 38 });
+    expect(n).toEqual({ 台北市: 12, 新北市: 29, 桃園市: 13, 基隆市: 7, 新竹市: 3, 新竹縣: 13, 台中市: 29, 台南市: 37, 高雄市: 38 });
     for (const v of Object.values(CITY_INFO)) expect(new Set(v.districts).size).toBe(v.districts.length);
     expect(DISTRICTS.台北市).toContain("大安區");
   });
@@ -43,6 +43,9 @@ describe("regions", () => {
       [22.9067, 120.1826, "高雄市"], // 茄萣(在台南外框裡)
       [23.0833, 120.5874, "高雄市"], // 甲仙
       [22.6273, 120.3014, "高雄市"],
+      [24.8016, 121.0386, "新竹縣"], // 竹北 / 竹科交界附近(縣)
+      [24.8015, 120.9718, "新竹市"], // 新竹火車站
+      [24.8270, 121.0130, "新竹縣"], // 竹北
       [35.68, 139.76, null],
     ];
     for (const [lat, lng, city] of cases) expect(cityAt(lat, lng), `${lat},${lng}`).toBe(city);

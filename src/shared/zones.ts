@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { CommuteMode } from "./drive";
 import type { CommuteWhen } from "./trip";
 import type { PoiCat } from "./poi";
+import type { RegionKey } from "./regions";
 
 /** 預設三圈:≤20 / ≤35 / ≤50 分(可以在畫面上改) */
 export const DEFAULT_RINGS = [20, 35, 50] as const;
@@ -86,7 +87,7 @@ export interface ZonesResponse {
 
 /** GET /api/shares/:token/zones:分享連結(不用登入,唯讀) */
 export interface SharedZones extends ZonesResponse {
-  region: "north" | "taichung" | "tainan" | "kaohsiung";
+  region: RegionKey;
   created_at: string;
 }
 

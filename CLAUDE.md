@@ -124,6 +124,7 @@ curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie�
 - 好房會限速:約 100 次載入就整站 403 一陣子。抓好房一定要走 sources/index.ts 的 politeDelay(6–10 秒),不要另外寫迴圈硬抓;sync 有斷路器,連續失敗或 403 就停該來源。
 - 好房:列表分頁是頁內 JS `PM(n)`,要在同一個 Playwright page 上 evaluate;物件頁欄位是 `<li class="list">` 標題 + 值,地址是 `<address>` 不是 span;沒座標,用 Nominatim(快取在 data/geocode-cache.json,1 秒一次)。
 - 591 的 `window.__NUXT__` 是 JS 函式呼叫不是 JSON,要 `node:vm` 執行;Playwright 裡 stringify 會循環參照。
+- **部署順序:先套正式 D1 migration、確認成功,再 `wrangler deploy`**。不要把 `wrangler d1 migrations apply --remote` 的輸出接 `| grep` 再用 `&&` 串部署:管線會吃掉失敗的結束碼,migration 失敗也照樣部署(2026-10-15 踩過,新程式查不存在的欄位約 2 分鐘)。
 - `/api/commute` 一次算所有房源 × 地點:本機實測 8 萬站、3000 間、2 個地點約 0.5 秒(首次載入公車網路約 1 秒)。**部署時要 Workers Paid**,免費方案每次請求 CPU 10ms 不夠。
 - maplibre v6 的 `map.isStyleLoaded()` 在任何 source 還在載入時也回 false:資料晚到時要等 `idle` 再畫(MapView 的 `whenReady`),直接 return 會永遠畫不上去。
 - 離線:`public/sw.js` 只在正式建置註冊(`vite preview` 才測得到,dev 沒有)。改了快取策略要把檔內 `VERSION` 加一,舊快取才會清掉。

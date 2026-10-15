@@ -16,6 +16,7 @@ export const DETOUR = 1.3;
 /** 平均時速(km/h,含紅綠燈):[尖峰, 離峰] */
 const SPEED: Record<RegionKey, Record<DriveMode, [number, number]>> = {
   north: { scooter: [24, 30], car: [18, 28] },
+  hsinchu: { scooter: [26, 33], car: [22, 32] },
   taichung: { scooter: [28, 34], car: [24, 34] },
   tainan: { scooter: [28, 34], car: [26, 36] },
   kaohsiung: { scooter: [28, 34], car: [25, 35] },

@@ -33,6 +33,7 @@ OUT = os.path.join(ROOT, "data", "roads")
 # 跟 src/shared/regions.ts 的生活圈外框一致([w, s, e, n],已開放縣市 bbox 的聯集)
 REGIONS = {
     "north": (120.98, 24.58, 122.01, 25.3),
+    "hsinchu": (120.88, 24.4, 121.42, 24.96),
     "taichung": (120.46, 24.0, 121.46, 24.45),
     "tainan": (120.02, 22.88, 120.66, 23.42),
     "kaohsiung": (120.17, 22.47, 121.05, 23.47),
