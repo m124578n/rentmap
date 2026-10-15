@@ -2,7 +2,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ConsentGate } from "@/features/legal/ConsentGate";
 import { useEffect, useState } from "react";
 import { FRESH_EVENT, STALE_EVENT } from "@/lib/api";
-import { Activity, UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
+import { Activity, Compass, UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -11,6 +11,7 @@ import { CompareBar } from "@/features/compare/compare";
 import { openRequirementsDialog } from "@/features/fit/fit";
 import { RequirementsDialogHost } from "@/features/fit/RequirementsDialog";
 import { AboutPage } from "@/routes/AboutPage";
+import { setZonesSettings, useZonesSettings } from "@/features/zones/useZones";
 import { LegalLinks } from "@/features/legal/LegalLinks";
 
 /** index.html 裡預先產生的介紹頁有留在畫面上(scripts/prerender.mjs 的行內 script 設的) */
@@ -23,6 +24,8 @@ export function Layout() {
   const { user, enabled, dev, loading, login, devLogin, logout, consentNeeded, owner, privatePool } = useAuth();
   // 資料狀態頁是給維運看的(要在家裡跑哪些指令):站長與私人模式才放入口
   const staff = owner || privatePool;
+  const zs = useZonesSettings();
+  const atMap = useRouterState({ select: (r) => r.location.pathname === "/" });
   // 條款頁沒登入也要看得到(同意畫面的連結、搜尋引擎)
   // 條款頁與落腳圈分享頁(/s/…)不用登入就能看
   const legal = useRouterState({ select: (s) => s.location.pathname.startsWith("/legal/") || s.location.pathname.startsWith("/s/") });
@@ -52,7 +55,10 @@ export function Layout() {
           {/* 手機:導覽在底部分頁列,頂欄只留主題與登出 */}
           {user && (
             <div className="hidden items-center gap-2 sm:flex">
-              <Link to="/" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }} activeOptions={{ exact: true }}>
+              <Link to="/" onClick={() => setZonesSettings({ on: true })} className={`btn-ghost ${atMap && zs.on ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "text-emerald-700 dark:text-emerald-400"}`}>
+                <Compass size={16} /> <span className="hidden sm:inline">落腳</span>
+              </Link>
+              <Link to="/" onClick={() => setZonesSettings({ on: false })} className={`btn-ghost ${atMap && !zs.on ? "bg-neutral-100 dark:bg-neutral-800" : ""}`}>
                 <Map size={16} /> <span className="hidden sm:inline">地圖</span>
               </Link>
               <Link to="/list" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
@@ -149,19 +155,23 @@ export function Layout() {
 /** 手機底部分頁列(sm 以上隱藏,導覽在頂欄):常用四個 + 「更多」 */
 function TabBar() {
   const [more, setMore] = useState(false);
-  const tab = "flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] text-neutral-500";
-  const active = { className: `${tab} text-emerald-700 dark:text-emerald-400` };
+  const zs = useZonesSettings();
+  const atMap = useRouterState({ select: (r) => r.location.pathname === "/" });
+  // 顏色不能疊兩個 text-*(Tailwind 依調色盤順序,neutral 會蓋掉 emerald):未選與已選各給一組完整 class
+  const base = "flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px]";
+  const tab = `${base} text-neutral-500`;
+  const active = { className: `${base} !text-emerald-700 dark:!text-emerald-400` };
   return (
     <>
       <nav className="flex border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-neutral-800 dark:bg-neutral-900">
-        <Link to="/" className={tab} activeProps={active} activeOptions={{ exact: true }}>
+        <Link to="/" onClick={() => setZonesSettings({ on: true })} className={atMap && zs.on ? active.className : tab}>
+          <Compass size={20} /> 落腳
+        </Link>
+        <Link to="/" onClick={() => setZonesSettings({ on: false })} className={atMap && !zs.on ? active.className : tab}>
           <Map size={20} /> 地圖
         </Link>
         <Link to="/list" className={tab} activeProps={active}>
           <List size={20} /> 列表
-        </Link>
-        <Link to="/board" className={tab} activeProps={active}>
-          <Kanban size={20} /> 看板
         </Link>
         <Link to="/new" className={tab} activeProps={active}>
           <Plus size={20} /> 新增
@@ -202,6 +212,9 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
           <SlidersHorizontal size={18} /> 我的需求
           <span className="ml-auto text-xs text-neutral-400">預算、通勤、設備</span>
         </button>
+        <Link to="/board" className={row} onClick={onClose}>
+          <Kanban size={18} /> 看板
+        </Link>
         <Link to="/tour" className={row} onClick={onClose}>
           <Route size={18} /> 看房路線
         </Link>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNarrow } from "@/lib/useNarrow";
 import { Bike, Bus, Car, ChevronDown, Crosshair, ExternalLink, Link2, MapPin, Scale, SlidersHorizontal, Trash2, TrainFront, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CommuteWhen } from "@shared/trip";
@@ -53,6 +54,9 @@ export function ZonesPanel({
   const budget = deal === "rent" && !readOnly ? (req?.budget_max ?? null) : null;
   const crime = useCrimeDistricts().data;
   const [showWeights, setShowWeights] = useState(false);
+  // 手機:設定預設收成一行,排名清單往上
+  const narrow = useNarrow();
+  const [showSettings, setShowSettings] = useState(!narrow);
   const [pick, setPick] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -97,8 +101,26 @@ export function ZonesPanel({
       ) : (
         <>
           {/* 設定(分享頁不能改) */}
-          {!readOnly && (
+          {!readOnly && !showSettings && (
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-left text-xs text-neutral-600 dark:border-neutral-800 dark:text-neutral-300"
+            >
+              <SlidersHorizontal size={12} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">
+                {MODES.find((m) => m.k === s.mode)?.label} · {s.rings.join(" / ")} 分{nPlaces > 1 ? ` · ${COMBINE_LABEL[s.combine]}` : ""}
+                {deal === "rent" ? ` · ${s.rentKind}` : ""}
+              </span>
+              <ChevronDown size={12} className="shrink-0" />
+            </button>
+          )}
+          {!readOnly && showSettings && (
             <div className="grid gap-2 rounded-lg border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+              {narrow && (
+                <button onClick={() => setShowSettings(false)} className="flex items-center justify-end gap-1 text-neutral-500">
+                  收起設定 <ChevronDown size={12} className="rotate-180" />
+                </button>
+              )}
               <div className="flex flex-wrap gap-1">
                 {MODES.map((m) => (
                   <button key={m.k} onClick={() => setZonesSettings({ mode: m.k })} className={pill(s.mode === m.k)}>

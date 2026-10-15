@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
@@ -104,6 +104,20 @@ export function MapPage() {
   const [fitTo, setFitTo] = useState<{ bbox: [number, number, number, number]; n: number } | null>(null);
   const focus = useCallback((bbox: [number, number, number, number]) => setFitTo((f) => ({ bbox, n: (f?.n ?? 0) + 1 })), []);
   const zonesPanel = zs.on && selectedId == null && point == null;
+  // 算好一份新的落腳圈就把地圖框住所有圈(同一份結果只框一次,使用者之後自己拖不會被拉回來)
+  const fittedZones = useRef<string | null>(null);
+  useEffect(() => {
+    const d = zonesQ.data;
+    if (!zs.on || !d || zonesQ.isPlaceholderData || d.cells.length === 0) return;
+    const sig = `${region.key}|${d.mode}|${d.combine}|${d.rings.join(",")}|${d.places.map((p) => `${p.id}:${p.days}`).join(",")}`;
+    if (fittedZones.current === sig) return;
+    fittedZones.current = sig;
+    let w = 180, so = 90, e = -180, n = -90;
+    for (const [lat, lng] of d.cells) {
+      w = Math.min(w, lng); e = Math.max(e, lng); so = Math.min(so, lat); n = Math.max(n, lat);
+    }
+    focus([w - d.step_lng / 2, so - d.step / 2, e + d.step_lng / 2, n + d.step / 2]);
+  }, [zs.on, zonesQ.data, zonesQ.isPlaceholderData, region.key, focus]);
   const panelOpen = selectedId != null || point != null || zs.on;
   // 依縣市界判斷房源在不在目前的生活圈(外框會重疊,例如新竹縣跟桃園)
   const inRegion = useCallback((lat: number, lng: number) => regionAt(lat, lng) === region.key, [region.key]);

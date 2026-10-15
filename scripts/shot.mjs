@@ -1,6 +1,6 @@
 /**
  * 視覺確認用:開 headless Chromium,本機登入,截指定路徑的圖。
- *   node scripts/shot.mjs [--route=/list] [--out=data/shot.png] [--dark] [--click=.rh-marker]
+ *   node scripts/shot.mjs [--route=/list] [--out=data/shot.png] [--dark] [--click=.rh-marker] [--mobile]
  * (路徑用 --route= 傳,因為 Git Bash 會把開頭的 / 轉成 C:/Program Files/Git/)
  * 需要 `npm run dev` 開著。只在版面 / 視覺改動後用,一張就好(省 token)。
  */
@@ -14,7 +14,8 @@ const out = flags.out ?? "data/shot.png";
 const base = process.env.RENTMAP_API ?? "http://localhost:5173";
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+// --mobile:手機尺寸(390×844)
+const page = await browser.newPage("mobile" in flags ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1200, height: 800 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("requestfailed", (r) => errors.push("FAILED " + r.url().slice(0, 120)));

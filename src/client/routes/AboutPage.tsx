@@ -4,8 +4,8 @@ import {
   Bike,
   Bus,
   Columns3,
+  Compass,
   Gauge,
-  Kanban,
   Layers,
   LineChart,
   MapPin,
@@ -29,7 +29,7 @@ export function AboutPage() {
   const { user, enabled, dev, loading, login, devLogin } = useAuth();
   useEffect(() => {
     const prev = document.title;
-    document.title = "落腳筆記|租屋、買房、搬家前,先看這個地址";
+    document.title = "落腳筆記|公司在這,住哪裡最剛好?";
     return () => {
       document.title = prev;
     };
@@ -59,13 +59,17 @@ export function AboutPage() {
             {OPEN_REGIONS.map((r) => r.label).join("、")} · 落腳筆記
           </p>
           <h1 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
-            租屋、買房、搬家前,
+            公司在這,
             <br />
-            <span className="text-emerald-600 dark:text-emerald-400">先看這個地址。</span>
+            <span className="text-emerald-600 dark:text-emerald-400">住哪裡最剛好?</span>
           </h1>
           <p className="mt-4 max-w-prose text-neutral-600 dark:text-neutral-400">
-            輸入一個地址,就幫你算好上下班怎麼搭(公車、捷運、台鐵,或騎車開車)、附近的租金或房價行情、每月實際要花多少(房租或房貸),
-            附近有什麼、會不會淹水、治安如何。看中的房子存成筆記,再收藏、約看、排路線、並排比較;只是想多了解自己住的地方,也一樣好用。
+            輸入公司(或家人、學校)的地址,就畫出 20、35、50 分鐘通勤圈:公車、捷運、台鐵,或騎車開車。
+            圈裡每個行政區、捷運站周邊的租金與房價行情、生活機能、淹水、治安一起排名,預算內的先看,兩區可以並排比較,
+            再一鍵連到 591 等網站找房。兩個人上班地點不同?依每週去幾天加權,找出對兩個人都剛好的地方。
+          </p>
+          <p className="mt-2 max-w-prose text-sm text-neutral-500">
+            看中房子之後,輸入地址就是一份報告:通勤、行情、每月支出、附近有什麼;存成筆記、約看、排路線、並排比較。
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {cta}
@@ -80,7 +84,25 @@ export function AboutPage() {
 
       {/* 功能 */}
       <section id="features" className="scroll-mt-4">
-        <h2 className="mb-1 text-xl font-semibold">每一個地址,幫你查好這些</h2>
+        <div className="card mb-6 grid gap-4 border-emerald-200 sm:grid-cols-[auto_1fr] dark:border-emerald-900">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
+            <Compass size={22} />
+          </span>
+          <div>
+            <h2 className="text-xl font-semibold">適合你落腳的地方</h2>
+            <p className="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+              不知道要在哪一區找房,就從這裡開始。通勤圈(分鐘數可以自己調)× 行政區與捷運、台鐵站周邊,每區列出通勤最短 / 中位數、
+              租金或每坪房價、生活機能密度、淹水比例、竊盜件數,再依你在意的程度(權重可調)排出落腳分數,附一句話讓你知道那裡大概是什麼樣的地方。
+            </p>
+            <ul className="mt-3 grid gap-1.5 text-sm text-neutral-600 sm:grid-cols-2 dark:text-neutral-400">
+              <li>· 多個地點:取「最遠的那個」或依每週去幾天加權</li>
+              <li>· 設了預算,住不起的區直接篩掉</li>
+              <li>· 勾兩個區並排比較</li>
+              <li>· 分享連結給室友或家人,不用登入就能看</li>
+            </ul>
+          </div>
+        </div>
+        <h2 className="mb-1 text-xl font-semibold">鎖定房子後,每一個地址幫你查好這些</h2>
         <p className="mb-5 text-sm text-neutral-500">
           資料都來自政府開放資料與 OpenStreetMap,在家裡的電腦定期更新。
           {/* 一般 <a>(不是 router 的 Link):/area 是 Worker 直接出的公開頁,不在 SPA 裡 */}
@@ -123,14 +145,14 @@ export function AboutPage() {
       <section className="mt-12">
         <h2 className="mb-5 text-xl font-semibold">從看到到決定</h2>
         <ol className="grid gap-4 sm:grid-cols-4">
-          <Step n={1} icon={<MapPin size={16} />} title="設好地點與需求">
-            公司、家人住處;預算、通勤上限、要電梯寵物開伙。
+          <Step n={1} icon={<Compass size={16} />} title="先找落腳的區">
+            輸入公司地址,看通勤圈裡哪幾區租金、機能、治安最合你意。
           </Step>
-          <Step n={2} icon={<Kanban size={16} />} title="收藏、聯絡、約看">
-            看板拖曳換狀態,寫私人備註與標籤;筆記只有你自己看得到。
+          <Step n={2} icon={<MapPin size={16} />} title="看中就存成筆記">
+            貼上刊登網址或地址,通勤、行情、每月支出自動算好。
           </Step>
-          <Step n={3} icon={<Route size={16} />} title="排看房路線">
-            約好的幾間排出最順的順序,每間幾點到、怎麼搭。
+          <Step n={3} icon={<Route size={16} />} title="約看、排路線">
+            看板拖曳換狀態;約好的幾間排出最順的順序,每間幾點到、怎麼搭。
           </Step>
           <Step n={4} icon={<Columns3 size={16} />} title="並排比較">
             2–4 間並排比價格、每月支出、通勤、機能、災害、治安。
@@ -186,11 +208,15 @@ export function AboutPage() {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "落腳筆記是什麼?",
-    a: "輸入一個地址,就幫你查好上下班通勤時間、附近的租金與房價行情、每月實際支出(房租或房貸)、生活機能、淹水與治安。看中的房子可以存成筆記、收藏、排看房路線、並排比較。租屋、買房、搬家前,或只是想多了解自己住的地方都能用。",
+    a: "輸入公司地址,就畫出通勤 20、35、50 分鐘的落腳圈,圈裡的行政區依租金、生活機能、治安、淹水排名;看中的房子輸入地址,就幫你查好上下班通勤時間、附近的租金與房價行情、每月實際支出(房租或房貸)、生活機能、淹水與治安。看中的房子可以存成筆記、收藏、排看房路線、並排比較。租屋、買房、搬家前,或只是想多了解自己住的地方都能用。",
   },
   {
     q: "目前可以查哪些地方?",
     a: `${OPEN_REGIONS.map((r) => r.label).join("、")}。以生活圈為單位,一次看一個生活圈;各行政區的租金、房價與治安對照可以在「各區行情」(/area)直接看,不用登入。`,
+  },
+  {
+    q: "「適合我落腳的地方」怎麼排名?",
+    a: "先用通勤時間把地圖分成三圈,圈裡每個行政區算出通勤中位數、實價登錄租金或每坪房價、每平方公里的超商超市餐飲等數量、淹水潛勢比例與竊盜件數,依你設的權重在這次圈內的區之間比較出分數。分數是相對的,不是絕對評價。",
   },
   {
     q: "通勤時間怎麼算?",
@@ -253,14 +279,13 @@ function Source({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   );
 }
 
-/** 首屏插圖:簡化的地圖 + 捷運線 + 價格標記 + 一張房源小卡(純 SVG / CSS) */
+/** 首屏插圖:公司 + 三層通勤圈 + 排名小卡(純 SVG / CSS) */
 function HeroMap() {
-  const pins: [number, number, string, string][] = [
-    [18, 30, "1.8萬", "#059669"],
-    [52, 22, "2.4萬", "#6b7280"],
-    [70, 48, "3.2萬", "#7c3aed"],
-    [34, 62, "1.5萬", "#d97706"],
-    [82, 74, "2.1萬", "#6b7280"],
+  // 由外往內:半徑、顏色
+  const rings: [number, string][] = [
+    [34, "#a7f3d0"],
+    [23, "#6ee7b7"],
+    [12, "#34d399"],
   ];
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-neutral-200 bg-[#f3f1ec] shadow-sm dark:border-neutral-800 dark:bg-neutral-900" aria-hidden>
@@ -276,46 +301,59 @@ function HeroMap() {
         </g>
         {/* 河 */}
         <path d="M0 58 C20 52 30 70 55 64 S90 50 100 56" className="stroke-sky-200 dark:stroke-sky-900" strokeWidth="4" fill="none" />
-        {/* 淹水範圍 */}
-        <ellipse cx="30" cy="60" rx="12" ry="6" className="fill-sky-400/25" />
+        {/* 通勤圈:沿捷運線拉長,不是正圓 */}
+        {rings.map(([r, c]) => (
+          <path
+            key={r}
+            d={`M${44 - r * 1.2} ${33 + r * 0.1} C${44 - r} ${33 - r * 0.9} ${44 + r * 0.9} ${33 - r * 1.1} ${44 + r * 1.3} ${33 - r * 0.3} S${44 + r * 0.4} ${33 + r * 1.1} ${44 - r * 1.2} ${33 + r * 0.1} Z`}
+            fill={c}
+            fillOpacity={0.45}
+            stroke="#059669"
+            strokeOpacity={0.5}
+            strokeWidth={0.4}
+          />
+        ))}
         {/* 捷運 */}
-        <path d="M5 40 C30 36 45 40 60 32 S85 20 98 18" stroke="#0070bd" strokeWidth="1.6" fill="none" />
-        <path d="M48 2 C50 20 44 40 50 74" stroke="#e3002c" strokeWidth="1.6" fill="none" />
-        {/* 通勤路線(虛線) */}
-        <path d="M34 62 C40 50 46 44 58 33" stroke="#059669" strokeWidth="1.1" strokeDasharray="2 1.4" fill="none" />
+        <path d="M5 44 C30 40 40 36 52 30 S85 20 98 16" stroke="#0070bd" strokeWidth="1.6" fill="none" />
+        <path d="M46 2 C48 20 40 40 46 74" stroke="#e3002c" strokeWidth="1.6" fill="none" />
         {[
-          [5, 40],
-          [30, 37.5],
-          [60, 32],
-          [98, 18],
-          [49, 20],
-          [47, 55],
+          [5, 44],
+          [24, 40.5],
+          [52, 30],
+          [78, 21],
+          [47, 14],
+          [43, 55],
         ].map(([x, y], i) => (
           <circle key={i} cx={x} cy={y} r="1.3" className="fill-white stroke-neutral-700" strokeWidth="0.5" />
         ))}
       </svg>
-      {pins.map(([x, y, label, c]) => (
-        <span
-          key={label}
-          className="absolute -translate-x-1/2 -translate-y-full rounded-full border-2 border-white px-2 py-0.5 text-[11px] font-semibold text-white shadow dark:border-neutral-900"
-          style={{ left: `${x}%`, top: `${(y / 75) * 100}%`, background: c }}
-        >
-          {label}
+      {(
+        [
+          [20, 30, "20 分"],
+          [70, 24, "35 分"],
+          [84, 6, "50 分"],
+        ] as const
+      ).map(([x, y, t]) => (
+        <span key={t} className="absolute rounded bg-white/80 px-1 text-[10px] font-medium text-emerald-800 dark:bg-neutral-900/80 dark:text-emerald-300" style={{ left: `${x}%`, top: `${y}%` }}>
+          {t}
         </span>
       ))}
-      <span className="absolute top-[40%] left-[58%] rounded bg-blue-700 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">公司</span>
-      <div className="absolute right-3 bottom-3 left-3 rounded-xl border border-neutral-200 bg-white/95 p-3 text-xs shadow-lg sm:left-auto sm:w-60 dark:border-neutral-700 dark:bg-neutral-900/95">
-        <div className="flex items-baseline justify-between">
-          <b className="text-base text-emerald-700 dark:text-emerald-400">$15,000</b>
-          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">比行情 -8%</span>
-        </div>
-        <p className="mt-1 text-neutral-600 dark:text-neutral-400">上班約 24 分 · 公車轉捷運</p>
-        <p className="text-neutral-600 dark:text-neutral-400">每月支出約 $17,380</p>
-        <p className="mt-1 flex gap-1">
-          <span className="rounded bg-sky-50 px-1 text-[10px] text-sky-700 dark:bg-sky-950 dark:text-sky-300">淹水 0.3–0.5m</span>
-          <span className="rounded bg-neutral-100 px-1 text-[10px] dark:bg-neutral-800">超商 12</span>
-          <span className="rounded bg-neutral-100 px-1 text-[10px] dark:bg-neutral-800">垃圾車 19:30</span>
-        </p>
+      <span className="absolute top-[44%] left-[44%] -translate-x-1/2 -translate-y-1/2 rounded bg-blue-700 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">公司</span>
+      <div className="absolute right-3 bottom-3 left-3 rounded-xl border border-neutral-200 bg-white/95 p-3 text-xs shadow-lg sm:left-auto sm:w-64 dark:border-neutral-700 dark:bg-neutral-900/95">
+        <p className="mb-1.5 font-semibold text-neutral-800 dark:text-neutral-100">適合你落腳的地方</p>
+        {[
+          ["1", "中和區", "18 分", "$16,500", "92"],
+          ["2", "永和區", "21 分", "$17,800", "87"],
+          ["3", "板橋區", "26 分", "$18,200", "81"],
+        ].map(([n, d, m, r, sc]) => (
+          <div key={n} className="flex items-center gap-2 border-t border-neutral-100 py-1 first-of-type:border-0 dark:border-neutral-800">
+            <span className="w-3 text-neutral-400">{n}</span>
+            <b className="flex-1">{d}</b>
+            <span className="text-neutral-500">{m}</span>
+            <span className="text-neutral-600 dark:text-neutral-400">{r}</span>
+            <span className="rounded bg-emerald-50 px-1 font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{sc}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

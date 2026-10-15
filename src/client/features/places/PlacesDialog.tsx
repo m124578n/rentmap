@@ -6,6 +6,7 @@ import type { Place } from "@shared/schemas";
 import { searchAddress, type GeoHit } from "./geocode";
 import { regionBbox } from "@shared/regions";
 import { useRegion } from "@/lib/region";
+import { setZonesSettings } from "@/features/zones/useZones";
 // 小地圖要載地圖引擎,打開對話框才載
 const PinMap = lazy(() => import("./PinMap").then((m) => ({ default: m.PinMap })));
 import { setCommuteTarget, usePlaceMutations, usePlaces, usePlacesDialogOpen } from "./places";
@@ -66,6 +67,8 @@ export function PlacesDialog({ onClose }: { onClose: () => void }) {
                   onSuccess: ({ place }) => {
                     setCommuteTarget(place.id);
                     setDraft(null);
+                    // 第一個地點:直接帶去看「適合我落腳的地方」
+                    if (items.length === 0) setZonesSettings({ on: true });
                   },
                 });
               else mut.update.mutate({ id: v.id, ...body }, { onSuccess: () => setDraft(null) });

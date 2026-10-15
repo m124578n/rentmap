@@ -16,7 +16,8 @@ export interface ZonesSettings {
   rentKind: string;
   budgetOnly: boolean;
 }
-const DEFAULTS: ZonesSettings = { on: false, mode: "transit", combine: "max", rings: [...DEFAULT_RINGS], weights: DEFAULT_WEIGHTS, rentKind: "整層住家", budgetOnly: false };
+// 主打功能:沒設定過的人預設打開(有地點才會算)
+const DEFAULTS: ZonesSettings = { on: true, mode: "transit", combine: "max", rings: [...DEFAULT_RINGS], weights: DEFAULT_WEIGHTS, rentKind: "整層住家", budgetOnly: false };
 const KEY = "rentmap.zones";
 const listeners = new Set<() => void>();
 
