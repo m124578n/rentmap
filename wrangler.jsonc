@@ -19,7 +19,8 @@
   // 正式站不設 PRIVATE_POOL(= 公開模式)、不設 DEV_USER_EMAIL。
   "vars": {
     "APP_ORIGIN": "https://lokanote.shunzz.com",
-    "ADMIN_EMAILS": "m23568n@gmail.com",
+    // 登入白名單:空字串 = 開放所有 Google 帳號(2026-11-01 起);填 email(逗號分隔)就變回封閉測試
+    "ADMIN_EMAILS": "",
     // 站長:永遠完整版、看得到營運儀表板 /admin(src/worker/owner.ts)
     "OWNER_EMAILS": "m23568n@gmail.com"
   },

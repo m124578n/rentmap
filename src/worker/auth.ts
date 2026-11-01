@@ -1,7 +1,8 @@
 /**
  * Google OAuth(authorization code)由 Worker 自己跑,callback 後簽 HS256 JWT 放 HttpOnly cookie 當 session。
  * 搬自 menmap worker/src/auth.ts,差別:
- *   - Phase 1 只放行 ADMIN_EMAILS 白名單裡的 Google 帳號(開放註冊是 Phase 3 的事)
+ *   - 任何驗證過 email 的 Google 帳號都能登入(2026-11-01 開放註冊);ADMIN_EMAILS 有值時才當白名單用(封閉測試)。
+ *     站長 / 營運後台是另一份名單 OWNER_EMAILS(owner.ts),跟這裡無關
  *   - user 表改用 Drizzle
  *
  * 路由:
@@ -219,6 +220,7 @@ export async function signSession(user: SessionUser, secret: string) {
 function isAllowedEmail(env: Env, email: string | null) {
   if (!email) return false;
   const allow = (env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!allow.length) return true; // 沒設白名單 = 開放註冊
   return allow.includes(email.trim().toLowerCase());
 }
 

@@ -126,7 +126,7 @@ export function Layout() {
       </header>
       <OfflineBanner />
       <main className="min-h-0 flex-1 overflow-auto">
-        {loginErr === "denied" && <p className="card m-4 border-red-300 text-red-700">這個 Google 帳號不在白名單裡。</p>}
+        {loginErr === "denied" && <p className="card m-4 border-red-300 text-red-700">這個 Google 帳號目前不能登入。</p>}
         {loginErr === "failed" && <p className="card m-4 border-red-300 text-red-700">登入失敗,再試一次。</p>}
         {legal ? (
           <Outlet />

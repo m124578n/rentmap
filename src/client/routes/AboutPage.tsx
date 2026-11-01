@@ -77,7 +77,6 @@ export function AboutPage() {
               看看能做什麼
             </a>
           </div>
-          {!user && <p className="mt-3 text-xs text-neutral-500">目前是私人使用,只有白名單帳號能登入。</p>}
         </div>
         <HeroMap />
       </section>

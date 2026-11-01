@@ -99,7 +99,7 @@ Windows 工作排程 `RentmapSync-*` 兩個時段(20:00 台北、21:00 新北 + 
 ## 本機登入
 
 本機不用 Google:`.dev.vars` 有 `DEV_USER_EMAIL` 時前端出現「本機登入」鈕(`GET /api/auth/dev`),只在 `APP_ORIGIN` 是 localhost 時生效。
-curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie。正式站才用 Google(`ADMIN_EMAILS` 白名單)。
+curl 測 API 可以 `curl -c jar http://localhost:5173/api/auth/dev` 拿 cookie。正式站才用 Google:任何 Google 帳號都能登入(2026-11-01 開放註冊;`ADMIN_EMAILS` 留空,填值才變白名單),站長 / 後台另看 `OWNER_EMAILS`。
 
 ## 已知坑
 
