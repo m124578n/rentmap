@@ -36,6 +36,8 @@ src/client/   React SPA(TanStack Router + Query、Tailwind v4);features/map/ 是
               書籤小工具:src/shared/bookmarklet.ts 的 extractFacts(591 __NUXT__ → 事實欄位)會被 toString() 塞進 javascript: 網址,**函式內不能引用外面任何東西**;
               lib/bookmarklet.ts 產生網址,NewPage 讀 /new#import=… 預填(資料只在瀏覽器,不經伺服器)
               features/places/ 是「我的地點」(輸入地址 → 瀏覽器查 Nominatim → 拖圖釘);features/commute/ 是通勤(面板「通勤」區塊、列表排序、篩選列「通勤 ≤ N 分」)
+              routes/GoPage(/go)是「怎麼去」:起點(筆記或地址)→ 我的地點,每種去法的時間與票價;票價估算在 src/shared/fare.ts(每段算,只有摘要時用 cost.ts 的 TRIP_FARE)
+              筆記修改是 routes/EditPage(/p/$id/edit),跟 NewPage 共用 PropertyForm;表單的定位是 features/property/LocateField(沒座標的筆記不上地圖、不算通勤)
 src/worker/   Hono API;db/schema.ts 是 Drizzle schema
               routes/area.ts 是公開的「各區行情」頁(/area/<縣市>/<區>,不用登入,Worker 直接出 HTML 不載 SPA;彙總在 src/shared/area.ts)與動態 sitemap.xml;
               新增這類公開路徑要加進 wrangler.jsonc 的 assets.run_worker_first,不然會被 SPA 的 index.html 接走

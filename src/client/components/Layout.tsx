@@ -2,7 +2,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ConsentGate } from "@/features/legal/ConsentGate";
 import { useEffect, useState } from "react";
 import { FRESH_EVENT, STALE_EVENT } from "@/lib/api";
-import { Activity, Compass, UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
+import { Activity, Compass, UserCog, Columns3, Database, Home, Info, Kanban, List, LogOut, Map, MapPin, Menu, Moon, Navigation, Plus, Route, SlidersHorizontal, Sun } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useTheme } from "@/lib/useTheme";
 import { openPlacesDialog } from "@/features/places/places";
@@ -66,6 +66,9 @@ export function Layout() {
               </Link>
               <Link to="/board" className="btn-ghost" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
                 <Kanban size={16} /> <span className="hidden sm:inline">看板</span>
+              </Link>
+              <Link to="/go" className="btn-ghost" title="從筆記到常去的地點:怎麼去、多久、多少錢" activeProps={{ className: "btn-ghost bg-neutral-100 dark:bg-neutral-800" }}>
+                <Navigation size={16} /> <span className="hidden sm:inline">怎麼去</span>
               </Link>
               <button onClick={openPlacesDialog} className="btn-ghost" title="我的地點(公司…)">
                 <MapPin size={16} /> <span className="hidden sm:inline">我的地點</span>
@@ -204,6 +207,10 @@ function MoreSheet({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+        <Link to="/go" className={row} onClick={onClose}>
+          <Navigation size={18} /> 怎麼去
+          <span className="ml-auto text-xs text-neutral-400">多久、多少錢</span>
+        </Link>
         <button className={row} onClick={go(openPlacesDialog)}>
           <MapPin size={18} /> 我的地點
           <span className="ml-auto text-xs text-neutral-400">公司、家人住處</span>

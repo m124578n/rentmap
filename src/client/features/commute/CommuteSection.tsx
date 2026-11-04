@@ -126,7 +126,7 @@ export function CommuteSection({ lat, lng, propertyId, onOverlay }: Props) {
   );
 }
 
-const tripsQuery = (lat: number, lng: number, place: Place, radius: number, when: CommuteWhen, bike: boolean) => ({
+export const tripsQuery = (lat: number, lng: number, place: Place, radius: number, when: CommuteWhen, bike: boolean) => ({
   queryKey: ["commute-trips", lat, lng, place.id, place.lat, place.lng, radius, when.day, when.time, when.dir, bike],
   queryFn: () => api.commuteTrips({ lat, lng, placeId: place.id, radius, when, bike }),
   staleTime: 10 * 60_000,
@@ -268,7 +268,7 @@ function Trips({
 }
 
 /** 一行看完:走3′ → 🚌262 12′ → 走2′ → 🚇板南線 8′ → 走4′ */
-function LegStrip({ legs }: { legs: TripLeg[] }) {
+export function LegStrip({ legs }: { legs: TripLeg[] }) {
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-neutral-600 dark:text-neutral-400">
       {legs.map((l, i) => (
@@ -301,7 +301,7 @@ function LegStrip({ legs }: { legs: TripLeg[] }) {
   );
 }
 
-function TripDetail({ trip }: { trip: Trip }) {
+export function TripDetail({ trip }: { trip: Trip }) {
   const [times, setTimes] = useState<number | null>(null);
   return (
     <ol className="mt-1 grid gap-1 rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800/60">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ExternalLink, Heart, MapPinOff, Maximize2, Pencil, Trash2, X } from "lucide-react";
+import { ExternalLink, Heart, MapPinOff, Maximize2, Navigation, Pencil, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePrivatePool } from "@/lib/useAuth";
 import { SOURCE_LABEL, type Source } from "@shared/constants";
@@ -78,6 +78,11 @@ export function PropertyDetail({ id, onClose, onBusOverlay }: Props) {
             <Link to="/p/$id/edit" params={{ id: String(id) }} className="flex items-center gap-0.5 text-xs text-neutral-500 hover:text-emerald-600">
               <Pencil size={13} /> 編輯
             </Link>
+            {p.lat != null && p.lng != null && (
+              <Link to="/go" search={{ from: String(id) }} className="flex items-center gap-0.5 text-xs text-neutral-500 hover:text-emerald-600">
+                <Navigation size={13} /> 怎麼去
+              </Link>
+            )}
           </p>
         </div>
         {onClose && (
