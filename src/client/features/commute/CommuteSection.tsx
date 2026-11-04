@@ -17,6 +17,8 @@ import { tripOverlay } from "./tripOverlay";
 import { driveMin, isPeak, roadKm } from "@shared/drive";
 import { haversine } from "@shared/bus";
 import { useRegion } from "@/lib/region";
+import { fareText, tripFare } from "@shared/fare";
+import { DRIVE_COST_PER_KM } from "@shared/drive";
 
 interface Props {
   lat: number;
@@ -152,7 +154,7 @@ export function BriefText({ b }: { b: TripBrief | null | undefined }) {
   if (!b) return <span className="text-neutral-400">太遠或搭不到(1 次轉乘內)</span>;
   return (
     <>
-      <b className="tabular-nums">約 {b.total_min} 分</b> · {b.summary}
+      <b className="tabular-nums">約 {b.total_min} 分</b> · {b.summary} · <span className="tabular-nums text-neutral-500">{fareText(tripFare(b))}</span>
     </>
   );
 }
@@ -249,7 +251,10 @@ function Trips({
                 <b>{t.summary}</b>
                 <span className="ml-1.5 text-[11px] text-neutral-500">{TRIP_KIND_LABEL[t.kind]}</span>
               </span>
-              <span className="shrink-0 font-semibold tabular-nums">約 {t.total_min} 分</span>
+              <span className="shrink-0 tabular-nums">
+                <b>約 {t.total_min} 分</b>
+                <span className="ml-1.5 text-[11px] text-neutral-500">{fareText(tripFare(t))}</span>
+              </span>
             </div>
             <LegStrip legs={t.legs} />
           </button>
@@ -257,7 +262,7 @@ function Trips({
         </div>
       ))}
       {q.data && !q.data.has_bus && <Pending what="公車資料(目前只算捷運與走路)" cmd="npm run collect -- bus" className="px-1.5 text-[11px] text-amber-700 dark:text-amber-400" />}
-      {trips.length > 0 && <p className="px-1.5 text-[11px] text-neutral-400">估計值:等車抓這個時段的班距一半(那時沒開的路線不算)、走路含等紅綠燈、轉乘另加 2 分;時間在篩選列「通勤」調整。</p>}
+      {trips.length > 0 && <p className="px-1.5 text-[11px] text-neutral-400">估計值:票價是單趟全票(公車每段 15、捷運台鐵依距離,不含轉乘優惠與 TPASS);等車抓這個時段的班距一半(那時沒開的路線不算)、走路含等紅綠燈、轉乘另加 2 分;時間在篩選列「通勤」調整。</p>}
     </div>
   );
 }
@@ -348,14 +353,14 @@ function DriveLine({ lat, lng, place, when }: { lat: number; lng: number; place:
   if (r && (r.scooter || r.car))
     return (
       <p className="px-1.5 pb-0.5 text-[11px] text-neutral-500" title={`OpenStreetMap 道路圖的最短時間(單行、國道機車禁行有算),依${isPeak(when) ? "尖峰" : "離峰"}平均時速;含牽車 / 停車,沒有即時路況,不是導航`}>
-        機車 {r.scooter ? `約 ${r.scooter.total_min} 分` : "—"} · 開車 {r.car ? `約 ${r.car.total_min} 分` : "—"} · {(r.scooter ?? r.car)!.km} km
+        機車 {r.scooter ? `約 ${r.scooter.total_min} 分、油錢 ${tripFare(r.scooter)} 元` : "—"} · 開車 {r.car ? `約 ${r.car.total_min} 分、油錢 ${tripFare(r.car)} 元` : "—"} · {(r.scooter ?? r.car)!.km} km
       </p>
     );
   // 跨生活圈(台北的房子 vs 高雄的地點)騎車開車都沒意義,不顯示
   if (q.isLoading || m > 100_000) return null;
   return (
     <p className="px-1.5 pb-0.5 text-[11px] text-neutral-500" title={`直線 ${(m / 1000).toFixed(1)} km × 1.3 當道路距離,依${isPeak(when) ? "尖峰" : "離峰"}平均時速估;不是導航`}>
-      機車約 {driveMin("scooter", m, when, region.key)} 分 · 開車約 {driveMin("car", m, when, region.key)} 分 · {roadKm(m)} km(估)
+      機車約 {driveMin("scooter", m, when, region.key)} 分 · 開車約 {driveMin("car", m, when, region.key)} 分 · {roadKm(m)} km,油錢約 {Math.round(roadKm(m) * DRIVE_COST_PER_KM.scooter)} / {Math.round(roadKm(m) * DRIVE_COST_PER_KM.car)} 元(估)
     </p>
   );
 }
