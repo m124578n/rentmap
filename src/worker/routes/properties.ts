@@ -3,6 +3,7 @@
  *   GET    /api/properties            列表(含目前租金、來源、我的狀態)
  *   POST   /api/properties            手動新增(property + 一筆 listing,並自動收藏成 saved)
  *   GET    /api/properties/:id        詳細(property + listings + favorite)
+ *   PUT    /api/properties/:id        修改(整份表單;租金 / 總價變了就記一筆價格紀錄)
  *   PUT    /api/properties/:id/stage  改狀態(舊,等同 favorite 只帶 stage)
  *   PUT    /api/properties/:id/favorite  收藏 / 部分更新(stage、priority、note、tags)
  *   DELETE /api/properties/:id/favorite  取消收藏
@@ -117,34 +118,7 @@ properties.post("/api/properties", async (c) => {
   const [prop] = await d
     .insert(schema.properties)
     .values({
-      title: v.title,
-      deal: v.deal,
-      landPing: v.land_ping ?? null,
-      city: v.city,
-      district: v.district,
-      road: v.road ?? null,
-      addressText: v.address_text ?? null,
-      lat: v.lat ?? null,
-      lng: v.lng ?? null,
-      geocodeSource: v.lat != null && v.lng != null ? "manual" : null,
-      kind: v.kind ?? null,
-      buildingType: v.building_type ?? null,
-      floor: v.floor ?? null,
-      totalFloors: v.total_floors ?? null,
-      buildingAge: v.building_age ?? null,
-      sizePing: v.size_ping ?? null,
-      rooms: v.rooms ?? null,
-      livingRooms: v.living_rooms ?? null,
-      bathrooms: v.bathrooms ?? null,
-      hasElevator: v.has_elevator ?? null,
-      hasParking: v.has_parking ?? null,
-      petAllowed: v.pet_allowed ?? null,
-      cookingAllowed: v.cooking_allowed ?? null,
-      hasWasher: v.has_washer ?? null,
-      hasInternet: v.has_internet ?? null,
-      mgmtFee: v.mgmt_fee ?? null,
-      utilitiesNote: v.utilities_note ?? null,
-      note: v.note ?? null,
+      ...propertyCols(v),
       createdBy: user.id,
       createdAt: now,
       updatedAt: now,
@@ -203,6 +177,46 @@ properties.get("/api/properties/:id", async (c) => {
   return c.json({ property: prop, listings, favorite: fav ?? null, price_history: priceHistory });
 });
 
+properties.put("/api/properties/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  if (!(await canSee(c, id))) return c.json({ error: "not found" }, 404);
+  const parsed = PropertyInput.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid", issues: parsed.error.issues }, 400);
+  const v = parsed.data;
+  const now = nowIso();
+  const d = db(c.env.DB);
+  const old = await d.query.properties.findFirst({ where: eq(schema.properties.id, id) });
+  if (!old) return c.json({ error: "not found" }, 404);
+  const cols = propertyCols(v);
+  // 座標沒動就保留原本的來源(採集來的是 591 / nominatim)
+  if (cols.lat === old.lat && cols.lng === old.lng) cols.geocodeSource = old.geocodeSource;
+  // updated_at 變了,彙總快取(通勤、行情…)的 key 跟著變
+  await d.update(schema.properties).set({ ...cols, updatedAt: now }).where(eq(schema.properties.id, id));
+
+  const main = await d.query.listings.findFirst({ where: eq(schema.listings.propertyId, id), orderBy: desc(schema.listings.id) });
+  if (main) {
+    const keepContact = isPrivatePool(c.env);
+    const rent = v.deal === "buy" ? 0 : v.rent!;
+    const price = v.deal === "buy" ? v.price! : null;
+    await d
+      .update(schema.listings)
+      .set({
+        source: v.source,
+        sourceUrl: v.source_url ?? null,
+        rent,
+        price,
+        depositMonths: v.deposit_months ?? null,
+        ...(keepContact ? { contactName: v.contact_name ?? null, contactPhone: v.contact_phone ?? null, contactLine: v.contact_line ?? null } : {}),
+        lastSeenAt: now,
+      })
+      .where(eq(schema.listings.id, main.id));
+    const amount = v.deal === "buy" ? price! : rent;
+    if (amount !== (v.deal === "buy" ? main.price : main.rent)) await d.insert(schema.listingPriceHistory).values({ listingId: main.id, rent: amount, seenAt: now });
+  }
+  return c.json({ id });
+});
+
 properties.put("/api/properties/:id/stage", async (c) => {
   const user = c.get("user");
   const id = Number(c.req.param("id"));
@@ -258,6 +272,40 @@ properties.delete("/api/properties/:id", async (c) => {
   await db(c.env.DB).delete(schema.properties).where(eq(schema.properties.id, id));
   return c.json({ ok: true });
 });
+
+/** 表單欄位 → properties 欄位(新增與修改共用) */
+function propertyCols(v: PropertyInput) {
+  return {
+    title: v.title,
+    deal: v.deal,
+    landPing: v.land_ping ?? null,
+    city: v.city,
+    district: v.district,
+    road: v.road ?? null,
+    addressText: v.address_text ?? null,
+    lat: v.lat ?? null,
+    lng: v.lng ?? null,
+    geocodeSource: (v.lat != null && v.lng != null ? "manual" : null) as string | null,
+    kind: v.kind ?? null,
+    buildingType: v.building_type ?? null,
+    floor: v.floor ?? null,
+    totalFloors: v.total_floors ?? null,
+    buildingAge: v.building_age ?? null,
+    sizePing: v.size_ping ?? null,
+    rooms: v.rooms ?? null,
+    livingRooms: v.living_rooms ?? null,
+    bathrooms: v.bathrooms ?? null,
+    hasElevator: v.has_elevator ?? null,
+    hasParking: v.has_parking ?? null,
+    petAllowed: v.pet_allowed ?? null,
+    cookingAllowed: v.cooking_allowed ?? null,
+    hasWasher: v.has_washer ?? null,
+    hasInternet: v.has_internet ?? null,
+    mgmtFee: v.mgmt_fee ?? null,
+    utilitiesNote: v.utilities_note ?? null,
+    note: v.note ?? null,
+  };
+}
 
 /** 公開模式只看得到自己建的房源 */
 function visible(c: Context<AppEnv>, createdBy: number | null) {

@@ -89,6 +89,7 @@ export function ListPage() {
                     {p.city}
                     {p.district}
                     {p.road ? ` ${p.road}` : ""}
+                    {(p.lat == null || p.lng == null) && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">未定位,不在地圖上</span>}
                   </p>
                   <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-neutral-600 dark:text-neutral-400">
                     {p.kind && <span>{p.kind}</span>}

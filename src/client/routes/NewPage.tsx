@@ -11,42 +11,71 @@ import { BUILDING_TYPES, DEALS, DEAL_LABEL, DISTRICTS, KINDS, SOURCES, SOURCE_LA
 import { invalidateProperties } from "@/lib/invalidate";
 import { parseImportHash, type ImportedFacts } from "@shared/bookmarklet";
 import { bookmarkletHref } from "@/lib/bookmarklet";
-import { normalizeCity, OPEN_CITIES, regionOfCity } from "@shared/regions";
+import { normalizeCity, OPEN_CITIES, regionBbox, regionOfCity } from "@shared/regions";
+import { LocateField } from "@/features/property/LocateField";
+import { searchAddress } from "@/features/places/geocode";
+
+/** 修改既有筆記:表單預填的欄位(跟書籤帶入同一套欄位名) */
+export interface EditTarget {
+  id: number;
+  deal: Deal;
+  city: City;
+  facts: Record<string, string | number | boolean | null | undefined>;
+}
 
 /** 手動新增房源。表單值全部是字串 / checkbox,交給 Zod schema 轉型與驗證。 */
 export function NewPage() {
+  return <PropertyForm />;
+}
+
+/** 新增與修改共用的表單;edit 有給就是修改那一筆 */
+export function PropertyForm({ edit }: { edit?: EditTarget }) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const region = useRegion();
   // 公開版不收聯絡人(個資);私人模式照舊
   const pool = usePrivatePool();
   // 書籤小工具帶過來的欄位(/new#import=…,只在瀏覽器裡,不經過伺服器)
-  const [imported] = useState<ImportedFacts | null>(() => parseImportHash(window.location.hash));
+  const [imported] = useState<ImportedFacts | null>(() => (edit ? null : parseImportHash(window.location.hash)));
   const importedCity = normalizeCity(imported?.city);
   // 帶入的物件在別的生活圈(例如目前看北北基桃、帶入台中的物件):切過去,縣市選單才有那個市,也跟帶入的座標一致
   const cityOk = !!importedCity && OPEN_CITIES.includes(importedCity);
   useEffect(() => {
-    const r = cityOk ? regionOfCity(importedCity!) : null;
+    const r = edit ? regionOfCity(edit.city) : cityOk ? regionOfCity(importedCity!) : null;
     if (r && r !== region.key) setRegion(r);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [city, setCity] = useState<City>(cityOk ? (importedCity as City) : region.cities[0]!);
+  const [city, setCity] = useState<City>(edit ? edit.city : cityOk ? (importedCity as City) : region.cities[0]!);
   const formRef = useRef<HTMLFormElement>(null);
+  const prefill = edit?.facts ?? imported;
+  // 位置:書籤帶入或原本存的座標;沒有就讓使用者用地址定位(送出時也會自動查一次)
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(() =>
+    typeof prefill?.lat === "number" && typeof prefill?.lng === "number" ? { lat: prefill.lat, lng: prefill.lng } : null,
+  );
   useEffect(() => {
-    if (!imported || !formRef.current) return;
-    fillForm(formRef.current, imported);
+    if (!prefill || !formRef.current) return;
+    fillForm(formRef.current, prefill);
     // 帶完就把 # 清掉,重新整理或分享網址不會再帶一次
-    history.replaceState(null, "", window.location.pathname);
-  }, [imported]);
+    if (imported) history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const addressOf = () => {
+    const f = formRef.current;
+    if (!f) return "";
+    const v = (k: string) => ((f.elements.namedItem(k) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "").trim();
+    // 有完整地址就用它,不然用 縣市 + 行政區 + 路段
+    return v("address_text") || (v("road") ? `${city}${v("district")}${v("road")}` : "");
+  };
   const [errors, setErrors] = useState<Record<string, string>>({});
   // 租屋 / 買房:預設跟著地址報告的用途(只看附近 → 租屋)
   const purpose = usePurpose();
-  const [deal, setDeal] = useState<Deal>(purpose === "buy" ? "buy" : "rent");
+  const [deal, setDeal] = useState<Deal>(edit ? edit.deal : purpose === "buy" ? "buy" : "rent");
 
   const create = useMutation({
-    mutationFn: api.createProperty,
+    mutationFn: (input: PropertyInput) => (edit ? api.updateProperty(edit.id, input) : api.createProperty(input)),
     onSuccess: ({ id }) => {
       invalidateProperties(qc);
+      qc.invalidateQueries({ queryKey: ["property", id] });
       nav({ to: "/p/$id", params: { id: String(id) } });
     },
     onError: (e) => {
@@ -57,9 +86,26 @@ export function NewPage() {
     },
   });
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  const [locating, setLocating] = useState(false);
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // 還沒定位:用地址自動查一次(查不到也照存,之後可以在編輯補)
+    let at = pin;
+    const q = addressOf();
+    if (!at && q) {
+      setLocating(true);
+      try {
+        const hit = (await searchAddress(q, regionBbox(region.key)))[0];
+        if (hit) setPin((at = { lat: hit.lat, lng: hit.lng }));
+      } catch {
+        // 查不到就算了
+      } finally {
+        setLocating(false);
+      }
+    }
+    fd.set("lat", at ? String(at.lat) : "");
+    fd.set("lng", at ? String(at.lng) : "");
     const raw: Record<string, unknown> = Object.fromEntries(fd.entries());
     for (const k of BOOL_FIELDS) raw[k] = fd.has(k);
     raw.deal = deal;
@@ -82,10 +128,11 @@ export function NewPage() {
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="mx-auto grid max-w-2xl gap-4 p-4">
-      <input type="hidden" name="lat" />
-      <input type="hidden" name="lng" /> 
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-semibold">新增{DEAL_LABEL[deal]}筆記</h1>
+        <h1 className="text-xl font-semibold">
+          {edit ? "修改" : "新增"}
+          {DEAL_LABEL[deal]}筆記
+        </h1>
         {DEALS.map((d) => (
           <button
             key={d}
@@ -97,7 +144,7 @@ export function NewPage() {
           </button>
         ))}
       </div>
-      <p className="-mt-2 text-sm text-neutral-500">
+      {!edit && <p className="-mt-2 text-sm text-neutral-500">
         {pool ? (
           <>
             591、好房的物件用採集比較快:<code className="text-xs">npm run collect -- add &lt;網址&gt;</code>。這裡是手動記錄(朋友介紹、社團、仲介)。
@@ -105,8 +152,8 @@ export function NewPage() {
         ) : (
           "只記事實(租金、坪數、樓層、設備…)與你自己的筆記;照片、屋況介紹、房東聯絡方式請看原始頁面。也可以在地圖上輸入地址,看完報告再存。"
         )}
-      </p>
-      {imported ? (
+      </p>}
+      {edit ? null : imported ? (
         <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
           已從原始頁面帶入 {Object.keys(imported).length} 個欄位,確認後再儲存。照片、屋況介紹、聯絡方式不會帶過來。
           {imported.city && !cityOk && <span className="block text-amber-700 dark:text-amber-400">{imported.city}不在目前的生活圈({region.label}),縣市與行政區請自己選。</span>}
@@ -143,6 +190,7 @@ export function NewPage() {
             <input name="address_text" className="input" />
           </Field>
         </div>
+        <LocateField value={pin} onChange={setPin} address={addressOf} />
       </section>
 
       <section className="card grid gap-3">
@@ -273,8 +321,8 @@ export function NewPage() {
         <button type="button" className="btn-ghost" onClick={() => history.back()}>
           取消
         </button>
-        <button type="submit" className="btn-primary" disabled={create.isPending}>
-          {create.isPending ? "儲存中…" : "儲存"}
+        <button type="submit" className="btn-primary" disabled={create.isPending || locating}>
+          {locating ? "定位中…" : create.isPending ? "儲存中…" : "儲存"}
         </button>
       </div>
     </form>
@@ -302,9 +350,10 @@ function Field({ label, error, children }: { label: string; error?: React.ReactN
 }
 
 /** 書籤帶來的欄位填進表單(不認得的欄位略過;布林值 → checkbox) */
-function fillForm(form: HTMLFormElement, facts: ImportedFacts) {
+function fillForm(form: HTMLFormElement, facts: ImportedFacts | EditTarget["facts"]) {
   for (const [k, v] of Object.entries(facts)) {
-    if (v == null || k === "city") continue;
+    // 縣市由 state 控制;座標由 LocateField 控制
+    if (v == null || k === "city" || k === "lat" || k === "lng") continue;
     const el = form.elements.namedItem(k);
     if (el instanceof HTMLInputElement && el.type === "checkbox") el.checked = v === true;
     else if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {

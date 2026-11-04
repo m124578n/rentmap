@@ -69,6 +69,7 @@ export const api = {
 
   listProperties: () => req<{ items: PropertySummary[] }>("/api/properties"),
   createProperty: (input: PropertyInput) => req<{ id: number }>("/api/properties", { method: "POST", body: JSON.stringify(input) }),
+  updateProperty: (id: number, input: PropertyInput) => req<{ id: number }>(`/api/properties/${id}`, { method: "PUT", body: JSON.stringify(input) }),
   getProperty: (id: number) => req<PropertyDetail>(`/api/properties/${id}`),
   setStage: (id: number, input: StageInput) =>
     req<{ ok: true }>(`/api/properties/${id}/stage`, { method: "PUT", body: JSON.stringify(input) }),

@@ -104,6 +104,23 @@ describe("properties", () => {
     const noFav = (await (await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).json()) as { favorite: unknown };
     expect(noFav.favorite).toBeNull();
 
+    // 修改:整份表單覆蓋;補上座標、租金變了記一筆價格紀錄
+    const edit = await SELF.fetch(
+      `${ORIGIN}/api/properties/${id}`,
+      authed({ method: "PUT", body: JSON.stringify({ title: "大安兩房(改)", city: "台北市", district: "大安區", rent: "21000", lat: 25.033, lng: 121.543, source: "591" }) }),
+    );
+    expect(edit.status).toBe(200);
+    const edited = (await (await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).json()) as {
+      property: { title: string; lat: number; geocodeSource: string; sizePing: number | null };
+      listings: { rent: number }[];
+      price_history: { rent: number }[];
+    };
+    expect(edited.property).toMatchObject({ title: "大安兩房(改)", lat: 25.033, geocodeSource: "manual", sizePing: null });
+    expect(edited.listings[0]?.rent).toBe(21000);
+    expect(edited.price_history.map((h) => h.rent)).toEqual([22000, 21000]);
+    const bad = await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed({ method: "PUT", body: JSON.stringify({ title: "", city: "台北市", district: "大安區" }) }));
+    expect(bad.status).toBe(400);
+
     const del = await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed({ method: "DELETE" }));
     expect(del.status).toBe(200);
     expect((await SELF.fetch(`${ORIGIN}/api/properties/${id}`, authed())).status).toBe(404);

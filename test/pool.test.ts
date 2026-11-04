@@ -71,6 +71,7 @@ describe("公開模式", () => {
       expect((await pub(`/api/properties/${id}/favorite`, 1, { method: "PUT", body: JSON.stringify({ stage: "saved" }) })).status).toBe(404);
       expect((await pub(`/api/properties/${id}/market`, 1)).status).toBe(404);
       expect((await pub(`/api/properties/${id}`, 1, { method: "DELETE" })).status).toBe(404);
+      expect((await pub(`/api/properties/${id}`, 1, { method: "PUT", body: JSON.stringify({ title: "x", city: "台北市", district: "大安區", rent: 1 }) })).status).toBe(404);
     }
     // 別人刪不掉,房源還在
     expect((await pub(`/api/properties/${b.id}`, 2)).status).toBe(200);
