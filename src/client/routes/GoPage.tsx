@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
 import { Bike, Car, MapPin, Navigation, Search } from "lucide-react";
@@ -16,9 +16,12 @@ import { driveMin, roadKm, DRIVE_COST_PER_KM } from "@shared/drive";
 import { fareText, tripFare } from "@shared/fare";
 import { regionBbox } from "@shared/regions";
 import type { Place } from "@shared/schemas";
+import { TRIP_COLORS } from "@/features/commute/tripColors";
+// 地圖引擎大,有結果才載
+const TripsMap = lazy(() => import("@/features/commute/TripsMap").then((m) => ({ default: m.TripsMap })));
 
 type Origin = { lat: number; lng: number; label: string };
-type Option = { key: string; label: string; summary: string; min: number; fare: number; trip?: Trip; estimated?: boolean };
+type Option = { key: string; label: string; summary: string; min: number; fare: number; trip?: Trip; estimated?: boolean; color?: string };
 
 /**
  * 怎麼去:選起點(我的筆記或任一地址)、選我的地點,列出每種去法要多久、大概多少錢。
@@ -161,9 +164,11 @@ function Results({
   const trips = useQuery(tripsQuery(origin.lat, origin.lng, place, 400, when, bike));
   const drive = useQuery({ queryKey: ["drive-at", origin.lat, origin.lng, when.day, when.time, when.dir], queryFn: () => api.driveAt(origin.lat, origin.lng, when), staleTime: 5 * 60_000, retry: false });
   const [open, setOpen] = useState<string | null>(null);
+  // 篩選:關掉的交通方式(依標籤:公車直達、捷運、轉乘…、機車、開車)
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const options = useMemo(() => {
-    const out: Option[] = (trips.data?.trips ?? []).map((t, i) => ({ key: `t${i}`, label: TRIP_KIND_LABEL[t.kind], summary: t.summary, min: t.total_min, fare: tripFare(t), trip: t }));
+    const out: Option[] = (trips.data?.trips ?? []).map((t, i) => ({ key: `t${i}`, label: TRIP_KIND_LABEL[t.kind], summary: t.summary, min: t.total_min, fare: tripFare(t), trip: t, color: TRIP_COLORS[i % TRIP_COLORS.length] }));
     const m = haversine(origin.lat, origin.lng, place.lat, place.lng);
     // 跨生活圈騎車開車沒意義
     if (m <= 100_000 && !drive.isLoading) {
@@ -180,6 +185,19 @@ function Results({
     return out.sort((a, b) => (sort === "time" ? a.min - b.min || a.fare - b.fare : a.fare - b.fare || a.min - b.min));
   }, [trips.data, drive.data, drive.isLoading, origin, place, sort, when, region.key]);
 
+  const labels = [...new Set(options.map((o) => o.label))];
+  const shown = options.filter((o) => !hidden.has(o.label));
+  const mapTrips = useMemo(() => shown.flatMap((o) => (o.trip ? [{ key: o.key, trip: o.trip, color: o.color! }] : [])), [shown]);
+  const home: [number, number] = [origin.lng, origin.lat];
+  const dest: [number, number] = [place.lng, place.lat];
+  const [start, end] = useMemo(() => (when.dir === "from" ? [dest, home] : [home, dest]), [when.dir, origin.lat, origin.lng, place.lat, place.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (l: string) =>
+    setHidden((h) => {
+      const n = new Set(h);
+      if (n.has(l)) n.delete(l);
+      else n.add(l);
+      return n;
+    });
   const seg = (on: boolean) => `rounded px-2 py-0.5 ${on ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`;
   return (
     <section className="grid gap-2">
@@ -203,14 +221,39 @@ function Results({
         </span>
       </div>
 
+      {labels.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <button onClick={() => setHidden(new Set())} className={`rounded-full border px-2.5 py-0.5 ${hidden.size === 0 ? "border-neutral-800 bg-neutral-800 text-white dark:border-neutral-200 dark:bg-neutral-200 dark:text-neutral-900" : "border-neutral-300 dark:border-neutral-700"}`}>
+            全部
+          </button>
+          {labels.map((l) => (
+            <button
+              key={l}
+              onClick={() => toggle(l)}
+              className={`rounded-full border px-2.5 py-0.5 ${hidden.has(l) ? "border-neutral-300 text-neutral-400 line-through dark:border-neutral-700" : "border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mapTrips.length > 0 && (
+        <Suspense fallback={<div className="h-64 animate-pulse rounded bg-neutral-100 sm:h-80 dark:bg-neutral-800" />}>
+          <TripsMap start={start} end={end} trips={mapTrips} selected={open && mapTrips.some((t) => t.key === open) ? open : null} onSelect={(k) => setOpen(k)} />
+        </Suspense>
+      )}
+      {mapTrips.length > 0 && <p className="-mt-1 text-[11px] text-neutral-400">綠色圖釘是起點、藍色是終點;點地圖上的線或下面的一種搭法,看那一條怎麼走。機車、開車不畫路線。</p>}
+
       {trips.isLoading && <p className="text-sm text-neutral-500">計算中…</p>}
       {trips.error && <p className="text-sm text-red-600">算不出來,稍後再試</p>}
       <ul className="grid gap-2">
-        {options.map((o) => (
-          <li key={o.key} className="card !p-0">
+        {shown.map((o) => (
+          <li key={o.key} className={`card !p-0 ${open === o.key ? "ring-2 ring-emerald-500" : ""}`}>
             <button className="w-full px-3 py-2.5 text-left" onClick={() => o.trip && setOpen(open === o.key ? null : o.key)}>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-1.5">
+                  {o.color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: o.color }} />}
                   {o.key === "scooter" ? <Bike size={15} /> : o.key === "car" ? <Car size={15} /> : null}
                   <b className="truncate">{o.trip ? o.summary : o.label}</b>
                   <span className="shrink-0 text-xs text-neutral-500">{o.trip ? o.label : `${o.summary}${o.estimated ? "(估)" : ""}`}</span>
