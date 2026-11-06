@@ -46,8 +46,10 @@ export function GoPage() {
   const [side, setSide] = useState<CommuteSide>("go");
   const [sort, setSort] = useState<"time" | "fare">("time");
 
-  const note = located.find((p) => String(p.id) === fromId) ?? (fromId === "addr" ? undefined : located[0]);
-  const origin: Origin | null = fromId === "addr" ? addrPin : note ? { lat: note.lat!, lng: note.lng!, label: note.title } : null;
+  // 沒有定位好的筆記就直接是輸入地址(以前是下拉選單只剩「輸入地址…」一項,選不到、也打不了字)
+  const addrMode = fromId === "addr" || (notes.isSuccess && located.length === 0);
+  const note = addrMode ? undefined : (located.find((p) => String(p.id) === fromId) ?? located[0]);
+  const origin: Origin | null = addrMode ? addrPin : note ? { lat: note.lat!, lng: note.lng!, label: note.title } : null;
   const place = list.find((p) => p.id === placeId) ?? list[0];
 
   async function search() {
@@ -72,18 +74,38 @@ export function GoPage() {
       </h1>
 
       <section className="card grid gap-3 text-sm">
-        <label className="grid gap-1">
-          <span className="text-xs text-neutral-500">從</span>
-          <select className="input" value={note && fromId !== "addr" ? String(note.id) : fromId} onChange={(e) => setFromId(e.target.value)}>
-            {located.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}({p.district})
-              </option>
-            ))}
-            <option value="addr">輸入地址…</option>
-          </select>
-        </label>
-        {fromId === "addr" && (
+        <div className="grid gap-1">
+          <span className="flex items-center gap-2 text-xs text-neutral-500">
+            從
+            {located.length > 0 && (
+              <span className="flex gap-1">
+                {[
+                  ["note", "我的筆記"],
+                  ["addr", "輸入地址"],
+                ].map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setFromId(k === "addr" ? "addr" : String(located[0]!.id))}
+                    className={`rounded px-2 py-0.5 ${(k === "addr") === addrMode ? "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </span>
+            )}
+          </span>
+          {!addrMode && (
+            <select className="input" value={note ? String(note.id) : ""} onChange={(e) => setFromId(e.target.value)}>
+              {located.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}({p.district})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {addrMode && (
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -91,13 +113,13 @@ export function GoPage() {
               void search();
             }}
           >
-            <input className="input" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="例:台北市大安區信義路四段1號" autoFocus />
+            <input className="input" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="輸入起點地址,例:台北市大安區信義路四段1號" autoFocus={fromId === "addr"} />
             <button type="submit" className="btn-ghost shrink-0" disabled={searching || !addr.trim()}>
               <Search size={15} /> {searching ? "搜尋中" : "搜尋"}
             </button>
           </form>
         )}
-        {fromId === "addr" && (addrErr ? <p className="text-xs text-red-600">{addrErr}</p> : addrPin && <p className="text-xs text-neutral-500">找到:{addrPin.label}</p>)}
+        {addrMode && (addrErr ? <p className="text-xs text-red-600">{addrErr}</p> : addrPin && <p className="text-xs text-neutral-500">找到:{addrPin.label}</p>)}
 
         <div className="grid gap-1">
           <span className="text-xs text-neutral-500">到</span>
@@ -124,13 +146,13 @@ export function GoPage() {
         </div>
       </section>
 
-      {!origin && fromId !== "addr" && notes.isSuccess && (
+      {!origin && addrMode && located.length === 0 && notes.isSuccess && (
         <p className="text-sm text-neutral-500">
-          還沒有定位好的筆記,選「輸入地址…」或先
+          輸入起點地址就能算;也可以先
           <Link to="/new" className="mx-1 text-emerald-600 underline">
             新增筆記
           </Link>
-          。
+          ,之後直接從筆記選。
         </p>
       )}
 
